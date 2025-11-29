@@ -1,40 +1,30 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
+import { login } from "./actions";
+
+const initialState = {
+  error: "",
+};
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="mt-2 rounded-lg bg-indigo-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-400"
+    >
+      {pending ? "로그인 중..." : "로그인"}
+    </button>
+  );
+}
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [formState, setFormState] = useState({ id: "", password: "" });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    setFormState((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    try {
-      // TODO: Implement Custom Auth API call
-      // const response = await fetch("/api/auth/login", { ... });
-
-      // Temporary simulation
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      console.log("Login attempt:", formState);
-
-      setErrorMessage("아직 인증 시스템이 구현되지 않았습니다.");
-    } catch (error) {
-      setErrorMessage("로그인 처리 중 오류가 발생했습니다.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const [state, formAction] = useActionState(login, initialState);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
@@ -46,7 +36,7 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form action={formAction} className="flex flex-col gap-5">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">아이디</span>
             <input
@@ -54,8 +44,6 @@ export default function LoginPage() {
               name="id"
               autoComplete="username"
               required
-              value={formState.id}
-              onChange={handleChange}
               className="rounded-lg border border-slate-300 px-4 py-3 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="예: hong"
             />
@@ -68,23 +56,15 @@ export default function LoginPage() {
               name="password"
               autoComplete="current-password"
               required
-              value={formState.password}
-              onChange={handleChange}
               className="rounded-lg border border-slate-300 px-4 py-3 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </label>
 
-          {errorMessage && (
-            <p className="text-sm font-medium text-rose-500">{errorMessage}</p>
+          {state?.error && (
+            <p className="text-sm font-medium text-rose-500">{state.error}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="mt-2 rounded-lg bg-indigo-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-400"
-          >
-            {isSubmitting ? "로그인 중..." : "로그인"}
-          </button>
+          <SubmitButton />
         </form>
 
         <div className="mt-6 text-center">
