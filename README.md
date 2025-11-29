@@ -17,6 +17,7 @@
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ### 2. 의존성 설치
@@ -49,4 +50,3 @@ npm run dev
 ## 데이터베이스
 
 Supabase PostgreSQL을 사용하며, 스키마는 `supabase/migrations` 디렉토리에서 관리됩니다.
-초기 스키마 적용을 위해 `supabase/migrations/20241128000000_init_schema.sql`을 실행하세요.
