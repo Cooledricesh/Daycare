@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AppConfig } from '@/backend/hono/context';
+import type { AppConfig } from '@/server/hono/context';
 
 const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),

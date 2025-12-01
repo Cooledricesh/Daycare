@@ -4,7 +4,7 @@ import {
   contextKeys,
   type AppEnv,
   type AppLogger,
-} from '@/backend/hono/context';
+} from '@/server/hono/context';
 
 export const errorBoundary = () =>
   createMiddleware<AppEnv>(async (c, next) => {

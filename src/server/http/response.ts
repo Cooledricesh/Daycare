@@ -1,5 +1,5 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import type { AppContext } from '@/backend/hono/context';
+import type { AppContext } from '@/server/hono/context';
 
 export type SuccessResult<TData> = {
   ok: true;

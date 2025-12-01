@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import type { AppEnv } from '@/backend/hono/context';
-import { success, failure, respond } from '@/backend/http/response';
+import type { AppEnv } from '@/server/hono/context';
+import { success, failure, respond } from '@/server/http/response';
 import { PatientError, PatientErrorCode } from './error';
 import {
   searchQuerySchema,

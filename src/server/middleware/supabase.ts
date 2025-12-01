@@ -2,8 +2,8 @@ import { createMiddleware } from 'hono/factory';
 import {
   contextKeys,
   type AppEnv,
-} from '@/backend/hono/context';
-import { createServiceClient } from '@/backend/supabase/client';
+} from '@/server/hono/context';
+import { createServiceClient } from '@/server/supabase/client';
 
 export const withSupabase = () =>
   createMiddleware<AppEnv>(async (c, next) => {

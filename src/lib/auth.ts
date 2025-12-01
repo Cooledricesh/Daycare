@@ -1,25 +1,5 @@
-import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
-
-const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'default-secret-key');
-const alg = 'HS256';
-
-export async function signJWT(payload: any) {
-    return new SignJWT(payload)
-        .setProtectedHeader({ alg })
-        .setIssuedAt()
-        .setExpirationTime('24h')
-        .sign(secret);
-}
-
-export async function verifyJWT(token: string) {
-    try {
-        const { payload } = await jwtVerify(token, secret);
-        return payload;
-    } catch (error) {
-        return null;
-    }
-}
+export { signJWT, verifyJWT } from './token';
 
 export async function hashPassword(password: string) {
     return bcrypt.hash(password, 10);
@@ -28,3 +8,5 @@ export async function hashPassword(password: string) {
 export async function comparePassword(password: string, hash: string) {
     return bcrypt.compare(password, hash);
 }
+
+

@@ -1,10 +1,10 @@
 import { createMiddleware } from 'hono/factory';
-import { getAppConfig } from '@/backend/config';
+import { getAppConfig } from '@/server/config';
 import {
   contextKeys,
   type AppEnv,
   type AppLogger,
-} from '@/backend/hono/context';
+} from '@/server/hono/context';
 
 const logger: AppLogger = {
   info: (...args) => console.info(...args),

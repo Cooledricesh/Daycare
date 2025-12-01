@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { errorBoundary } from '@/backend/middleware/error';
-import { withAppContext } from '@/backend/middleware/context';
-import { withSupabase } from '@/backend/middleware/supabase';
-import type { AppEnv } from '@/backend/hono/context';
+import { errorBoundary } from '@/server/middleware/error';
+import { withAppContext } from '@/server/middleware/context';
+import { withSupabase } from '@/server/middleware/supabase';
+import type { AppEnv } from '@/server/hono/context';
 import patientRoutes from '@/features/patient/backend/route';
 import adminRoutes from '@/features/admin/backend/route';
 import staffRoutes from '@/features/staff/backend/route';

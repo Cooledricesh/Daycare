@@ -1,30 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { verifyJWT } from "@/lib/auth";
+import { verifyJWT } from "@/lib/token";
 
 const PROTECTED_PATHS = ["/staff", "/doctor", "/nurse", "/admin"];
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const accessToken = request.cookies.get("accessToken")?.value;
-
-    console.log(`[Proxy] Path: ${pathname}, Token: ${accessToken ? "Present" : "Missing"}`);
 
     // 1. Check if path requires auth
     const isProtected = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
 
     if (isProtected) {
         if (!accessToken) {
-            console.log(`[Proxy] Redirecting to login (No Token)`);
             return redirectToLogin(request);
         }
 
         const payload = await verifyJWT(accessToken);
         if (!payload) {
-            console.log(`[Proxy] Redirecting to login (Invalid Token)`);
             return redirectToLogin(request);
         }
-
-        console.log(`[Proxy] Access granted for ${payload.sub}, role: ${payload.role}`);
 
         // Role-based access control
         const role = payload.role as string;
@@ -48,7 +42,6 @@ export async function proxy(request: NextRequest) {
         if (payload) {
             const role = payload.role as string;
             const redirectUrl = getRoleBasedRedirect(role);
-            console.log(`[Proxy] Already logged in as ${role}, redirecting to ${redirectUrl}`);
             return NextResponse.redirect(new URL(redirectUrl, request.url));
         }
     }
@@ -79,13 +72,6 @@ function redirectToLogin(request: NextRequest) {
 
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public folder files (images, etc)
-         */
         "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
     ],
 };
