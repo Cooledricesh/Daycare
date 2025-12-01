@@ -16,7 +16,10 @@ type StaffLayoutProps = {
   children: ReactNode;
 };
 
+import { useLogout } from '@/hooks/useLogout';
+
 export default function StaffLayout({ children }: StaffLayoutProps) {
+  const { logout } = useLogout();
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-10">
@@ -44,11 +47,13 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
                       대시보드
                     </Button>
                   </Link>
-                  <Link href="/login">
-                    <Button variant="ghost" className="w-full justify-start">
-                      로그아웃
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={logout}
+                  >
+                    로그아웃
+                  </Button>
                 </nav>
               </SheetContent>
             </Sheet>

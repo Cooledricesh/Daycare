@@ -38,8 +38,11 @@ const navItems = [
   },
 ];
 
+import { useLogout } from '@/hooks/useLogout';
+
 export function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname();
+  const { logout } = useLogout();
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -75,10 +78,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <div className="absolute bottom-0 left-0 right-0 w-64 p-4 border-t border-gray-200">
           <button
             className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-            onClick={() => {
-              // TODO: 로그아웃 처리
-              window.location.href = '/login';
-            }}
+            onClick={logout}
           >
             <LogOut className="h-5 w-5" />
             로그아웃
