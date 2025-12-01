@@ -104,14 +104,14 @@ export default function PatientsPage() {
 
           {/* 담당 코디 필터 */}
           <Select
-            value={filters.coordinator_id}
-            onValueChange={(value) => setFilters({ coordinator_id: value })}
+            value={filters.coordinator_id || "all"}
+            onValueChange={(value) => setFilters({ coordinator_id: value === "all" ? "" : value })}
           >
             <SelectTrigger>
               <SelectValue placeholder="전체 코디" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">전체 코디</SelectItem>
+              <SelectItem value="all">전체 코디</SelectItem>
               {coordinators?.map((coordinator) => (
                 <SelectItem key={coordinator.id} value={coordinator.id}>
                   {coordinator.name}

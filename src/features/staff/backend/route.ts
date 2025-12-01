@@ -27,7 +27,7 @@ staffRoutes.get('/my-patients', async (c) => {
 
   // TODO: JWT에서 staffId 추출 (현재는 임시로 하드코딩)
   // const staffId = c.get('staffId');
-  const staffId = 'temp-coordinator-id';
+  const staffId = '00000000-0000-0000-0000-000000000000';
 
   try {
     const params = getMyPatientsSchema.parse({ date });
@@ -52,7 +52,7 @@ staffRoutes.get('/patient/:id', async (c) => {
   const date = c.req.query('date');
 
   // TODO: JWT에서 staffId 추출
-  const staffId = 'temp-coordinator-id';
+  const staffId = '00000000-0000-0000-0000-000000000000';
 
   try {
     const params = getPatientDetailSchema.parse({ patient_id, date });
@@ -77,7 +77,7 @@ staffRoutes.post('/task/:consultation_id/complete', async (c) => {
   const body = await c.req.json();
 
   // TODO: JWT에서 staffId 추출
-  const staffId = 'temp-coordinator-id';
+  const staffId = '00000000-0000-0000-0000-000000000000';
 
   try {
     const params = completeTaskSchema.parse({ consultation_id, ...body });
@@ -101,7 +101,7 @@ staffRoutes.post('/messages', async (c) => {
   const body = await c.req.json();
 
   // TODO: JWT에서 staffId 추출
-  const staffId = 'temp-coordinator-id';
+  const staffId = '00000000-0000-0000-0000-000000000000';
 
   try {
     const params = createMessageSchema.parse(body);

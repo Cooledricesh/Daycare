@@ -1,29 +1,20 @@
-import { SignJWT, jwtVerify } from "jose";
-import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from 'jose';
+import bcrypt from 'bcryptjs';
 
-const SECRET_KEY = new TextEncoder().encode(
-    process.env.JWT_SECRET_KEY || "default-secret-key-change-me"
-);
+const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'default-secret-key');
+const alg = 'HS256';
 
-const ALG = "HS256";
-
-export async function signJWT(payload: {
-    sub: string;
-    role: string;
-    name: string;
-}) {
+export async function signJWT(payload: any) {
     return new SignJWT(payload)
-        .setProtectedHeader({ alg: ALG })
+        .setProtectedHeader({ alg })
         .setIssuedAt()
-        .setExpirationTime("24h") // 24 hours expiration
-        .sign(SECRET_KEY);
+        .setExpirationTime('24h')
+        .sign(secret);
 }
 
 export async function verifyJWT(token: string) {
     try {
-        const { payload } = await jwtVerify(token, SECRET_KEY, {
-            algorithms: [ALG],
-        });
+        const { payload } = await jwtVerify(token, secret);
         return payload;
     } catch (error) {
         return null;

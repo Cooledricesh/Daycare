@@ -23,6 +23,7 @@ export default function StaffDashboardPage() {
     return (
       <div className="text-center py-8">
         <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
+        <p className="text-sm text-gray-500 mt-2">{error.message}</p>
       </div>
     );
   }

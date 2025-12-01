@@ -1,12 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { login } from "./actions";
 
 const initialState = {
   error: "",
+  success: false,
+  redirectUrl: "",
 };
 
 function SubmitButton() {
@@ -24,7 +27,14 @@ function SubmitButton() {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [state, formAction] = useActionState(login, initialState);
+
+  useEffect(() => {
+    if (state?.success && state?.redirectUrl) {
+      router.push(state.redirectUrl);
+    }
+  }, [state, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
