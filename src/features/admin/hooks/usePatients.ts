@@ -103,3 +103,16 @@ export function useCoordinators() {
     staleTime: 10 * 60 * 1000,
   });
 }
+
+export function useDoctors() {
+  return useQuery({
+    queryKey: ['admin', 'doctors'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: any[] }>(
+        '/api/admin/staff?role=doctor&status=active&limit=100'
+      );
+      return response.data.data;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}

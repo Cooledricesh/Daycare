@@ -24,15 +24,17 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useCreatePatient, useUpdatePatient, useCoordinators } from '../hooks/usePatients';
+import { useCreatePatient, useUpdatePatient, useCoordinators, useDoctors } from '../hooks/usePatients';
 import type { PatientWithCoordinator } from '../backend/schema';
 import { Loader2 } from 'lucide-react';
 
 const patientFormSchema = z.object({
   name: z.string().min(1, '이름을 입력해주세요').max(100),
-  birth_date: z.string().optional(),
   gender: z.enum(['M', 'F', '']).optional(),
+  room_number: z.string().max(10).optional(),
+  patient_id_no: z.string().max(20).optional(),
   coordinator_id: z.string().optional(),
+  doctor_id: z.string().optional(),
   memo: z.string().max(500).optional(),
   schedule_days: z.array(z.number()),
   status: z.enum(['active', 'discharged', 'suspended']).optional(),
@@ -56,6 +58,7 @@ export function PatientFormModal({
   patient,
 }: PatientFormModalProps) {
   const { data: coordinators } = useCoordinators();
+  const { data: doctors } = useDoctors();
   const createPatient = useCreatePatient();
   const updatePatient = useUpdatePatient();
 
@@ -70,9 +73,11 @@ export function PatientFormModal({
     resolver: zodResolver(patientFormSchema),
     defaultValues: {
       name: '',
-      birth_date: '',
       gender: '',
+      room_number: '',
+      patient_id_no: '',
       coordinator_id: '',
+      doctor_id: '',
       memo: '',
       schedule_days: [],
       status: 'active',
@@ -85,9 +90,11 @@ export function PatientFormModal({
     if (mode === 'edit' && patient) {
       reset({
         name: patient.name,
-        birth_date: patient.birth_date || '',
         gender: patient.gender || '',
+        room_number: patient.room_number || '',
+        patient_id_no: patient.patient_id_no || '',
         coordinator_id: patient.coordinator_id || '',
+        doctor_id: patient.doctor_id || '',
         memo: patient.memo || '',
         schedule_days: patient.schedule_pattern
           ? patient.schedule_pattern.split(',').map((day) => dayNames.indexOf(day))
@@ -97,9 +104,11 @@ export function PatientFormModal({
     } else {
       reset({
         name: '',
-        birth_date: '',
         gender: '',
+        room_number: '',
+        patient_id_no: '',
         coordinator_id: '',
+        doctor_id: '',
         memo: '',
         schedule_days: [],
         status: 'active',
@@ -111,9 +120,11 @@ export function PatientFormModal({
     try {
       const payload = {
         name: data.name,
-        birth_date: data.birth_date || undefined,
         gender: data.gender === '' ? undefined : data.gender,
+        room_number: data.room_number || undefined,
+        patient_id_no: data.patient_id_no || undefined,
         coordinator_id: data.coordinator_id || undefined,
+        doctor_id: data.doctor_id || undefined,
         memo: data.memo || undefined,
         schedule_days: data.schedule_days || [],
         status: data.status,
@@ -172,13 +183,24 @@ export function PatientFormModal({
             )}
           </div>
 
-          {/* 생년월일 */}
+          {/* 병록번호 */}
           <div className="space-y-2">
-            <Label htmlFor="birth_date">생년월일</Label>
+            <Label htmlFor="patient_id_no">병록번호</Label>
             <Input
-              id="birth_date"
-              type="date"
-              {...register('birth_date')}
+              id="patient_id_no"
+              {...register('patient_id_no')}
+              placeholder="병록번호 (최대 20자)"
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* 호실 */}
+          <div className="space-y-2">
+            <Label htmlFor="room_number">호실</Label>
+            <Input
+              id="room_number"
+              {...register('room_number')}
+              placeholder="호실 (예: 3101)"
               disabled={isLoading}
             />
           </div>
@@ -206,6 +228,28 @@ export function PatientFormModal({
                 </div>
               </div>
             </RadioGroup>
+          </div>
+
+          {/* 주치의 */}
+          <div className="space-y-2">
+            <Label htmlFor="doctor_id">주치의</Label>
+            <Select
+              value={watch('doctor_id') || ''}
+              onValueChange={(value) => setValue('doctor_id', value)}
+              disabled={isLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="주치의 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">선택 안 함</SelectItem>
+                {doctors?.map((doctor) => (
+                  <SelectItem key={doctor.id} value={doctor.id}>
+                    {doctor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 담당 코디 */}

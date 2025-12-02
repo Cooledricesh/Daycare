@@ -12,18 +12,22 @@ export const getPatientsQuerySchema = z.object({
 
 export const createPatientSchema = z.object({
   name: z.string().min(1, '이름을 입력해주세요').max(100, '이름은 100자 이하이어야 합니다'),
-  birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '올바른 날짜 형식이 아닙니다').optional().or(z.literal('')),
   gender: z.enum(['M', 'F']).optional(),
+  room_number: z.string().max(10, '호실은 10자 이하이어야 합니다').optional().or(z.literal('')),
+  patient_id_no: z.string().max(20, '병록번호는 20자 이하이어야 합니다').optional().or(z.literal('')),
   coordinator_id: z.string().uuid('올바른 담당 코디를 선택해주세요').optional().or(z.literal('')),
+  doctor_id: z.string().uuid('올바른 주치의를 선택해주세요').optional().or(z.literal('')),
   memo: z.string().max(500, '메모는 500자 이하이어야 합니다').optional(),
   schedule_days: z.array(z.number().min(0).max(6)),
 });
 
 export const updatePatientSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   gender: z.enum(['M', 'F']).optional(),
+  room_number: z.string().max(10).optional().or(z.literal('')),
+  patient_id_no: z.string().max(20).optional().or(z.literal('')),
   coordinator_id: z.string().uuid().optional().or(z.literal('')),
+  doctor_id: z.string().uuid().optional().or(z.literal('')),
   status: z.enum(['active', 'discharged', 'suspended']).optional(),
   memo: z.string().max(500).optional(),
   schedule_days: z.array(z.number().min(0).max(6)).optional(),
@@ -126,10 +130,13 @@ export type GetDailyStatsQuery = z.infer<typeof getDailyStatsQuerySchema>;
 export interface PatientWithCoordinator {
   id: string;
   name: string;
-  birth_date: string | null;
   gender: 'M' | 'F' | null;
+  room_number: string | null;
+  patient_id_no: string | null;
   coordinator_id: string | null;
   coordinator_name: string | null;
+  doctor_id: string | null;
+  doctor_name: string | null;
   status: 'active' | 'discharged' | 'suspended';
   memo: string | null;
   created_at: string;

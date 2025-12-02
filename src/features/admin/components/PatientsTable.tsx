@@ -12,8 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit } from 'lucide-react';
 import type { PatientWithCoordinator } from '../backend/schema';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
 
 interface PatientsTableProps {
   patients: PatientWithCoordinator[];
@@ -38,9 +36,10 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>이름</TableHead>
-            <TableHead>생년월일</TableHead>
+            <TableHead>병록번호</TableHead>
+            <TableHead>호실</TableHead>
             <TableHead>성별</TableHead>
-            <TableHead>담당 코디</TableHead>
+            <TableHead>주치의</TableHead>
             <TableHead>출석 패턴</TableHead>
             <TableHead>상태</TableHead>
             <TableHead className="w-[100px]">관리</TableHead>
@@ -49,7 +48,7 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
         <TableBody>
           {patients.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+              <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                 환자가 없습니다
               </TableCell>
             </TableRow>
@@ -57,15 +56,12 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
             patients.map((patient) => (
               <TableRow key={patient.id}>
                 <TableCell className="font-medium">{patient.name}</TableCell>
-                <TableCell>
-                  {patient.birth_date
-                    ? format(new Date(patient.birth_date), 'yyyy-MM-dd', { locale: ko })
-                    : '-'}
-                </TableCell>
+                <TableCell>{patient.patient_id_no || '-'}</TableCell>
+                <TableCell>{patient.room_number || '-'}</TableCell>
                 <TableCell>
                   {patient.gender ? genderLabels[patient.gender] : '-'}
                 </TableCell>
-                <TableCell>{patient.coordinator_name || '-'}</TableCell>
+                <TableCell>{patient.doctor_name || '-'}</TableCell>
                 <TableCell>
                   {patient.schedule_pattern ? (
                     <div className="flex gap-1">

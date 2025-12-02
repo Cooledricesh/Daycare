@@ -42,14 +42,17 @@ export async function getPatients(
     .select(`
       id,
       name,
-      birth_date,
       gender,
+      room_number,
+      patient_id_no,
       coordinator_id,
+      doctor_id,
       status,
       memo,
       created_at,
       updated_at,
-      coordinator:staff!coordinator_id(name)
+      coordinator:staff!coordinator_id(name),
+      doctor:staff!doctor_id(name)
     `, { count: 'exact' });
 
   // 필터 적용
@@ -95,10 +98,13 @@ export async function getPatients(
   const result: PatientWithCoordinator[] = (data || []).map((p: any) => ({
     id: p.id,
     name: p.name,
-    birth_date: p.birth_date,
     gender: p.gender,
+    room_number: p.room_number,
+    patient_id_no: p.patient_id_no,
     coordinator_id: p.coordinator_id,
     coordinator_name: p.coordinator?.name || null,
+    doctor_id: p.doctor_id,
+    doctor_name: p.doctor?.name || null,
     status: p.status,
     memo: p.memo,
     created_at: p.created_at,
@@ -126,14 +132,17 @@ export async function getPatientDetail(
     .select(`
       id,
       name,
-      birth_date,
       gender,
+      room_number,
+      patient_id_no,
       coordinator_id,
+      doctor_id,
       status,
       memo,
       created_at,
       updated_at,
-      coordinator:staff!coordinator_id(name)
+      coordinator:staff!coordinator_id(name),
+      doctor:staff!doctor_id(name)
     `)
     .eq('id', patientId)
     .single();
@@ -157,10 +166,13 @@ export async function getPatientDetail(
   return {
     id: patientData.id,
     name: patientData.name,
-    birth_date: patientData.birth_date,
     gender: patientData.gender,
+    room_number: patientData.room_number,
+    patient_id_no: patientData.patient_id_no,
     coordinator_id: patientData.coordinator_id,
     coordinator_name: patientData.coordinator?.name || null,
+    doctor_id: patientData.doctor_id,
+    doctor_name: patientData.doctor?.name || null,
     status: patientData.status,
     memo: patientData.memo,
     created_at: patientData.created_at,
@@ -179,9 +191,11 @@ export async function createPatient(
     .from('patients') as any)
     .insert({
       name: request.name,
-      birth_date: request.birth_date || null,
       gender: request.gender || null,
+      room_number: request.room_number || null,
+      patient_id_no: request.patient_id_no || null,
       coordinator_id: request.coordinator_id || null,
+      doctor_id: request.doctor_id || null,
       memo: request.memo || null,
       status: 'active',
     })
@@ -217,15 +231,22 @@ export async function createPatient(
     }
   }
 
-  // 코디네이터 이름 가져오기
+  // 코디네이터/주치의 이름 가져오기
   let coordinatorName: string | null = null;
-  if (patient.coordinator_id) {
-    const { data: coordinator } = await (supabase
+  let doctorName: string | null = null;
+
+  if (patient.coordinator_id || patient.doctor_id) {
+    const staffIds = [patient.coordinator_id, patient.doctor_id].filter(Boolean);
+    const { data: staffList } = await (supabase
       .from('staff') as any)
-      .select('name')
-      .eq('id', patient.coordinator_id)
-      .single();
-    coordinatorName = (coordinator as any)?.name || null;
+      .select('id, name')
+      .in('id', staffIds);
+
+    if (staffList) {
+      const staffMap = new Map<string, string>(staffList.map((s: any) => [s.id, s.name]));
+      coordinatorName = staffMap.get(patient.coordinator_id) ?? null;
+      doctorName = staffMap.get(patient.doctor_id) ?? null;
+    }
   }
 
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
@@ -237,10 +258,13 @@ export async function createPatient(
   return {
     id: patient.id,
     name: patient.name,
-    birth_date: patient.birth_date,
     gender: patient.gender,
+    room_number: patient.room_number,
+    patient_id_no: patient.patient_id_no,
     coordinator_id: patient.coordinator_id,
     coordinator_name: coordinatorName,
+    doctor_id: patient.doctor_id,
+    doctor_name: doctorName,
     status: patient.status,
     memo: patient.memo,
     created_at: patient.created_at,
@@ -257,9 +281,11 @@ export async function updatePatient(
   // 환자 정보 업데이트
   const updateData: any = {};
   if (request.name !== undefined) updateData.name = request.name;
-  if (request.birth_date !== undefined) updateData.birth_date = request.birth_date || null;
   if (request.gender !== undefined) updateData.gender = request.gender || null;
+  if (request.room_number !== undefined) updateData.room_number = request.room_number || null;
+  if (request.patient_id_no !== undefined) updateData.patient_id_no = request.patient_id_no || null;
   if (request.coordinator_id !== undefined) updateData.coordinator_id = request.coordinator_id || null;
+  if (request.doctor_id !== undefined) updateData.doctor_id = request.doctor_id || null;
   if (request.status !== undefined) updateData.status = request.status;
   if (request.memo !== undefined) updateData.memo = request.memo || null;
 
