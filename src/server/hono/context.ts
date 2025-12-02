@@ -10,10 +10,19 @@ export type AppConfig = {
   };
 };
 
+export type JWTPayload = {
+  sub: string; // user.id
+  role: string;
+  name: string;
+  iat?: number;
+  exp?: number;
+};
+
 export type AppVariables = {
   supabase: SupabaseClient;
   logger: AppLogger;
   config: AppConfig;
+  user?: JWTPayload; // JWT 인증 후 주입되는 사용자 정보
 };
 
 export type AppEnv = {
@@ -26,6 +35,7 @@ export const contextKeys = {
   supabase: 'supabase',
   logger: 'logger',
   config: 'config',
+  user: 'user',
 } as const satisfies Record<keyof AppVariables, keyof AppVariables>;
 
 export const getSupabase = (c: AppContext) =>
@@ -36,3 +46,6 @@ export const getLogger = (c: AppContext) =>
 
 export const getConfig = (c: AppContext) =>
   c.get(contextKeys.config) as AppConfig;
+
+export const getUser = (c: AppContext) =>
+  c.get(contextKeys.user) as JWTPayload | undefined;

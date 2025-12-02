@@ -23,11 +23,14 @@ const staffRoutes = new Hono<AppEnv>();
  */
 staffRoutes.get('/my-patients', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const date = c.req.query('date');
 
-  // TODO: JWT에서 staffId 추출 (현재는 임시로 하드코딩)
-  // const staffId = c.get('staffId');
-  const staffId = '00000000-0000-0000-0000-000000000000';
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub; // JWT의 sub 필드에서 사용자 ID 추출
 
   try {
     const params = getMyPatientsSchema.parse({ date });
@@ -48,11 +51,15 @@ staffRoutes.get('/my-patients', async (c) => {
  */
 staffRoutes.get('/patient/:id', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const patient_id = c.req.param('id');
   const date = c.req.query('date');
 
-  // TODO: JWT에서 staffId 추출
-  const staffId = '00000000-0000-0000-0000-000000000000';
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
 
   try {
     const params = getPatientDetailSchema.parse({ patient_id, date });
@@ -73,11 +80,15 @@ staffRoutes.get('/patient/:id', async (c) => {
  */
 staffRoutes.post('/task/:consultation_id/complete', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const consultation_id = c.req.param('consultation_id');
   const body = await c.req.json();
 
-  // TODO: JWT에서 staffId 추출
-  const staffId = '00000000-0000-0000-0000-000000000000';
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
 
   try {
     const params = completeTaskSchema.parse({ consultation_id, ...body });
@@ -98,10 +109,14 @@ staffRoutes.post('/task/:consultation_id/complete', async (c) => {
  */
 staffRoutes.post('/messages', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const body = await c.req.json();
 
-  // TODO: JWT에서 staffId 추출
-  const staffId = '00000000-0000-0000-0000-000000000000';
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
 
   try {
     const params = createMessageSchema.parse(body);

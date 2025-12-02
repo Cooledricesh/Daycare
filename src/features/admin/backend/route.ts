@@ -204,11 +204,15 @@ adminRoutes.post('/staff', async (c) => {
  */
 adminRoutes.put('/staff/:id', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const staffId = c.req.param('id');
   const body = await c.req.json();
 
-  // TODO: 현재 로그인한 사용자 ID 가져오기 (미들웨어에서 주입)
-  const currentUserId = 'CURRENT_USER_ID'; // 임시
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const currentUserId = user.sub; // JWT의 sub 필드에서 현재 사용자 ID 추출
 
   try {
     const request = updateStaffSchema.parse(body);

@@ -39,11 +39,15 @@ nurseRoutes.get('/prescriptions', async (c) => {
  */
 nurseRoutes.post('/task/:consultation_id/complete', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const consultation_id = c.req.param('consultation_id');
   const body = await c.req.json();
 
-  // TODO: JWT에서 staffId 추출
-  const staffId = 'temp-nurse-id';
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
 
   try {
     const params = completeTaskSchema.parse({ consultation_id, ...body });
@@ -64,10 +68,14 @@ nurseRoutes.post('/task/:consultation_id/complete', async (c) => {
  */
 nurseRoutes.post('/messages', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const body = await c.req.json();
 
-  // TODO: JWT에서 staffId 추출
-  const staffId = 'temp-nurse-id';
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
 
   try {
     const params = createMessageSchema.parse(body);

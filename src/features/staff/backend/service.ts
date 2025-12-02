@@ -29,26 +29,15 @@ export async function getMyPatients(
 
   if (error) {
     // RPC가 없는 경우 직접 쿼리
+    // 먼저 담당 환자 목록 조회 (출석 여부와 관계없이)
     const { data: patients, error: patientsError } = await (supabase
       .from('patients') as any)
       .select(`
         id,
-        name,
-        attendances!inner(checked_at),
-        consultations(
-          id,
-          has_task,
-          task_content,
-          task_target,
-          task_completions(is_completed)
-        ),
-        messages(id, is_read)
+        name
       `)
       .eq('coordinator_id', coordinatorId)
-      .eq('status', 'active')
-      .eq('attendances.date', date)
-      .eq('consultations.date', date)
-      .eq('messages.date', date);
+      .eq('status', 'active');
 
     if (patientsError) {
       throw new StaffError(
@@ -57,12 +46,58 @@ export async function getMyPatients(
       );
     }
 
-    // 데이터 변환
+    // 각 환자에 대해 출석, 진찰, 메시지 정보 조회
+    const patientIds = (patients || []).map((p: any) => p.id);
+
+    if (patientIds.length === 0) {
+      return [];
+    }
+
+    // 해당 날짜의 출석 정보
+    const { data: attendances } = await (supabase
+      .from('attendances') as any)
+      .select('patient_id, checked_at')
+      .in('patient_id', patientIds)
+      .eq('date', date);
+
+    // 해당 날짜의 진찰 정보
+    const { data: consultations } = await (supabase
+      .from('consultations') as any)
+      .select(`
+        patient_id,
+        id,
+        has_task,
+        task_content,
+        task_target,
+        task_completions(is_completed)
+      `)
+      .in('patient_id', patientIds)
+      .eq('date', date);
+
+    // 해당 날짜의 메시지 정보
+    const { data: messages } = await (supabase
+      .from('messages') as any)
+      .select('patient_id, id, is_read')
+      .in('patient_id', patientIds)
+      .eq('date', date);
+
+    // 데이터를 Map으로 변환
+    const attendanceMap = new Map((attendances || []).map((a: any) => [a.patient_id, a]));
+    const consultationMap = new Map((consultations || []).map((c: any) => [c.patient_id, c]));
+    const messageMap = new Map<string, any[]>();
+    (messages || []).forEach((m: any) => {
+      if (!messageMap.has(m.patient_id)) {
+        messageMap.set(m.patient_id, []);
+      }
+      messageMap.get(m.patient_id)!.push(m);
+    });
+
+    // 데이터 변환 (Map에서 조회)
     return (patients || []).map((p: any) => {
-      const attendance = p.attendances?.[0];
-      const consultation = p.consultations?.[0];
+      const attendance = attendanceMap.get(p.id);
+      const consultation = consultationMap.get(p.id);
       const taskCompletions = consultation?.task_completions || [];
-      const messages = p.messages || [];
+      const patientMessages = messageMap.get(p.id) || [];
 
       return {
         id: p.id,
@@ -79,7 +114,7 @@ export async function getMyPatients(
           taskCompletions.length > 0
             ? taskCompletions.every((tc: any) => tc.is_completed)
             : false,
-        unread_message_count: messages.filter((m: any) => !m.is_read).length,
+        unread_message_count: patientMessages.filter((m: any) => !m.is_read).length,
       };
     });
   }
