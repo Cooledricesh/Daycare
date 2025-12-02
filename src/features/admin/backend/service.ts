@@ -49,7 +49,7 @@ export async function getPatients(
       memo,
       created_at,
       updated_at,
-      coordinator:staff!coordinator_id(name)
+      coordinator:staff(name)
     `, { count: 'exact' });
 
   // 필터 적용
@@ -133,7 +133,7 @@ export async function getPatientDetail(
       memo,
       created_at,
       updated_at,
-      coordinator:staff!coordinator_id(name)
+      coordinator:staff(name)
     `)
     .eq('id', patientId)
     .single();
@@ -494,7 +494,7 @@ export async function getSchedulePatterns(
     .select(`
       id,
       name,
-      coordinator:staff!coordinator_id(name)
+      coordinator:staff(name)
     `, { count: 'exact' })
     .eq('status', 'active');
 
@@ -590,7 +590,7 @@ export async function getDailySchedule(
       is_cancelled,
       created_at,
       patient:patients!patient_id(name, coordinator_id),
-      coordinator:patients!patient_id(coordinator:staff!coordinator_id(name))
+      coordinator:patients!patient_id(coordinator:staff(name))
     `)
     .eq('date', query.date);
 
@@ -671,7 +671,7 @@ export async function addManualSchedule(
       is_cancelled,
       created_at,
       patient:patients!patient_id(name, coordinator_id),
-      coordinator:patients!patient_id(coordinator:staff!coordinator_id(name))
+      coordinator:patients!patient_id(coordinator:staff(name))
     `)
     .single();
 
