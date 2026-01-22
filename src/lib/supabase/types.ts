@@ -52,9 +52,11 @@ export interface Database {
                 Row: {
                     id: string;
                     name: string;
-                    birth_date: string | null;
                     gender: Gender | null;
+                    room_number: string | null;
+                    patient_id_no: string | null;
                     coordinator_id: string | null;
+                    doctor_id: string | null;
                     status: PatientStatus;
                     memo: string | null;
                     created_at: string;
@@ -63,9 +65,11 @@ export interface Database {
                 Insert: {
                     id?: string;
                     name: string;
-                    birth_date?: string | null;
                     gender?: Gender | null;
+                    room_number?: string | null;
+                    patient_id_no?: string | null;
                     coordinator_id?: string | null;
+                    doctor_id?: string | null;
                     status?: PatientStatus;
                     memo?: string | null;
                     created_at?: string;
@@ -74,9 +78,11 @@ export interface Database {
                 Update: {
                     id?: string;
                     name?: string;
-                    birth_date?: string | null;
                     gender?: Gender | null;
+                    room_number?: string | null;
+                    patient_id_no?: string | null;
                     coordinator_id?: string | null;
+                    doctor_id?: string | null;
                     status?: PatientStatus;
                     memo?: string | null;
                     created_at?: string;

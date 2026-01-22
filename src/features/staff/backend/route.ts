@@ -7,12 +7,15 @@ import {
   getPatientDetailSchema,
   completeTaskSchema,
   createMessageSchema,
+  updateSchedulePatternSchema,
 } from './schema';
 import {
   getMyPatients,
   getPatientDetail,
   completeTask,
   createMessage,
+  getMyPatientsSchedulePatterns,
+  updateMyPatientSchedulePattern,
 } from './service';
 
 const staffRoutes = new Hono<AppEnv>();
@@ -60,10 +63,11 @@ staffRoutes.get('/patient/:id', async (c) => {
   }
 
   const staffId = user.sub;
+  const userRole = user.role;
 
   try {
     const params = getPatientDetailSchema.parse({ patient_id, date });
-    const patient = await getPatientDetail(supabase, staffId, params);
+    const patient = await getPatientDetail(supabase, staffId, userRole, params);
 
     return respond(c, success({ patient }, 200));
   } catch (error) {
@@ -123,6 +127,59 @@ staffRoutes.post('/messages', async (c) => {
     const message = await createMessage(supabase, staffId, params);
 
     return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * GET /api/staff/schedule-patterns
+ * 담당 환자 출석 패턴 목록 조회
+ */
+staffRoutes.get('/schedule-patterns', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    const patterns = await getMyPatientsSchedulePatterns(supabase, staffId);
+    return respond(c, success({ patterns }, 200));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * PUT /api/staff/schedule-patterns/:patient_id
+ * 담당 환자 출석 패턴 수정
+ */
+staffRoutes.put('/schedule-patterns/:patient_id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const patientId = c.req.param('patient_id');
+  const body = await c.req.json();
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    const params = updateSchedulePatternSchema.parse(body);
+    const result = await updateMyPatientSchedulePattern(supabase, staffId, patientId, params);
+    return respond(c, success(result, 200));
   } catch (error) {
     if (error instanceof StaffError) {
       return respond(c, failure(400, error.code, error.message));

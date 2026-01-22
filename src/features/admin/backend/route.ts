@@ -297,11 +297,27 @@ adminRoutes.get('/schedule/patterns', async (c) => {
 /**
  * PUT /api/admin/schedule/patterns/:patient_id
  * 환자 출석 패턴 수정
+ * - admin: 모든 환자 수정 가능
+ * - coordinator: 담당 환자만 수정 가능
  */
 adminRoutes.put('/schedule/patterns/:patient_id', async (c) => {
   const supabase = c.get('supabase');
+  const user = c.get('user');
   const patientId = c.req.param('patient_id');
   const body = await c.req.json();
+
+  // coordinator인 경우 담당 환자 검증
+  if (user && user.role === 'coordinator') {
+    const { data: patient } = await (supabase
+      .from('patients') as any)
+      .select('coordinator_id')
+      .eq('id', patientId)
+      .single();
+
+    if (!patient || patient.coordinator_id !== user.sub) {
+      return respond(c, failure(403, 'FORBIDDEN', '담당 환자가 아닙니다'));
+    }
+  }
 
   try {
     const request = updateSchedulePatternSchema.parse(body);

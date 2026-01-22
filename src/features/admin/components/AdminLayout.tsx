@@ -9,7 +9,10 @@ import {
   Calendar,
   BarChart3,
   LogOut,
+  User,
 } from 'lucide-react';
+import { useLogout } from '@/hooks/useLogout';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -38,21 +41,20 @@ const navItems = [
   },
 ];
 
-import { useLogout } from '@/hooks/useLogout';
-
 export function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname();
   const { logout } = useLogout();
+  const { user } = useAuth();
 
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200">
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <h1 className="text-xl font-bold text-gray-900">주간보호센터</h1>
         </div>
 
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 flex-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname.startsWith(item.href);
@@ -75,7 +77,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 w-64 p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 space-y-2">
+          {user && (
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600">
+              <User className="h-4 w-4" />
+              <span>{user.name}</span>
+              <span className="text-xs text-gray-400">(관리자)</span>
+            </div>
+          )}
           <button
             className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
             onClick={logout}

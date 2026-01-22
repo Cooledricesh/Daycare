@@ -9,6 +9,15 @@ import type {
   Message,
 } from './schema';
 import { NurseError, NurseErrorCode } from './error';
+import {
+  completeTask as completeTaskShared,
+  TaskError,
+} from '@/server/services/task';
+import {
+  createMessage as createMessageShared,
+  MessageError,
+} from '@/server/services/message';
+import { getTodayString } from '@/lib/date';
 
 /**
  * 처방 변경 목록 조회
@@ -89,56 +98,26 @@ export async function completeTask(
   staffId: string,
   params: CompleteTaskRequest,
 ): Promise<TaskCompletion> {
-  // consultation_id로 task_completion 찾기
-  const { data: taskCompletion, error: findError } = await (supabase
-    .from('task_completions') as any)
-    .select('id, is_completed')
-    .eq('consultation_id', params.consultation_id)
-    .eq('completed_by', staffId)
-    .eq('role', 'nurse')
-    .maybeSingle();
-
-  if (findError) {
-    throw new NurseError(
-      NurseErrorCode.TASK_NOT_FOUND,
-      `지시사항을 찾을 수 없습니다: ${findError.message}`,
-    );
+  try {
+    const result = await completeTaskShared(supabase, staffId, 'nurse', {
+      consultation_id: params.consultation_id,
+      memo: params.memo,
+    });
+    return result;
+  } catch (error) {
+    if (error instanceof TaskError) {
+      const errorCodeMap: Record<string, NurseErrorCode> = {
+        TASK_NOT_FOUND: NurseErrorCode.TASK_NOT_FOUND,
+        TASK_ALREADY_COMPLETED: NurseErrorCode.TASK_ALREADY_COMPLETED,
+        TASK_UPDATE_FAILED: NurseErrorCode.INVALID_REQUEST,
+      };
+      throw new NurseError(
+        errorCodeMap[error.code] || NurseErrorCode.INVALID_REQUEST,
+        error.message,
+      );
+    }
+    throw error;
   }
-
-  if (!taskCompletion) {
-    throw new NurseError(
-      NurseErrorCode.TASK_NOT_FOUND,
-      '지시사항을 찾을 수 없습니다',
-    );
-  }
-
-  if ((taskCompletion as any).is_completed) {
-    throw new NurseError(
-      NurseErrorCode.TASK_ALREADY_COMPLETED,
-      '이미 처리 완료된 지시사항입니다',
-    );
-  }
-
-  // 처리 완료로 업데이트
-  const { data, error } = await (supabase
-    .from('task_completions') as any)
-    .update({
-      is_completed: true,
-      completed_at: new Date().toISOString(),
-      memo: params.memo || null,
-    })
-    .eq('id', (taskCompletion as any).id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new NurseError(
-      NurseErrorCode.INVALID_REQUEST,
-      `지시사항 처리에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
-    );
-  }
-
-  return data as TaskCompletion;
 }
 
 /**
@@ -149,27 +128,17 @@ export async function createMessage(
   staffId: string,
   params: CreateMessageRequest,
 ): Promise<Message> {
-  const insertData = {
-    patient_id: params.patient_id,
-    date: params.date,
-    author_id: staffId,
-    author_role: 'nurse' as const,
-    content: params.content,
-    is_read: false,
-  };
-
-  const { data, error } = await (supabase
-    .from('messages') as any)
-    .insert([insertData])
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new NurseError(
-      NurseErrorCode.MESSAGE_SAVE_FAILED,
-      `전달사항 저장에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
-    );
+  try {
+    const result = await createMessageShared(supabase, staffId, 'nurse', {
+      patient_id: params.patient_id,
+      date: params.date,
+      content: params.content,
+    });
+    return result;
+  } catch (error) {
+    if (error instanceof MessageError) {
+      throw new NurseError(NurseErrorCode.MESSAGE_SAVE_FAILED, error.message);
+    }
+    throw error;
   }
-
-  return data as Message;
 }

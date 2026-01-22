@@ -48,7 +48,6 @@ export type PatientSummary = {
 export type PatientDetail = {
   id: string;
   name: string;
-  birth_date: string | null;
   gender: string | null;
   attendance: {
     is_attended: boolean;
@@ -90,4 +89,18 @@ export type Message = {
   date: string;
   content: string;
   created_at: string;
+};
+
+// 출석 패턴 수정 스키마
+export const updateSchedulePatternSchema = z.object({
+  schedule_days: z.array(z.number().min(0).max(6)),
+});
+
+export type UpdateSchedulePatternRequest = z.infer<typeof updateSchedulePatternSchema>;
+
+// 담당 환자 패턴 목록 응답 타입
+export type MyPatientSchedulePattern = {
+  patient_id: string;
+  patient_name: string;
+  schedule_days: number[];
 };

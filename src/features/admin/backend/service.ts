@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import bcrypt from 'bcryptjs';
+import { formatScheduleDays } from '@/lib/date';
 import { AdminError, AdminErrorCode } from './error';
 import type {
   GetPatientsQuery,
@@ -93,8 +94,6 @@ export async function getPatients(
     patternMap.get(p.patient_id)!.push(p.day_of_week);
   });
 
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-
   const result: PatientWithCoordinator[] = (data || []).map((p: any) => ({
     id: p.id,
     name: p.name,
@@ -109,10 +108,7 @@ export async function getPatients(
     memo: p.memo,
     created_at: p.created_at,
     updated_at: p.updated_at,
-    schedule_pattern: (patternMap.get(p.id) || [])
-      .sort((a, b) => a - b)
-      .map((d) => dayNames[d])
-      .join(','),
+    schedule_pattern: formatScheduleDays(patternMap.get(p.id) || []),
   }));
 
   return {
@@ -156,11 +152,9 @@ export async function getPatientDetail(
     .select('id, day_of_week, is_active')
     .eq('patient_id', patientId);
 
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const scheduleDays = ((patterns as any) || [])
     .filter((p: any) => p.is_active)
-    .map((p: any) => p.day_of_week)
-    .sort((a: number, b: number) => a - b);
+    .map((p: any) => p.day_of_week);
 
   const patientData = data as any;
   return {
@@ -177,7 +171,7 @@ export async function getPatientDetail(
     memo: patientData.memo,
     created_at: patientData.created_at,
     updated_at: patientData.updated_at,
-    schedule_pattern: scheduleDays.map((d: number) => dayNames[d]).join(','),
+    schedule_pattern: formatScheduleDays(scheduleDays),
     schedule_patterns: (patterns as any) || [],
   };
 }
@@ -249,12 +243,6 @@ export async function createPatient(
     }
   }
 
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-  const schedulePattern = request.schedule_days
-    .sort((a, b) => a - b)
-    .map((d) => dayNames[d])
-    .join(',');
-
   return {
     id: patient.id,
     name: patient.name,
@@ -269,7 +257,7 @@ export async function createPatient(
     memo: patient.memo,
     created_at: patient.created_at,
     updated_at: patient.updated_at,
-    schedule_pattern: schedulePattern,
+    schedule_pattern: formatScheduleDays(request.schedule_days),
   };
 }
 

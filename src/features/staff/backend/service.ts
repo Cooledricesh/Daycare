@@ -5,12 +5,23 @@ import type {
   GetPatientDetailParams,
   CompleteTaskRequest,
   CreateMessageRequest,
+  UpdateSchedulePatternRequest,
   PatientSummary,
   PatientDetail,
   TaskCompletion,
   Message,
+  MyPatientSchedulePattern,
 } from './schema';
 import { StaffError, StaffErrorCode } from './error';
+import {
+  completeTask as completeTaskShared,
+  TaskError,
+} from '@/server/services/task';
+import {
+  createMessage as createMessageShared,
+  MessageError,
+} from '@/server/services/message';
+import { getMonthsAgoString, getTodayString } from '@/lib/date';
 
 /**
  * 담당 환자 목록 조회
@@ -82,8 +93,8 @@ export async function getMyPatients(
       .eq('date', date);
 
     // 데이터를 Map으로 변환
-    const attendanceMap = new Map((attendances || []).map((a: any) => [a.patient_id, a]));
-    const consultationMap = new Map((consultations || []).map((c: any) => [c.patient_id, c]));
+    const attendanceMap = new Map<string, any>((attendances || []).map((a: any) => [a.patient_id, a]));
+    const consultationMap = new Map<string, any>((consultations || []).map((c: any) => [c.patient_id, c]));
     const messageMap = new Map<string, any[]>();
     (messages || []).forEach((m: any) => {
       if (!messageMap.has(m.patient_id)) {
@@ -128,6 +139,7 @@ export async function getMyPatients(
 export async function getPatientDetail(
   supabase: SupabaseClient<Database>,
   coordinatorId: string,
+  userRole: string,
   params: GetPatientDetailParams,
 ): Promise<PatientDetail> {
   const date = params.date || new Date().toISOString().split('T')[0];
@@ -135,7 +147,7 @@ export async function getPatientDetail(
   // 환자 기본 정보
   const { data: patient, error: patientError } = await (supabase
     .from('patients') as any)
-    .select('id, name, birth_date, gender, coordinator_id')
+    .select('id, name, gender, coordinator_id')
     .eq('id', params.patient_id)
     .single();
 
@@ -146,8 +158,11 @@ export async function getPatientDetail(
     );
   }
 
-  // 담당자 확인
-  if ((patient as any).coordinator_id !== coordinatorId) {
+  // 담당자 확인 (admin은 모든 환자 접근 가능)
+  const isAdmin = userRole === 'admin';
+  const isCoordinator = (patient as any).coordinator_id === coordinatorId;
+
+  if (!isAdmin && !isCoordinator) {
     throw new StaffError(
       StaffErrorCode.UNAUTHORIZED,
       '담당 환자가 아닙니다',
@@ -171,7 +186,7 @@ export async function getPatientDetail(
       has_task,
       task_content,
       task_target,
-      task_completions(id, is_completed, completed_at, memo)
+      task_completions(id, is_completed, completed_at, memo, role)
     `)
     .eq('patient_id', params.patient_id)
     .eq('date', date)
@@ -210,7 +225,6 @@ export async function getPatientDetail(
   return {
     id: (patient as any).id,
     name: (patient as any).name,
-    birth_date: (patient as any).birth_date,
     gender: (patient as any).gender,
     attendance: {
       is_attended: !!attendance,
@@ -246,56 +260,26 @@ export async function completeTask(
   staffId: string,
   params: CompleteTaskRequest,
 ): Promise<TaskCompletion> {
-  // consultation_id로 task_completion 찾기
-  const { data: taskCompletion, error: findError } = await (supabase
-    .from('task_completions') as any)
-    .select('id, is_completed')
-    .eq('consultation_id', params.consultation_id)
-    .eq('completed_by', staffId)
-    .eq('role', 'coordinator')
-    .maybeSingle();
-
-  if (findError) {
-    throw new StaffError(
-      StaffErrorCode.TASK_NOT_FOUND,
-      `지시사항을 찾을 수 없습니다: ${findError.message}`,
-    );
+  try {
+    const result = await completeTaskShared(supabase, staffId, 'coordinator', {
+      consultation_id: params.consultation_id,
+      memo: params.memo,
+    });
+    return result;
+  } catch (error) {
+    if (error instanceof TaskError) {
+      const errorCodeMap: Record<string, StaffErrorCode> = {
+        TASK_NOT_FOUND: StaffErrorCode.TASK_NOT_FOUND,
+        TASK_ALREADY_COMPLETED: StaffErrorCode.TASK_ALREADY_COMPLETED,
+        TASK_UPDATE_FAILED: StaffErrorCode.INVALID_REQUEST,
+      };
+      throw new StaffError(
+        errorCodeMap[error.code] || StaffErrorCode.INVALID_REQUEST,
+        error.message,
+      );
+    }
+    throw error;
   }
-
-  if (!taskCompletion) {
-    throw new StaffError(
-      StaffErrorCode.TASK_NOT_FOUND,
-      '지시사항을 찾을 수 없습니다',
-    );
-  }
-
-  if ((taskCompletion as any).is_completed) {
-    throw new StaffError(
-      StaffErrorCode.TASK_ALREADY_COMPLETED,
-      '이미 처리 완료된 지시사항입니다',
-    );
-  }
-
-  // 처리 완료로 업데이트
-  const { data, error } = await (supabase
-    .from('task_completions') as any)
-    .update({
-      is_completed: true,
-      completed_at: new Date().toISOString(),
-      memo: params.memo || null,
-    })
-    .eq('id', (taskCompletion as any).id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new StaffError(
-      StaffErrorCode.INVALID_REQUEST,
-      `지시사항 처리에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
-    );
-  }
-
-  return data as TaskCompletion;
 }
 
 /**
@@ -306,27 +290,126 @@ export async function createMessage(
   staffId: string,
   params: CreateMessageRequest,
 ): Promise<Message> {
-  const insertData = {
-    patient_id: params.patient_id,
-    date: params.date,
-    author_id: staffId,
-    author_role: 'coordinator' as const,
-    content: params.content,
-    is_read: false,
-  };
+  try {
+    const result = await createMessageShared(supabase, staffId, 'coordinator', {
+      patient_id: params.patient_id,
+      date: params.date,
+      content: params.content,
+    });
+    return result;
+  } catch (error) {
+    if (error instanceof MessageError) {
+      throw new StaffError(StaffErrorCode.MESSAGE_SAVE_FAILED, error.message);
+    }
+    throw error;
+  }
+}
 
-  const { data, error } = await (supabase
-    .from('messages') as any)
-    .insert([insertData])
-    .select()
-    .single();
+/**
+ * 담당 환자 출석 패턴 목록 조회
+ */
+export async function getMyPatientsSchedulePatterns(
+  supabase: SupabaseClient<Database>,
+  coordinatorId: string,
+): Promise<MyPatientSchedulePattern[]> {
+  // 담당 환자 목록 조회
+  const { data: patients, error: patientsError } = await (supabase
+    .from('patients') as any)
+    .select('id, name')
+    .eq('coordinator_id', coordinatorId)
+    .eq('status', 'active')
+    .order('name');
 
-  if (error || !data) {
+  if (patientsError) {
     throw new StaffError(
-      StaffErrorCode.MESSAGE_SAVE_FAILED,
-      `전달사항 저장에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
+      StaffErrorCode.INVALID_REQUEST,
+      `환자 목록 조회에 실패했습니다: ${patientsError.message}`,
     );
   }
 
-  return data as Message;
+  const patientIds = (patients || []).map((p: any) => p.id);
+
+  if (patientIds.length === 0) {
+    return [];
+  }
+
+  // 스케줄 패턴 조회
+  const { data: patterns } = await (supabase
+    .from('scheduled_patterns') as any)
+    .select('patient_id, day_of_week')
+    .in('patient_id', patientIds)
+    .eq('is_active', true);
+
+  const patternMap = new Map<string, number[]>();
+  (patterns || []).forEach((p: any) => {
+    if (!patternMap.has(p.patient_id)) {
+      patternMap.set(p.patient_id, []);
+    }
+    patternMap.get(p.patient_id)!.push(p.day_of_week);
+  });
+
+  return (patients || []).map((p: any) => ({
+    patient_id: p.id,
+    patient_name: p.name,
+    schedule_days: (patternMap.get(p.id) || []).sort((a, b) => a - b),
+  }));
+}
+
+/**
+ * 담당 환자 출석 패턴 수정
+ */
+export async function updateMyPatientSchedulePattern(
+  supabase: SupabaseClient<Database>,
+  coordinatorId: string,
+  patientId: string,
+  request: UpdateSchedulePatternRequest,
+): Promise<{ success: boolean }> {
+  // 담당 환자인지 확인
+  const { data: patient, error: patientError } = await (supabase
+    .from('patients') as any)
+    .select('id, coordinator_id')
+    .eq('id', patientId)
+    .single();
+
+  if (patientError || !patient) {
+    throw new StaffError(
+      StaffErrorCode.PATIENT_NOT_FOUND,
+      '환자를 찾을 수 없습니다',
+    );
+  }
+
+  if ((patient as any).coordinator_id !== coordinatorId) {
+    throw new StaffError(
+      StaffErrorCode.UNAUTHORIZED,
+      '담당 환자가 아닙니다',
+    );
+  }
+
+  // 기존 패턴 삭제
+  await (supabase
+    .from('scheduled_patterns') as any)
+    .delete()
+    .eq('patient_id', patientId);
+
+  // 새 패턴 생성
+  if (request.schedule_days.length > 0) {
+    const patternsToInsert = request.schedule_days.map((day) => ({
+      patient_id: patientId,
+      day_of_week: day,
+      is_active: true,
+    }));
+
+    const { error: insertError } = await (supabase
+      .from('scheduled_patterns') as any)
+      .insert(patternsToInsert);
+
+    if (insertError) {
+      throw new StaffError(
+        StaffErrorCode.INVALID_REQUEST,
+        `스케줄 패턴 수정에 실패했습니다: ${insertError.message}`,
+      );
+    }
+  }
+
+  return { success: true };
 }
