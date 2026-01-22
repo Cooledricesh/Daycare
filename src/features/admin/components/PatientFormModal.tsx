@@ -234,15 +234,15 @@ export function PatientFormModal({
           <div className="space-y-2">
             <Label htmlFor="doctor_id">주치의</Label>
             <Select
-              value={watch('doctor_id') || ''}
-              onValueChange={(value) => setValue('doctor_id', value)}
+              value={watch('doctor_id') || '__none__'}
+              onValueChange={(value) => setValue('doctor_id', value === '__none__' ? '' : value)}
               disabled={isLoading}
             >
               <SelectTrigger>
                 <SelectValue placeholder="주치의 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">선택 안 함</SelectItem>
+                <SelectItem value="__none__">선택 안 함</SelectItem>
                 {doctors?.map((doctor) => (
                   <SelectItem key={doctor.id} value={doctor.id}>
                     {doctor.name}
@@ -256,15 +256,15 @@ export function PatientFormModal({
           <div className="space-y-2">
             <Label htmlFor="coordinator_id">담당 코디</Label>
             <Select
-              value={watch('coordinator_id') || ''}
-              onValueChange={(value) => setValue('coordinator_id', value)}
+              value={watch('coordinator_id') || '__none__'}
+              onValueChange={(value) => setValue('coordinator_id', value === '__none__' ? '' : value)}
               disabled={isLoading}
             >
               <SelectTrigger>
                 <SelectValue placeholder="담당 코디 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">선택 안 함</SelectItem>
+                <SelectItem value="__none__">선택 안 함</SelectItem>
                 {coordinators?.map((coordinator) => (
                   <SelectItem key={coordinator.id} value={coordinator.id}>
                     {coordinator.name}

@@ -60,11 +60,8 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
           </Button>
         </Link>
         <h1 className="text-2xl font-bold">{patient.name}</h1>
-        {patient.birth_date && patient.gender && (
+        {patient.gender && (
           <p className="text-gray-600">
-            {format(new Date(patient.birth_date), 'yyyy.MM.dd', {
-              locale: ko,
-            })}{' '}
             ({patient.gender === 'M' ? '남' : '여'})
           </p>
         )}

@@ -30,6 +30,8 @@ import {
   useCancelSchedule,
   useDeleteSchedule,
 } from '@/features/admin/hooks/useSchedule';
+import { SchedulePatternModal } from '@/features/admin/components/SchedulePatternModal';
+import { ManualScheduleModal } from '@/features/admin/components/ManualScheduleModal';
 import { useDebounce } from 'react-use';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -399,7 +401,9 @@ export default function SchedulePage() {
         </TabsContent>
       </Tabs>
 
-      {/* TODO: Pattern Modal, Manual Add Modal */}
+      {/* Modals */}
+      <SchedulePatternModal />
+      <ManualScheduleModal />
     </div>
   );
 }
