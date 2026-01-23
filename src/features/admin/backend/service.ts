@@ -26,6 +26,11 @@ import type {
   StatsSummary,
   GetDailyStatsQuery,
   DailyStatsItem,
+  UpdateRoomMappingRequest,
+  CreateRoomMappingRequest,
+  RoomMappingItem,
+  GetSyncLogsQuery,
+  SyncLogItem,
 } from './schema';
 
 const SALT_ROUNDS = 10;
@@ -871,4 +876,255 @@ export async function getDailyStats(
   }
 
   return (data || []) as DailyStatsItem[];
+}
+
+// ========== Room Mapping Service ==========
+
+export async function getRoomMappings(
+  supabase: SupabaseClient<Database>,
+): Promise<RoomMappingItem[]> {
+  // 매핑 데이터 조회
+  const { data: mappings, error } = await (supabase
+    .from('room_coordinator_mapping') as any)
+    .select(`
+      id,
+      room_prefix,
+      coordinator_id,
+      description,
+      is_active,
+      created_at,
+      updated_at,
+      coordinator:staff!coordinator_id(id, name)
+    `)
+    .order('room_prefix');
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.STAFF_CREATE_FAILED,
+      `호실 매핑 조회 실패: ${error.message}`,
+    );
+  }
+
+  // 각 호실별 환자 수 계산
+  const roomPrefixes = (mappings || []).map((m: any) => m.room_prefix);
+  const patientCounts: Record<string, number> = {};
+
+  if (roomPrefixes.length > 0) {
+    const { data: patients } = await supabase
+      .from('patients')
+      .select('room_number')
+      .eq('status', 'active');
+
+    (patients || []).forEach((p: any) => {
+      if (p.room_number) {
+        const prefix = p.room_number.toString().substring(0, 4);
+        if (roomPrefixes.includes(prefix)) {
+          patientCounts[prefix] = (patientCounts[prefix] || 0) + 1;
+        }
+      }
+    });
+  }
+
+  return (mappings || []).map((m: any) => ({
+    id: m.id,
+    room_prefix: m.room_prefix,
+    coordinator_id: m.coordinator_id,
+    coordinator_name: m.coordinator?.name || null,
+    description: m.description,
+    is_active: m.is_active,
+    patient_count: patientCounts[m.room_prefix] || 0,
+    created_at: m.created_at,
+    updated_at: m.updated_at,
+  }));
+}
+
+export async function updateRoomMapping(
+  supabase: SupabaseClient<Database>,
+  roomPrefix: string,
+  request: UpdateRoomMappingRequest,
+): Promise<RoomMappingItem> {
+  const updateData: any = {};
+  if (request.coordinator_id !== undefined) {
+    updateData.coordinator_id = request.coordinator_id || null;
+  }
+  if (request.description !== undefined) {
+    updateData.description = request.description || null;
+  }
+  if (request.is_active !== undefined) {
+    updateData.is_active = request.is_active;
+  }
+
+  const { data, error } = await (supabase
+    .from('room_coordinator_mapping') as any)
+    .update(updateData)
+    .eq('room_prefix', roomPrefix)
+    .select(`
+      id,
+      room_prefix,
+      coordinator_id,
+      description,
+      is_active,
+      created_at,
+      updated_at,
+      coordinator:staff!coordinator_id(id, name)
+    `)
+    .single();
+
+  if (error || !data) {
+    throw new AdminError(
+      AdminErrorCode.STAFF_UPDATE_FAILED,
+      `호실 매핑 수정 실패: ${error?.message}`,
+    );
+  }
+
+  // 하이브리드 방식: coordinator_id가 변경되면 해당 호실 환자들 일괄 업데이트
+  if (request.coordinator_id !== undefined) {
+    const newCoordinatorId = request.coordinator_id || null;
+    await (supabase
+      .from('patients') as any)
+      .update({ coordinator_id: newCoordinatorId })
+      .eq('room_number', roomPrefix)
+      .eq('status', 'active');
+    // 에러는 무시 (환자가 없을 수도 있음)
+  }
+
+  return {
+    id: data.id,
+    room_prefix: data.room_prefix,
+    coordinator_id: data.coordinator_id,
+    coordinator_name: (data as any).coordinator?.name || null,
+    description: data.description,
+    is_active: data.is_active,
+    patient_count: 0,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  };
+}
+
+export async function createRoomMapping(
+  supabase: SupabaseClient<Database>,
+  request: CreateRoomMappingRequest,
+): Promise<RoomMappingItem> {
+  const { data, error } = await (supabase
+    .from('room_coordinator_mapping') as any)
+    .insert({
+      room_prefix: request.room_prefix,
+      coordinator_id: request.coordinator_id || null,
+      description: request.description || null,
+      is_active: true,
+    })
+    .select(`
+      id,
+      room_prefix,
+      coordinator_id,
+      description,
+      is_active,
+      created_at,
+      updated_at,
+      coordinator:staff!coordinator_id(id, name)
+    `)
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new AdminError(
+        AdminErrorCode.ROOM_MAPPING_ALREADY_EXISTS,
+        '이미 존재하는 호실입니다. 수정 버튼을 사용해 주세요.',
+      );
+    }
+    throw new AdminError(
+      AdminErrorCode.ROOM_MAPPING_CREATE_FAILED,
+      `호실 매핑 생성 실패: ${error.message}`,
+    );
+  }
+
+  // 하이브리드 방식: 새 매핑 추가 시 해당 호실 환자들 coordinator_id 업데이트
+  if (request.coordinator_id) {
+    await (supabase
+      .from('patients') as any)
+      .update({ coordinator_id: request.coordinator_id })
+      .eq('room_number', request.room_prefix)
+      .eq('status', 'active');
+    // 에러는 무시 (환자가 없을 수도 있음)
+  }
+
+  return {
+    id: data.id,
+    room_prefix: data.room_prefix,
+    coordinator_id: data.coordinator_id,
+    coordinator_name: (data as any).coordinator?.name || null,
+    description: data.description,
+    is_active: data.is_active,
+    patient_count: 0,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  };
+}
+
+export async function deleteRoomMapping(
+  supabase: SupabaseClient<Database>,
+  roomPrefix: string,
+): Promise<{ success: boolean }> {
+  const { error } = await (supabase
+    .from('room_coordinator_mapping') as any)
+    .delete()
+    .eq('room_prefix', roomPrefix);
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.SCHEDULE_DELETE_FAILED,
+      `호실 매핑 삭제 실패: ${error.message}`,
+    );
+  }
+
+  return { success: true };
+}
+
+// ========== Sync Logs Service ==========
+
+export async function getSyncLogs(
+  supabase: SupabaseClient<Database>,
+  query: GetSyncLogsQuery,
+): Promise<{ data: SyncLogItem[]; total: number; page: number; limit: number }> {
+  const offset = (query.page - 1) * query.limit;
+
+  const { data, error, count } = await (supabase
+    .from('sync_logs') as any)
+    .select('*', { count: 'exact' })
+    .order('started_at', { ascending: false })
+    .range(offset, offset + query.limit - 1);
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.STATS_FETCH_FAILED,
+      `동기화 로그 조회 실패: ${error.message}`,
+    );
+  }
+
+  return {
+    data: (data || []) as SyncLogItem[],
+    total: count || 0,
+    page: query.page,
+    limit: query.limit,
+  };
+}
+
+export async function getSyncLogById(
+  supabase: SupabaseClient<Database>,
+  logId: string,
+): Promise<any> {
+  const { data, error } = await (supabase
+    .from('sync_logs') as any)
+    .select('*')
+    .eq('id', logId)
+    .single();
+
+  if (error || !data) {
+    throw new AdminError(
+      AdminErrorCode.STAFF_NOT_FOUND,
+      '동기화 로그를 찾을 수 없습니다',
+    );
+  }
+
+  return data;
 }

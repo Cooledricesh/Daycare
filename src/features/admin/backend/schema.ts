@@ -93,6 +93,27 @@ export const cancelScheduleSchema = z.object({
   is_cancelled: z.boolean(),
 });
 
+// ========== Room Mapping API Schemas ==========
+
+export const updateRoomMappingSchema = z.object({
+  coordinator_id: z.string().uuid().nullable().optional(),
+  description: z.string().max(100).optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const createRoomMappingSchema = z.object({
+  room_prefix: z.string().min(1, '호실 번호를 입력해주세요').max(10),
+  coordinator_id: z.string().uuid().nullable().optional(),
+  description: z.string().max(100).optional(),
+});
+
+// ========== Sync API Schemas ==========
+
+export const getSyncLogsQuerySchema = z.object({
+  page: z.string().transform(Number).pipe(z.number().int().min(1)).default('1'),
+  limit: z.string().transform(Number).pipe(z.number().int().min(1).max(100)).default('20'),
+});
+
 // ========== Stats API Schemas ==========
 
 export const getStatsSummaryQuerySchema = z.object({
@@ -124,6 +145,10 @@ export type CancelScheduleRequest = z.infer<typeof cancelScheduleSchema>;
 
 export type GetStatsSummaryQuery = z.infer<typeof getStatsSummaryQuerySchema>;
 export type GetDailyStatsQuery = z.infer<typeof getDailyStatsQuerySchema>;
+
+export type UpdateRoomMappingRequest = z.infer<typeof updateRoomMappingSchema>;
+export type CreateRoomMappingRequest = z.infer<typeof createRoomMappingSchema>;
+export type GetSyncLogsQuery = z.infer<typeof getSyncLogsQuerySchema>;
 
 // ========== Response Types ==========
 
@@ -222,4 +247,38 @@ export interface DailyStatsItem {
   attendance_rate: number | null;
   consultation_rate: number | null;
   calculated_at: string;
+}
+
+// ========== Room Mapping Types ==========
+
+export interface RoomMappingItem {
+  id: string;
+  room_prefix: string;
+  coordinator_id: string | null;
+  coordinator_name: string | null;
+  description: string | null;
+  is_active: boolean;
+  patient_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ========== Sync Types ==========
+
+export interface SyncLogItem {
+  id: string;
+  started_at: string;
+  completed_at: string | null;
+  source: 'google_sheets' | 'excel_upload';
+  triggered_by: string;
+  status: 'running' | 'completed' | 'failed';
+  total_in_source: number;
+  total_processed: number;
+  inserted: number;
+  updated: number;
+  discharged: number;
+  reactivated: number;
+  unchanged: number;
+  skipped: number;
+  error_message: string | null;
 }
