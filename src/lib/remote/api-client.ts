@@ -7,6 +7,14 @@ const apiClient = axios.create({
   },
 });
 
+// FormData 전송 시 Content-Type 헤더 자동 제거 (axios가 boundary 포함하여 설정)
+apiClient.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+  return config;
+});
+
 type ErrorPayload = {
   error?: {
     message?: string;

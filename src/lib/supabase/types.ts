@@ -12,6 +12,57 @@ export type PatientStatus = 'active' | 'discharged' | 'suspended';
 export type Gender = 'M' | 'F';
 export type TaskTarget = 'coordinator' | 'nurse' | 'both';
 export type ScheduleSource = 'auto' | 'manual';
+export type SyncSource = 'google_sheets' | 'excel_upload';
+export type SyncStatus = 'running' | 'completed' | 'failed';
+
+// 동기화 관련 타입
+export interface RoomCoordinatorMapping {
+    id: string;
+    room_prefix: string;
+    coordinator_id: string | null;
+    description: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RoomCoordinatorMappingWithCoordinator extends RoomCoordinatorMapping {
+    coordinator?: { id: string; name: string } | null;
+}
+
+export interface SyncLog {
+    id: string;
+    started_at: string;
+    completed_at: string | null;
+    source: SyncSource;
+    triggered_by: string;
+    status: SyncStatus;
+    total_in_source: number;
+    total_processed: number;
+    inserted: number;
+    updated: number;
+    discharged: number;
+    reactivated: number;
+    unchanged: number;
+    skipped: number;
+    error_message: string | null;
+    details: SyncDetails | null;
+    created_at: string;
+}
+
+export interface SyncDetails {
+    changes: SyncChange[];
+    skipped_reasons: { patientIdNo: string; name: string; reason: string }[];
+}
+
+export interface SyncChange {
+    patientIdNo: string;
+    name: string;
+    action: 'insert' | 'update' | 'discharge' | 'reactivate';
+    fields?: {
+        [key: string]: { old: string | null; new: string | null };
+    };
+}
 
 export interface Database {
     public: {
@@ -325,6 +376,94 @@ export interface Database {
                     attendance_rate?: number | null;
                     consultation_rate?: number | null;
                     calculated_at?: string;
+                };
+            };
+            room_coordinator_mapping: {
+                Row: {
+                    id: string;
+                    room_prefix: string;
+                    coordinator_id: string | null;
+                    description: string | null;
+                    is_active: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    room_prefix: string;
+                    coordinator_id?: string | null;
+                    description?: string | null;
+                    is_active?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    room_prefix?: string;
+                    coordinator_id?: string | null;
+                    description?: string | null;
+                    is_active?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            sync_logs: {
+                Row: {
+                    id: string;
+                    started_at: string;
+                    completed_at: string | null;
+                    source: SyncSource;
+                    triggered_by: string;
+                    status: SyncStatus;
+                    total_in_source: number;
+                    total_processed: number;
+                    inserted: number;
+                    updated: number;
+                    discharged: number;
+                    reactivated: number;
+                    unchanged: number;
+                    skipped: number;
+                    error_message: string | null;
+                    details: SyncDetails | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    started_at?: string;
+                    completed_at?: string | null;
+                    source: SyncSource;
+                    triggered_by: string;
+                    status?: SyncStatus;
+                    total_in_source?: number;
+                    total_processed?: number;
+                    inserted?: number;
+                    updated?: number;
+                    discharged?: number;
+                    reactivated?: number;
+                    unchanged?: number;
+                    skipped?: number;
+                    error_message?: string | null;
+                    details?: SyncDetails | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    started_at?: string;
+                    completed_at?: string | null;
+                    source?: SyncSource;
+                    triggered_by?: string;
+                    status?: SyncStatus;
+                    total_in_source?: number;
+                    total_processed?: number;
+                    inserted?: number;
+                    updated?: number;
+                    discharged?: number;
+                    reactivated?: number;
+                    unchanged?: number;
+                    skipped?: number;
+                    error_message?: string | null;
+                    details?: SyncDetails | null;
+                    created_at?: string;
                 };
             };
         };

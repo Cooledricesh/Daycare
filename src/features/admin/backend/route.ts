@@ -17,6 +17,9 @@ import {
   cancelScheduleSchema,
   getStatsSummaryQuerySchema,
   getDailyStatsQuerySchema,
+  updateRoomMappingSchema,
+  createRoomMappingSchema,
+  getSyncLogsQuerySchema,
 } from './schema';
 import {
   getPatients,
@@ -37,6 +40,12 @@ import {
   deleteSchedule,
   getStatsSummary,
   getDailyStats,
+  getRoomMappings,
+  updateRoomMapping,
+  createRoomMapping,
+  deleteRoomMapping,
+  getSyncLogs,
+  getSyncLogById,
 } from './service';
 
 const adminRoutes = new Hono<AppEnv>();
@@ -466,6 +475,194 @@ adminRoutes.get('/stats/daily', async (c) => {
       return respond(c, failure(400, error.code, error.message));
     }
     throw error;
+  }
+});
+
+// ========== Room Mapping Routes ==========
+
+/**
+ * GET /api/admin/settings/room-mapping
+ * 호실-담당자 매핑 목록 조회
+ */
+adminRoutes.get('/settings/room-mapping', async (c) => {
+  const supabase = c.get('supabase');
+
+  try {
+    const result = await getRoomMappings(supabase);
+    return respond(c, success({ data: result }, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * PUT /api/admin/settings/room-mapping/:room_prefix
+ * 호실 매핑 수정
+ */
+adminRoutes.put('/settings/room-mapping/:room_prefix', async (c) => {
+  const supabase = c.get('supabase');
+  const roomPrefix = c.req.param('room_prefix');
+  const body = await c.req.json();
+
+  try {
+    const request = updateRoomMappingSchema.parse(body);
+    const result = await updateRoomMapping(supabase, roomPrefix, request);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/admin/settings/room-mapping
+ * 새 호실 매핑 추가
+ */
+adminRoutes.post('/settings/room-mapping', async (c) => {
+  const supabase = c.get('supabase');
+  const body = await c.req.json();
+
+  try {
+    const request = createRoomMappingSchema.parse(body);
+    const result = await createRoomMapping(supabase, request);
+    return respond(c, success(result, 201));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      if (error.code === 'ROOM_MAPPING_ALREADY_EXISTS') {
+        return respond(c, failure(409, error.code, error.message));
+      }
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/admin/settings/room-mapping/:room_prefix
+ * 호실 매핑 삭제
+ */
+adminRoutes.delete('/settings/room-mapping/:room_prefix', async (c) => {
+  const supabase = c.get('supabase');
+  const roomPrefix = c.req.param('room_prefix');
+
+  try {
+    const result = await deleteRoomMapping(supabase, roomPrefix);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+// ========== Sync Routes ==========
+
+/**
+ * GET /api/admin/sync/logs
+ * 동기화 이력 조회
+ */
+adminRoutes.get('/sync/logs', async (c) => {
+  const supabase = c.get('supabase');
+  const query = {
+    page: c.req.query('page'),
+    limit: c.req.query('limit'),
+  };
+
+  try {
+    const params = getSyncLogsQuerySchema.parse(query);
+    const result = await getSyncLogs(supabase, params);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * GET /api/admin/sync/logs/:id
+ * 동기화 상세 조회
+ */
+adminRoutes.get('/sync/logs/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const logId = c.req.param('id');
+
+  try {
+    const result = await getSyncLogById(supabase, logId);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(404, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/admin/sync
+ * 환자 데이터 동기화 실행 (Excel 업로드)
+ */
+adminRoutes.post('/sync', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File | null;
+    const dryRunStr = formData.get('dryRun') as string | null;
+    const dryRun = dryRunStr === 'true';
+
+    if (!file) {
+      return respond(c, failure(400, 'FILE_REQUIRED', '파일을 첨부해주세요'));
+    }
+
+    // 파일 타입 검증
+    const validTypes = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/octet-stream',
+    ];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
+      return respond(
+        c,
+        failure(400, 'INVALID_FILE_TYPE', 'Excel 파일만 업로드 가능합니다')
+      );
+    }
+
+    // 파일을 Buffer로 변환
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 동기화 서비스 실행
+    const { PatientSyncService } = await import(
+      '@/server/services/patient-sync'
+    );
+    const syncService = new PatientSyncService(supabase);
+
+    const result = await syncService.syncPatients(buffer, {
+      dryRun,
+      source: 'excel_upload',
+      triggeredBy: user.name || user.sub,
+    });
+
+    return respond(c, success(result, 200));
+  } catch (error: any) {
+    console.error('Sync error:', error);
+    return respond(
+      c,
+      failure(500, 'SYNC_FAILED', error.message || '동기화 중 오류가 발생했습니다')
+    );
   }
 });
 

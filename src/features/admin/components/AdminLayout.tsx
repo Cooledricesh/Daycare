@@ -10,6 +10,8 @@ import {
   BarChart3,
   LogOut,
   User,
+  Settings,
+  RefreshCw,
 } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +40,16 @@ const navItems = [
     href: '/admin/stats',
     label: '통계',
     icon: BarChart3,
+  },
+  {
+    href: '/admin/sync',
+    label: '데이터 동기화',
+    icon: RefreshCw,
+  },
+  {
+    href: '/admin/settings/room-mapping',
+    label: '호실 매핑',
+    icon: Settings,
   },
 ];
 
