@@ -4,6 +4,7 @@ import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { login } from "./actions";
 
 const initialState = {
@@ -28,13 +29,16 @@ function SubmitButton() {
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [state, formAction] = useActionState(login, initialState);
 
   useEffect(() => {
     if (state?.success && state?.redirectUrl) {
+      // 이전 사용자 캐시 데이터 초기화 후 리다이렉트
+      queryClient.clear();
       router.push(state.redirectUrl);
     }
-  }, [state, router]);
+  }, [state, router, queryClient]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">

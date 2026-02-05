@@ -36,12 +36,11 @@ export async function completeTask(
   role: TaskRole,
   params: CompleteTaskParams,
 ): Promise<TaskCompletionResult> {
-  // consultation_id로 task_completion 찾기
+  // consultation_id와 role로 task_completion 찾기
   const { data: taskCompletion, error: findError } = await (supabase
     .from('task_completions') as any)
     .select('id, is_completed')
     .eq('consultation_id', params.consultation_id)
-    .eq('completed_by', staffId)
     .eq('role', role)
     .maybeSingle();
 
@@ -63,11 +62,12 @@ export async function completeTask(
     );
   }
 
-  // 처리 완료로 업데이트
+  // 처리 완료로 업데이트 (실제 처리자 기록)
   const { data, error } = await (supabase
     .from('task_completions') as any)
     .update({
       is_completed: true,
+      completed_by: staffId,
       completed_at: new Date().toISOString(),
       memo: params.memo || null,
     })

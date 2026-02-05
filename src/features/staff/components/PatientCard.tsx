@@ -2,57 +2,94 @@
 
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Bell } from 'lucide-react';
+import { Bell, Check, Clock, User } from 'lucide-react';
 import type { PatientSummary } from '../backend/schema';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 type PatientCardProps = {
   patient: PatientSummary;
 };
 
 export function PatientCard({ patient }: PatientCardProps) {
+  // 카드 왼쪽 테두리 색상 결정
+  const getBorderColor = () => {
+    if (patient.has_task && !patient.task_completed) return 'border-l-orange-500';
+    if (patient.is_consulted) return 'border-l-green-500';
+    if (patient.is_attended) return 'border-l-blue-500';
+    return 'border-l-gray-300';
+  };
+
   return (
-    <Card className="mb-3">
+    <Card className={cn('border-l-4 transition-shadow hover:shadow-md', getBorderColor())}>
       <CardContent className="p-4">
-        <div className="flex items-start justify-between mb-2">
+        <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold">{patient.name}</h3>
+            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+              <User className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">{patient.name}</h3>
+              {patient.attendance_time && (
+                <p className="text-xs text-gray-500">
+                  {format(new Date(patient.attendance_time), 'HH:mm', { locale: ko })} 출석
+                </p>
+              )}
+            </div>
             {patient.has_task && !patient.task_completed && (
-              <Bell className="w-5 h-5 text-orange-500" />
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
+                <Bell className="w-3 h-3" />
+                지시
+              </span>
             )}
           </div>
           <Link href={`/staff/patient/${patient.id}`}>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
               상세
             </Button>
           </Link>
         </div>
 
-        <div className="flex gap-2 mb-2">
-          <Badge variant={patient.is_attended ? 'default' : 'secondary'}>
-            출석 {patient.is_attended ? '✓' : '✗'}
-          </Badge>
-          <Badge variant={patient.is_consulted ? 'default' : 'secondary'}>
-            진찰 {patient.is_consulted ? '✓' : '⏳'}
-          </Badge>
+        <div className="flex gap-2 flex-wrap">
+          <span className={cn(
+            'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md',
+            patient.is_attended
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 text-gray-500'
+          )}>
+            {patient.is_attended ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+            출석 {patient.is_attended ? '완료' : '대기'}
+          </span>
+          <span className={cn(
+            'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md',
+            patient.is_consulted
+              ? 'bg-green-100 text-green-700'
+              : 'bg-gray-100 text-gray-500'
+          )}>
+            {patient.is_consulted ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+            진찰 {patient.is_consulted ? '완료' : '대기'}
+          </span>
+          {patient.has_task && (
+            <span className={cn(
+              'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md',
+              patient.task_completed
+                ? 'bg-purple-100 text-purple-700'
+                : 'bg-orange-100 text-orange-700'
+            )}>
+              {patient.task_completed ? <Check className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+              지시 {patient.task_completed ? '완료' : '확인필요'}
+            </span>
+          )}
         </div>
 
-        {patient.has_task && (
-          <div className="mt-2 text-sm">
-            <p className="text-gray-600">
-              지시: {patient.task_content || '-'}
+        {patient.has_task && patient.task_content && (
+          <div className="mt-3 p-2 bg-orange-50 rounded-md border border-orange-200">
+            <p className="text-sm text-orange-800">
+              <span className="font-medium">의사 지시:</span> {patient.task_content}
             </p>
           </div>
-        )}
-
-        {patient.attendance_time && (
-          <p className="text-xs text-gray-500 mt-1">
-            {format(new Date(patient.attendance_time), 'HH:mm', { locale: ko })}{' '}
-            출석
-          </p>
         )}
       </CardContent>
     </Card>

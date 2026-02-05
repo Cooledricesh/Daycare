@@ -80,10 +80,13 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        {!isLoading &&
-          patients.map((patient) => (
-            <PatientCard key={patient.id} patient={patient} />
-          ))}
+        {!isLoading && patients.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {patients.map((patient) => (
+              <PatientCard key={patient.id} patient={patient} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

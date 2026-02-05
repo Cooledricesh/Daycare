@@ -10,6 +10,7 @@ import patientRoutes from '@/features/patient/backend/route';
 import adminRoutes from '@/features/admin/backend/route';
 import staffRoutes from '@/features/staff/backend/route';
 import nurseRoutes from '@/features/nurse/backend/route';
+import doctorRoutes from '@/features/doctor/backend/route';
 
 let singletonApp: Hono<AppEnv> | null = null;
 
@@ -28,6 +29,7 @@ export const createHonoApp = () => {
   // JWT 인증 + RBAC 미들웨어 (역할별 접근 제어)
   app.use('/api/staff/*', withAuth(), requireRole('coordinator', 'admin'));
   app.use('/api/nurse/*', withAuth(), requireRole('nurse', 'admin'));
+  app.use('/api/doctor/*', withAuth(), requireRole('doctor', 'admin'));
   // schedule patterns는 coordinator도 접근 가능 (담당 환자만 수정 가능)
   app.use('/api/admin/schedule/patterns/*', withAuth(), requireRole('coordinator', 'admin'));
   app.use('/api/admin/schedule/patterns', withAuth(), requireRole('coordinator', 'admin'));
@@ -52,6 +54,7 @@ export const createHonoApp = () => {
   app.route('/api/admin', adminRoutes);
   app.route('/api/staff', staffRoutes);
   app.route('/api/nurse', nurseRoutes);
+  app.route('/api/doctor', doctorRoutes);
 
   singletonApp = app;
 

@@ -8,6 +8,7 @@ import {
   completeTaskSchema,
   createMessageSchema,
   updateSchedulePatternSchema,
+  getMessagesSchema,
 } from './schema';
 import {
   getMyPatients,
@@ -16,6 +17,7 @@ import {
   createMessage,
   getMyPatientsSchedulePatterns,
   updateMyPatientSchedulePattern,
+  getMyMessages,
 } from './service';
 
 const staffRoutes = new Hono<AppEnv>();
@@ -99,6 +101,33 @@ staffRoutes.post('/task/:consultation_id/complete', async (c) => {
     const taskCompletion = await completeTask(supabase, staffId, params);
 
     return respond(c, success({ task_completion: taskCompletion }, 200));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * GET /api/staff/messages
+ * 담당 환자 전달사항 목록 조회
+ */
+staffRoutes.get('/messages', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const date = c.req.query('date');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    const params = getMessagesSchema.parse({ date });
+    const messages = await getMyMessages(supabase, staffId, params);
+    return respond(c, success({ messages }, 200));
   } catch (error) {
     if (error instanceof StaffError) {
       return respond(c, failure(400, error.code, error.message));

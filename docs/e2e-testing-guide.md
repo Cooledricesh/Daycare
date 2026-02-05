@@ -236,9 +236,12 @@ npx playwright show-report
 
 ```
 e2e/
-├── home.spec.ts           # 홈 페이지 테스트
-├── login.spec.ts          # 로그인 테스트
-├── patient-checkin.spec.ts # 환자 체크인 테스트
+├── home.spec.ts             # 홈 페이지 테스트
+├── login.spec.ts            # 로그인 테스트
+├── patient-checkin.spec.ts  # 환자 체크인 테스트
 ├── protected-routes.spec.ts # 보호된 라우트 테스트
-└── room-mapping-sync.spec.ts # 호실 매핑 동기화 테스트
+├── room-mapping-sync.spec.ts # 호실 매핑 동기화 테스트
+├── doctor-tasks.spec.ts     # 의사 처리 필요 항목 테스트
+├── doctor-history.spec.ts   # 환자 히스토리 테스트
+└── staff-messages.spec.ts   # 전달사항 작성 테스트
 ```

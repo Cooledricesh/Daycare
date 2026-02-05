@@ -9,7 +9,7 @@ interface CreateVitalsResponse {
 export function useCreateVitals() {
   return useMutation({
     mutationFn: async (data: CreateVitalsRequest) => {
-      const response = await apiClient.post<CreateVitalsResponse>('/api/vitals', data);
+      const response = await apiClient.post<CreateVitalsResponse>('/api/patients/vitals', data);
       return response.data.vitals;
     },
   });
