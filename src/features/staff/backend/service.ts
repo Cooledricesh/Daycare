@@ -6,11 +6,13 @@ import type {
   CompleteTaskRequest,
   CreateMessageRequest,
   UpdateSchedulePatternRequest,
+  GetMessagesParams,
   PatientSummary,
   PatientDetail,
   TaskCompletion,
   Message,
   MyPatientSchedulePattern,
+  MessageItem,
 } from './schema';
 import { StaffError, StaffErrorCode } from './error';
 import {
@@ -412,4 +414,48 @@ export async function updateMyPatientSchedulePattern(
   }
 
   return { success: true };
+}
+
+/**
+ * 본인이 작성한 전달사항 목록 조회
+ */
+export async function getMyMessages(
+  supabase: SupabaseClient<Database>,
+  authorId: string,
+  params: GetMessagesParams,
+): Promise<MessageItem[]> {
+  const date = params.date || getTodayString();
+
+  // 해당 날짜의 본인이 작성한 전달사항 조회
+  const { data: messages, error: messagesError } = await (supabase
+    .from('messages') as any)
+    .select(`
+      id,
+      patient_id,
+      date,
+      content,
+      is_read,
+      created_at,
+      patients!inner(name)
+    `)
+    .eq('author_id', authorId)
+    .eq('date', date)
+    .order('created_at', { ascending: false });
+
+  if (messagesError) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `전달사항 조회에 실패했습니다: ${messagesError.message}`,
+    );
+  }
+
+  return (messages || []).map((m: any) => ({
+    id: m.id,
+    patient_id: m.patient_id,
+    patient_name: m.patients?.name || '알 수 없음',
+    date: m.date,
+    content: m.content,
+    is_read: m.is_read,
+    created_at: m.created_at,
+  }));
 }

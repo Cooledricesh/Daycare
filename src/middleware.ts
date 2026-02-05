@@ -20,18 +20,20 @@ export async function middleware(request: NextRequest) {
             return redirectToLogin(request);
         }
 
-        // Role-based access control
+        // Role-based access control (admin can access all pages)
         const role = payload.role as string;
-        if (pathname.startsWith("/admin") && role !== "admin") {
+        const isAdmin = role === "admin";
+
+        if (pathname.startsWith("/admin") && !isAdmin) {
             return NextResponse.redirect(new URL("/", request.url));
         }
-        if (pathname.startsWith("/doctor") && role !== "doctor") {
+        if (pathname.startsWith("/doctor") && role !== "doctor" && !isAdmin) {
             return NextResponse.redirect(new URL("/", request.url));
         }
-        if (pathname.startsWith("/nurse") && role !== "nurse") {
+        if (pathname.startsWith("/nurse") && role !== "nurse" && !isAdmin) {
             return NextResponse.redirect(new URL("/", request.url));
         }
-        if (pathname.startsWith("/staff") && role !== "coordinator") {
+        if (pathname.startsWith("/staff") && role !== "coordinator" && !isAdmin) {
             return NextResponse.redirect(new URL("/", request.url));
         }
     }

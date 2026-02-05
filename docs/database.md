@@ -5,7 +5,7 @@
 - **사용 DB**: Supabase (PostgreSQL)
 - **인증**: Supabase Auth 미사용, 자체 구현 (bcrypt + JWT)
 - **RLS**: 비활성화
-- **주요 엔티티**: staff, patients, scheduled_patterns, scheduled_attendances, attendances, vitals, consultations, task_completions, messages, daily_stats
+- **주요 엔티티**: staff, patients, scheduled_patterns, scheduled_attendances, attendances, vitals, consultations, task_completions, messages, daily_stats, room_coordinator_mapping, sync_logs
 
 ## ERD
 
@@ -24,6 +24,34 @@ erDiagram
     patients ||--o{ messages : "about"
 
     consultations ||--o{ task_completions : "generates"
+
+    staff ||--o{ room_coordinator_mapping : "assigned_to"
+
+    room_coordinator_mapping {
+        uuid id PK
+        varchar room_prefix UK
+        uuid coordinator_id FK
+        varchar description
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    sync_logs {
+        uuid id PK
+        timestamp started_at
+        timestamp completed_at
+        varchar source
+        varchar triggered_by
+        varchar status
+        integer total_in_source
+        integer total_processed
+        integer inserted
+        integer updated
+        integer discharged
+        text error_message
+        jsonb details
+    }
 
     staff {
         uuid id PK
@@ -678,6 +706,133 @@ CREATE INDEX idx_daily_stats_date ON daily_stats(date);
 
 ---
 
+### room_coordinator_mapping (호실-담당자 매핑)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | 매핑 고유 ID |
+| room_prefix | VARCHAR(10) | UNIQUE, NOT NULL | 호실 번호 (예: 3101) |
+| coordinator_id | UUID | FK → staff.id | 담당 코디네이터 ID |
+| description | VARCHAR(100) | | 설명 |
+| is_active | BOOLEAN | DEFAULT true | 활성 상태 |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | 생성일시 |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | 수정일시 |
+
+#### TypeScript Interface
+```typescript
+interface RoomCoordinatorMapping {
+  id: string;
+  room_prefix: string;
+  coordinator_id: string | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+```
+
+#### SQL Migration
+```sql
+CREATE TABLE IF NOT EXISTS room_coordinator_mapping (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_prefix VARCHAR(10) UNIQUE NOT NULL,
+  coordinator_id UUID REFERENCES staff(id) ON DELETE SET NULL,
+  description VARCHAR(100),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_room_mapping_prefix ON room_coordinator_mapping(room_prefix);
+CREATE INDEX idx_room_mapping_coordinator ON room_coordinator_mapping(coordinator_id);
+
+-- updated_at 트리거
+CREATE OR REPLACE TRIGGER trg_room_mapping_updated_at
+  BEFORE UPDATE ON room_coordinator_mapping
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+```
+
+---
+
+### sync_logs (환자 동기화 이력)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | 로그 고유 ID |
+| started_at | TIMESTAMPTZ | DEFAULT NOW() | 시작 시각 |
+| completed_at | TIMESTAMPTZ | | 완료 시각 |
+| source | VARCHAR(50) | NOT NULL, CHECK | 'google_sheets', 'excel_upload' |
+| triggered_by | VARCHAR(100) | NOT NULL | 트리거한 사용자/시스템 |
+| status | VARCHAR(20) | DEFAULT 'running', CHECK | 'running', 'completed', 'failed' |
+| total_in_source | INTEGER | DEFAULT 0 | 소스 총 레코드 수 |
+| total_processed | INTEGER | DEFAULT 0 | 처리된 레코드 수 |
+| inserted | INTEGER | DEFAULT 0 | 신규 삽입 수 |
+| updated | INTEGER | DEFAULT 0 | 업데이트 수 |
+| discharged | INTEGER | DEFAULT 0 | 퇴원 처리 수 |
+| reactivated | INTEGER | DEFAULT 0 | 재활성화 수 |
+| unchanged | INTEGER | DEFAULT 0 | 변경 없음 수 |
+| skipped | INTEGER | DEFAULT 0 | 스킵된 수 |
+| error_message | TEXT | | 에러 메시지 |
+| details | JSONB | | 상세 정보 |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | 생성일시 |
+
+#### TypeScript Interface
+```typescript
+interface SyncLog {
+  id: string;
+  started_at: string;
+  completed_at: string | null;
+  source: 'google_sheets' | 'excel_upload';
+  triggered_by: string;
+  status: 'running' | 'completed' | 'failed';
+  total_in_source: number;
+  total_processed: number;
+  inserted: number;
+  updated: number;
+  discharged: number;
+  reactivated: number;
+  unchanged: number;
+  skipped: number;
+  error_message: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+```
+
+#### SQL Migration
+```sql
+CREATE TABLE IF NOT EXISTS sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  source VARCHAR(50) NOT NULL,
+  triggered_by VARCHAR(100) NOT NULL,
+  status VARCHAR(20) DEFAULT 'running',
+  total_in_source INTEGER DEFAULT 0,
+  total_processed INTEGER DEFAULT 0,
+  inserted INTEGER DEFAULT 0,
+  updated INTEGER DEFAULT 0,
+  discharged INTEGER DEFAULT 0,
+  reactivated INTEGER DEFAULT 0,
+  unchanged INTEGER DEFAULT 0,
+  skipped INTEGER DEFAULT 0,
+  error_message TEXT,
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_sync_logs_started_at ON sync_logs(started_at DESC);
+CREATE INDEX idx_sync_logs_status ON sync_logs(status);
+
+ALTER TABLE sync_logs ADD CONSTRAINT chk_sync_logs_source
+  CHECK (source IN ('google_sheets', 'excel_upload'));
+
+ALTER TABLE sync_logs ADD CONSTRAINT chk_sync_logs_status
+  CHECK (status IN ('running', 'completed', 'failed'));
+```
+
+---
+
 ## Indexes
 
 ### 주요 인덱스 전략
@@ -916,5 +1071,5 @@ VALUES ('nurse1', '$2b$10$[실제_해시값]', '박간호사', 'nurse');
 
 ---
 
-*문서 버전: 1.0*
-*최종 수정: 2025-01-29*
+*문서 버전: 1.1*
+*최종 수정: 2025-01-23*

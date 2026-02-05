@@ -104,3 +104,21 @@ export type MyPatientSchedulePattern = {
   patient_name: string;
   schedule_days: number[];
 };
+
+// 전달사항 목록 조회 스키마
+export const getMessagesSchema = z.object({
+  date: z.string().optional(),
+});
+
+export type GetMessagesParams = z.infer<typeof getMessagesSchema>;
+
+// 전달사항 목록 응답 타입
+export type MessageItem = {
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  date: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+};

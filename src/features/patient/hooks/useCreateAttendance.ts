@@ -9,7 +9,7 @@ interface CreateAttendanceResponse {
 export function useCreateAttendance() {
   return useMutation({
     mutationFn: async (data: CreateAttendanceRequest) => {
-      const response = await apiClient.post<CreateAttendanceResponse>('/api/attendances', data);
+      const response = await apiClient.post<CreateAttendanceResponse>('/api/patients/attendances', data);
       return response.data.attendance;
     },
   });

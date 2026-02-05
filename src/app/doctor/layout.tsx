@@ -1,86 +1,32 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Menu, User } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-} from '@/components/ui/sheet';
-import { useLogout } from '@/hooks/useLogout';
-import { useAuth } from '@/hooks/useAuth';
+import { ReactNode } from 'react';
+import { Stethoscope, ClipboardList } from 'lucide-react';
+import { AppLayout, type NavItem } from '@/components/layout/AppLayout';
 
 type DoctorLayoutProps = {
-    children: ReactNode;
+  children: ReactNode;
 };
 
+const navItems: NavItem[] = [
+  {
+    href: '/doctor/consultation',
+    label: '진료실',
+    icon: Stethoscope,
+  },
+  {
+    href: '/doctor/tasks',
+    label: '처리 필요 항목',
+    icon: ClipboardList,
+  },
+];
+
 export default function DoctorLayout({ children }: DoctorLayoutProps) {
-    const { logout } = useLogout();
-    const { user } = useAuth();
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    return (
-        <div className="min-h-screen bg-gray-50">
-            <header className="bg-white border-b sticky top-0 z-10">
-                <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Link href="/doctor/consultation" className="font-bold text-lg">
-                            낮병원 (의사)
-                        </Link>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        {user && (
-                            <span className="text-sm text-gray-600 flex items-center gap-1">
-                                <User className="h-4 w-4" />
-                                {user.name}
-                            </span>
-                        )}
-                        {mounted && (
-                            <Sheet>
-                                <SheetTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                        <Menu className="h-5 w-5" />
-                                    </Button>
-                                </SheetTrigger>
-                                <SheetContent>
-                                    <SheetHeader>
-                                        <SheetTitle>메뉴</SheetTitle>
-                                        <SheetDescription>
-                                            {user ? `${user.name}님으로 로그인됨` : ''}
-                                        </SheetDescription>
-                                    </SheetHeader>
-                                    <nav className="flex flex-col gap-2 mt-4">
-                                        <Link href="/doctor/consultation">
-                                            <Button variant="ghost" className="w-full justify-start">
-                                                진료실
-                                            </Button>
-                                        </Link>
-                                        <Button
-                                            variant="ghost"
-                                            className="w-full justify-start"
-                                            onClick={logout}
-                                        >
-                                            로그아웃
-                                        </Button>
-                                    </nav>
-                                </SheetContent>
-                            </Sheet>
-                        )}
-                    </div>
-                </div>
-            </header>
-
-            <main className="container mx-auto px-4 py-6 max-w-2xl">{children}</main>
-        </div>
-    );
+  return (
+    <AppLayout navItems={navItems} title="낮병원">
+      <div className="p-6">
+        {children}
+      </div>
+    </AppLayout>
+  );
 }
