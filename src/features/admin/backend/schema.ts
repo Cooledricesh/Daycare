@@ -49,7 +49,7 @@ export const createStaffSchema = z.object({
     .max(50, '로그인 ID는 50자 이하이어야 합니다')
     .regex(/^[a-zA-Z0-9_]+$/, '영문, 숫자, _만 사용 가능합니다'),
   password: z.string()
-    .min(8, '비밀번호는 8자 이상이어야 합니다')
+    .min(4, '비밀번호는 4자 이상이어야 합니다')
     .max(100, '비밀번호는 100자 이하이어야 합니다'),
   role: z.enum(['doctor', 'coordinator', 'nurse', 'admin']),
 });
@@ -62,7 +62,7 @@ export const updateStaffSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   new_password: z.string()
-    .min(8, '비밀번호는 8자 이상이어야 합니다')
+    .min(4, '비밀번호는 4자 이상이어야 합니다')
     .max(100, '비밀번호는 100자 이하이어야 합니다'),
 });
 

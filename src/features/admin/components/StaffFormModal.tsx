@@ -30,7 +30,7 @@ const staffCreateSchema = z.object({
   name: z.string().min(1, '이름을 입력해주세요'),
   login_id: z.string().min(4, '로그인 ID는 4자 이상이어야 합니다')
     .regex(/^[a-zA-Z0-9_]+$/, '영문, 숫자, _만 사용 가능합니다'),
-  password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다'),
+  password: z.string().min(4, '비밀번호는 4자 이상이어야 합니다'),
   role: z.enum(['doctor', 'coordinator', 'nurse', 'admin']),
 });
 

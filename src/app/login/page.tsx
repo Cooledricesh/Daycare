@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -31,12 +31,17 @@ export default function LoginPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [state, formAction] = useActionState(login, initialState);
+  const [loginId, setLoginId] = useState("");
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (state?.success && state?.redirectUrl) {
-      // 이전 사용자 캐시 데이터 초기화 후 리다이렉트
       queryClient.clear();
       router.push(state.redirectUrl);
+    }
+    if (state?.error) {
+      // 오류 시 비밀번호만 초기화
+      if (passwordRef.current) passwordRef.current.value = "";
     }
   }, [state, router, queryClient]);
 
@@ -58,6 +63,8 @@ export default function LoginPage() {
               name="id"
               autoComplete="username"
               required
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
               className="rounded-lg border border-slate-300 px-4 py-3 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="예: hong"
             />
@@ -66,6 +73,7 @@ export default function LoginPage() {
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">비밀번호</span>
             <input
+              ref={passwordRef}
               type="password"
               name="password"
               autoComplete="current-password"

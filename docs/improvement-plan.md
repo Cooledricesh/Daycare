@@ -1,8 +1,8 @@
 # 코드베이스 개선 계획
 
-> **최종 업데이트**: 2025-01-23
+> **최종 업데이트**: 2026-02-16
 >
-> **현재 상태**: PRD 핵심 기능 구현 완료, 후순위 리팩토링 항목 남음
+> **현재 상태**: 진찰 기록 마이그레이션, 로그인/비밀번호 UX 개선 완료
 
 ---
 
@@ -14,6 +14,8 @@
 | **Phase 1** | 긴급 수정 | ✅ **완료** | JWT 시크릿, birth_date 제거, 중복라우트 정리 |
 | **Phase 5** | 아키텍처 개선 | ✅ **완료** | RBAC 미들웨어 구현됨 |
 | **Phase 7** | DX 개선 | ✅ **완료** | .env.example 존재 |
+| **Phase 8** | 진찰 기록 마이그레이션 | ✅ **완료** | Google Sheets→Supabase, UI 개선 |
+| **Phase 9** | 로그인/비밀번호 UX | ✅ **완료** | 오류 문구, 아이디 유지, 비밀번호 4자 |
 | **Phase 2** | 타입 안전성 | 🔶 후순위 | 82+ `as any` 제거 필요 |
 | **Phase 3** | 코드 중복 제거 | 🔶 후순위 | task/message 공통 서비스 |
 | **Phase 4** | 테스트 커버리지 | 🔶 후순위 | E2E 테스트 8개 추가됨 |
@@ -68,6 +70,33 @@
 | `doctor-tasks.spec.ts` | 3 | 의사 처리 항목 |
 | `doctor-history.spec.ts` | 3 | 환자 히스토리 |
 | `staff-messages.spec.ts` | 3 | 전달사항 |
+
+### Phase 8: 진찰 기록 마이그레이션 및 히스토리 UI 개선
+
+**마이그레이션 스크립트** (`scripts/google-apps-script-migrate-history.js`):
+- Google Sheets "Dr.박승현 진찰 comment" 파일에서 300+ 일별 시트 데이터 마이그레이션
+- Progress 기록 → 전 기간 (2024~2026), 약변경 → 2026년만
+- 배치 처리 (25 시트/회) + ScriptProperties로 상태 관리
+- IDNO 기반 환자 매핑, Supabase REST API upsert
+
+**환자 동기화 스크립트** (`scripts/google-apps-script-patient-sync.js`):
+- Google Drive 엑셀 파일에서 매일 08:15 KST 환자 데이터 자동 동기화
+- Drive API v2로 Excel→Google Sheets 임시 변환 후 데이터 읽기
+
+**백엔드 개선**:
+- ✅ months 파라미터 확장 (0~24, 0=전체 기간)
+- ✅ Staff용 환자 히스토리 API 추가 (`GET /api/staff/patient/:id/history`)
+
+**UI 개선**:
+- ✅ ConsultationHistory 컴포넌트: 최근 1개월 펼침 + 이전 기록 월별 그룹 접기/펼치기
+- ✅ Doctor history 페이지: 24개월 히스토리 로드
+- ✅ Staff patient detail 페이지: 전체 기록 보기/간략히 보기 토글
+
+### Phase 9: 로그인/비밀번호 UX 개선
+
+- ✅ 로그인 실패 시 오류 문구 개선 ("아이디 또는 비밀번호를 다시 확인해주세요.")
+- ✅ 로그인 실패 시 아이디 입력값 유지, 비밀번호만 초기화
+- ✅ 비밀번호 최소 조건 완화 (8자 → 4자)
 
 ---
 
@@ -138,12 +167,8 @@ queryClient.invalidateQueries({ queryKey: ['admin', 'staff', 'list'], exact: tru
 - ✅ DB 스키마 완료 (`room_coordinator_mapping`, `sync_logs`)
 - ✅ 서비스 기본 구조 (`src/server/services/patient-sync.ts`)
 - ✅ 관리자 UI 기본 (`/admin/sync`, `/admin/settings/room-mapping`)
-- ⏳ Google Sheets API 연동 미완료
-
-**남은 작업**:
-1. Google Cloud 서비스 계정 설정
-2. Google Sheets API 연동
-3. 자동 스케줄러 (cron)
+- ✅ Google Apps Script 기반 자동 동기화 구현 (`scripts/google-apps-script-patient-sync.js`)
+- ✅ 진찰 기록 마이그레이션 스크립트 (`scripts/google-apps-script-migrate-history.js`)
 
 ---
 

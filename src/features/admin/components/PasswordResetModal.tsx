@@ -19,7 +19,7 @@ import { Loader2 } from 'lucide-react';
 
 const passwordResetSchema = z
   .object({
-    new_password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다'),
+    new_password: z.string().min(4, '비밀번호는 4자 이상이어야 합니다'),
     confirm_password: z.string(),
   })
   .refine((data) => data.new_password === data.confirm_password, {

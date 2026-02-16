@@ -18,7 +18,7 @@ export default function DoctorHistoryPage({ params }: PageProps) {
   const router = useRouter();
   const { data: history, isLoading, error } = usePatientHistory({
     patientId: resolvedParams.id,
-    months: 1,
+    months: 24,
   });
 
   if (isLoading) {
