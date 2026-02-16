@@ -126,7 +126,8 @@ export async function getPatientHistory(
   params: GetPatientHistoryParams,
 ): Promise<PatientHistory> {
   const { patient_id, months } = params;
-  const fromDate = getMonthsAgoString(months || 1);
+  // months=0이면 전체 기간 조회
+  const fromDate = months === 0 ? '2000-01-01' : getMonthsAgoString(months || 1);
 
   // 환자 기본 정보 조회
   const { data: patient, error: patientError } = await (supabase

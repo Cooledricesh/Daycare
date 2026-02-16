@@ -11,7 +11,7 @@ export type GetTasksParams = z.infer<typeof GetTasksParamsSchema>;
 // 환자 히스토리 조회 파라미터
 export const GetPatientHistoryParamsSchema = z.object({
   patient_id: z.string().uuid(),
-  months: z.number().int().min(1).max(12).optional().default(1),
+  months: z.number().int().min(0).max(24).optional().default(1),
 });
 
 export type GetPatientHistoryParams = z.infer<typeof GetPatientHistoryParamsSchema>;

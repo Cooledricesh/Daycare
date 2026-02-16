@@ -19,6 +19,7 @@ import {
   updateMyPatientSchedulePattern,
   getMyMessages,
 } from './service';
+import { getPatientHistory } from '@/features/doctor/backend/service';
 
 const staffRoutes = new Hono<AppEnv>();
 
@@ -161,6 +162,31 @@ staffRoutes.post('/messages', async (c) => {
       return respond(c, failure(400, error.code, error.message));
     }
     throw error;
+  }
+});
+
+/**
+ * GET /api/staff/patient/:id/history
+ * 환자 진찰 히스토리 조회 (코디용)
+ */
+staffRoutes.get('/patient/:id/history', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const patient_id = c.req.param('id');
+  const months = parseInt(c.req.query('months') || '24', 10);
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const history = await getPatientHistory(supabase, {
+      patient_id,
+      months: Math.min(Math.max(months, 0), 24),
+    });
+    return respond(c, success(history, 200));
+  } catch (error) {
+    return respond(c, failure(400, 'HISTORY_FETCH_FAILED', '히스토리를 불러올 수 없습니다'));
   }
 });
 

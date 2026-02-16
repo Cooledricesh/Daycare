@@ -1,17 +1,19 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { usePatientDetail } from '@/features/staff/hooks/usePatientDetail';
+import { useStaffPatientHistory } from '@/features/staff/hooks/usePatientHistory';
 import { TaskCompletionButton } from '@/features/staff/components/TaskCompletionButton';
 import { MessageForm } from '@/features/staff/components/MessageForm';
+import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -21,10 +23,17 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const patientId = resolvedParams.id;
   const today = new Date().toISOString().split('T')[0];
+  const [showFullHistory, setShowFullHistory] = useState(false);
 
   const { data, isLoading, error } = usePatientDetail({
     patientId,
     date: today,
+  });
+
+  const { data: historyData, isLoading: historyLoading } = useStaffPatientHistory({
+    patientId,
+    months: 24,
+    enabled: showFullHistory,
   });
 
   const patient = data?.patient;
@@ -119,7 +128,7 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              🔔 지시사항
+              지시사항
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -146,36 +155,79 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>최근 기록</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {patient.recent_consultations.length === 0 ? (
-            <p className="text-gray-500 text-sm">최근 기록이 없습니다.</p>
-          ) : (
-            <div className="space-y-3">
-              {patient.recent_consultations.map((record, index) => (
-                <div key={index} className="border-b last:border-0 pb-3 last:pb-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium">
-                      {format(new Date(record.date), 'MM/dd (EEE)', {
-                        locale: ko,
-                      })}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {record.doctor_name}
-                    </span>
+      {/* 최근 기록 (기본: 간단 목록) / 전체 기록 (펼쳤을 때) */}
+      {!showFullHistory ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>최근 기록</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {patient.recent_consultations.length === 0 ? (
+              <p className="text-gray-500 text-sm">최근 기록이 없습니다.</p>
+            ) : (
+              <div className="space-y-3">
+                {patient.recent_consultations.map((record, index) => (
+                  <div key={index} className="border-b last:border-0 pb-3 last:pb-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">
+                        {format(new Date(record.date), 'MM/dd (EEE)', {
+                          locale: ko,
+                        })}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {record.doctor_name}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700">
+                      {record.note || '기록 없음'}
+                    </p>
                   </div>
-                  <p className="text-sm text-gray-700">
-                    {record.note || '기록 없음'}
-                  </p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full mt-4 text-gray-500"
+              onClick={() => setShowFullHistory(true)}
+            >
+              <ChevronDown className="w-4 h-4 mr-1" />
+              전체 기록 보기
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div>
+          <div className="mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-500"
+              onClick={() => setShowFullHistory(false)}
+            >
+              <ChevronUp className="w-4 h-4 mr-1" />
+              간략히 보기
+            </Button>
+          </div>
+
+          {historyLoading ? (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                기록을 불러오는 중...
+              </CardContent>
+            </Card>
+          ) : historyData ? (
+            <ConsultationHistory consultations={historyData.consultations} />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                기록을 불러올 수 없습니다.
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }

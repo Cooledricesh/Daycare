@@ -39,13 +39,9 @@ export async function login(prevState: any, formData: FormData) {
             .eq("login_id", id)
             .single();
 
-        if (error) {
-            if (isDev) console.error("[Login] Database error:", error.message);
-            return { error: "데이터베이스 오류가 발생했습니다.", success: false };
-        }
-
-        if (!staff) {
-            return { error: "잘못된 아이디 또는 비밀번호입니다.", success: false };
+        if (error || !staff) {
+            if (isDev) console.error("[Login] Staff not found:", error?.message);
+            return { error: "아이디 또는 비밀번호를 다시 확인해주세요.", success: false };
         }
 
         const user = staff as StaffRow;
