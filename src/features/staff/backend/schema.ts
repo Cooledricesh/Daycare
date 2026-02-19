@@ -3,6 +3,7 @@ import { z } from 'zod';
 // 담당 환자 목록 조회 스키마
 export const getMyPatientsSchema = z.object({
   date: z.string().optional(),
+  show_all: z.enum(['true', 'false']).optional(),
 });
 
 export type GetMyPatientsParams = z.infer<typeof getMyPatientsSchema>;

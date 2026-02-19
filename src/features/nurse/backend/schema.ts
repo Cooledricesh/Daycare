@@ -32,6 +32,8 @@ export type PrescriptionItem = {
   patient_name: string;
   coordinator_name: string | null;
   doctor_name: string;
+  note: string | null;
+  has_task: boolean;
   task_content: string;
   is_completed: boolean;
   completed_at: string | null;

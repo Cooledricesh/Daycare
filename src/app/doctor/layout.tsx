@@ -24,9 +24,7 @@ const navItems: NavItem[] = [
 export default function DoctorLayout({ children }: DoctorLayoutProps) {
   return (
     <AppLayout navItems={navItems} title="낮병원">
-      <div className="p-6">
-        {children}
-      </div>
+      {children}
     </AppLayout>
   );
 }

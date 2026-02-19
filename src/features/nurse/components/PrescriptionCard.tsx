@@ -67,32 +67,45 @@ export function PrescriptionCard({ prescription }: PrescriptionCardProps) {
           )}
         </div>
 
-        <p className="text-gray-800 mb-3">{prescription.task_content}</p>
+        {/* 진료 메모 */}
+        {prescription.note && (
+          <p className="text-gray-700 mb-3 text-sm bg-gray-50 p-2 rounded">
+            {prescription.note}
+          </p>
+        )}
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={`task-${prescription.consultation_id}`}
-              checked={checked}
-              onCheckedChange={handleChange}
-              disabled={isPending || prescription.is_completed}
-            />
-            <label
-              htmlFor={`task-${prescription.consultation_id}`}
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              처리 완료
-            </label>
+        {/* 지시사항 내용 */}
+        {prescription.has_task && prescription.task_content && (
+          <p className="text-gray-800 mb-3">{prescription.task_content}</p>
+        )}
+
+        {/* 지시사항이 있는 경우에만 처리 완료 체크박스 표시 */}
+        {prescription.has_task && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id={`task-${prescription.consultation_id}`}
+                checked={checked}
+                onCheckedChange={handleChange}
+                disabled={isPending || prescription.is_completed}
+              />
+              <label
+                htmlFor={`task-${prescription.consultation_id}`}
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                처리 완료
+              </label>
+            </div>
+
+            {prescription.completed_at && (
+              <span className="text-xs text-gray-500">
+                {format(new Date(prescription.completed_at), 'HH:mm', {
+                  locale: ko,
+                })}
+              </span>
+            )}
           </div>
-
-          {prescription.completed_at && (
-            <span className="text-xs text-gray-500">
-              {format(new Date(prescription.completed_at), 'HH:mm', {
-                locale: ko,
-              })}
-            </span>
-          )}
-        </div>
+        )}
       </CardContent>
     </Card>
   );

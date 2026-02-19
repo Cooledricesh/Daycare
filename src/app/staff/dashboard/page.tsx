@@ -1,14 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { PatientCard } from '@/features/staff/components/PatientCard';
 import { useMyPatients } from '@/features/staff/hooks/useMyPatients';
 
 export default function StaffDashboardPage() {
   const today = new Date().toISOString().split('T')[0];
-  const { data, isLoading, error } = useMyPatients({ date: today });
+  const [showAll, setShowAll] = useState(false);
+  const { data, isLoading, error } = useMyPatients({ date: today, showAll });
 
   const patients = data?.patients || [];
 
@@ -37,9 +40,29 @@ export default function StaffDashboardPage() {
         </p>
       </div>
 
+      {/* 담당/전체 환자 토글 */}
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={!showAll ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowAll(false)}
+        >
+          담당 환자
+        </Button>
+        <Button
+          variant={showAll ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowAll(true)}
+        >
+          전체 환자
+        </Button>
+      </div>
+
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>내 담당 환자 ({stats.total}명)</CardTitle>
+          <CardTitle>
+            {showAll ? '전체 환자' : '내 담당 환자'} ({stats.total}명)
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 text-center">
@@ -76,7 +99,9 @@ export default function StaffDashboardPage() {
 
         {!isLoading && patients.length === 0 && (
           <div className="text-center py-8">
-            <p className="text-gray-500">담당 환자가 없습니다.</p>
+            <p className="text-gray-500">
+              {showAll ? '등록된 환자가 없습니다.' : '담당 환자가 없습니다.'}
+            </p>
           </div>
         )}
 

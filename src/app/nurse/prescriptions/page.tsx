@@ -10,7 +10,7 @@ import { usePrescriptions } from '@/features/nurse/hooks/usePrescriptions';
 
 export default function NursePrescriptionsPage() {
   const today = new Date().toISOString().split('T')[0];
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   const { data, isLoading, error } = usePrescriptions({ date: today, filter });
 
@@ -41,7 +41,7 @@ export default function NursePrescriptionsPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>오늘 처방 변경 ({stats.total}건)</CardTitle>
+          <CardTitle>오늘 진료 기록 ({stats.total}건)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 text-center">
