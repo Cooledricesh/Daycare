@@ -120,6 +120,7 @@ export interface WaitingPatient {
     blood_sugar: number | null;
   } | null;
   has_consultation: boolean;
+  unread_message_count: number;
 }
 
 // 진찰 기록 생성 요청

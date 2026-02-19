@@ -28,21 +28,22 @@ export async function getPrescriptions(
 ): Promise<PrescriptionItem[]> {
   const date = params.date || new Date().toISOString().split('T')[0];
 
-  // 오늘 처방 변경 건 조회 (nurse 또는 both 대상)
+  // 오늘 모든 진료 기록 조회 (간호사가 투약 변경/진료 메모 확인용)
   let query = (supabase
     .from('consultations') as any)
     .select(`
       id,
       patient_id,
+      note,
+      has_task,
       task_content,
+      task_target,
       created_at,
       patients!inner(name, coordinator_id),
       staff!consultations_doctor_id_fkey(name),
       task_completions(id, is_completed, completed_at, role)
     `)
-    .eq('date', date)
-    .eq('has_task', true)
-    .in('task_target', ['nurse', 'both']);
+    .eq('date', date);
 
   const { data, error } = await query;
 
@@ -58,6 +59,9 @@ export async function getPrescriptions(
   }
 
   // 데이터 변환 및 필터링
+  const hasNurseTask = (c: any) =>
+    c.has_task && (c.task_target === 'nurse' || c.task_target === 'both');
+
   const items: PrescriptionItem[] = (data as any[])
     .map((c) => {
       const nurseTaskCompletion = c.task_completions?.find(
@@ -68,10 +72,14 @@ export async function getPrescriptions(
         consultation_id: c.id,
         patient_id: c.patient_id,
         patient_name: c.patients?.name || '알 수 없음',
-        coordinator_name: null, // TODO: coordinator 정보 추가
+        coordinator_name: null,
         doctor_name: c.staff?.name || '알 수 없음',
+        note: c.note || null,
+        has_task: hasNurseTask(c),
         task_content: c.task_content || '',
-        is_completed: nurseTaskCompletion?.is_completed || false,
+        is_completed: hasNurseTask(c)
+          ? (nurseTaskCompletion?.is_completed || false)
+          : true, // 지시사항이 없으면 완료 처리
         completed_at: nurseTaskCompletion?.completed_at || null,
         task_completion_id: nurseTaskCompletion?.id || null,
         created_at: c.created_at,

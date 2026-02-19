@@ -6,6 +6,7 @@ import type { PatientSummary } from '../backend/schema';
 
 type UseMyPatientsParams = {
   date?: string;
+  showAll?: boolean;
 };
 
 type UseMyPatientsResponse = {
@@ -14,11 +15,14 @@ type UseMyPatientsResponse = {
 
 export const useMyPatients = (params: UseMyPatientsParams = {}) => {
   return useQuery({
-    queryKey: ['staff', 'my-patients', params.date],
+    queryKey: ['staff', 'my-patients', params.date, params.showAll],
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) {
         searchParams.append('date', params.date);
+      }
+      if (params.showAll) {
+        searchParams.append('show_all', 'true');
       }
 
       const { data } = await apiClient.get<UseMyPatientsResponse>(

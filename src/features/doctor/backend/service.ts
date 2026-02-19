@@ -298,84 +298,38 @@ export async function markMessageRead(
 
 /**
  * 대기 환자 목록 조회
- * 오늘 예정된 모든 환자 (출석 여부 무관)
- * scheduled_attendances가 비어있으면 scheduled_patterns 기반으로 조회
+ * 모든 활성 환자를 표시 (주치의가 요일별로 변경되므로 스케줄 무관)
  */
 export async function getWaitingPatients(
   supabase: SupabaseClient<Database>,
   params: GetWaitingPatientsParams,
 ): Promise<WaitingPatient[]> {
   const date = params.date || getTodayString();
-  const targetDate = new Date(date);
-  const dayOfWeek = targetDate.getDay(); // 0=일, 1=월, ..., 6=토
 
-  // 먼저 scheduled_attendances에서 조회 시도
-  const { data: scheduledPatients, error: scheduledError } = await (supabase
-    .from('scheduled_attendances') as any)
+  // 모든 활성 환자 조회 (스케줄/출석 여부 무관)
+  const { data: allPatients, error: patientsError } = await (supabase
+    .from('patients') as any)
     .select(`
       id,
-      patient_id,
-      is_cancelled,
-      patients!inner(
-        id,
-        name,
-        gender,
-        room_number,
-        coordinator:coordinator_id(name)
-      )
+      name,
+      gender,
+      room_number,
+      coordinator:coordinator_id(name)
     `)
-    .eq('date', date)
-    .eq('is_cancelled', false)
-    .order('created_at', { ascending: true });
+    .eq('status', 'active')
+    .order('room_number', { ascending: true });
 
-  if (scheduledError) {
+  if (patientsError) {
     throw new DoctorError(
       DoctorErrorCode.INVALID_REQUEST,
-      `예정 환자 조회에 실패했습니다: ${scheduledError.message}`,
+      `환자 목록 조회에 실패했습니다: ${patientsError.message}`,
     );
   }
 
-  let patientList: any[] = [];
-
-  // scheduled_attendances에 데이터가 있으면 사용
-  if (scheduledPatients && scheduledPatients.length > 0) {
-    patientList = scheduledPatients.map((sp: any) => ({
-      patient_id: sp.patient_id,
-      patients: sp.patients,
-    }));
-  } else {
-    // scheduled_attendances가 비어있으면 scheduled_patterns 기반으로 조회
-    const { data: patternPatients, error: patternError } = await (supabase
-      .from('scheduled_patterns') as any)
-      .select(`
-        patient_id,
-        patients!inner(
-          id,
-          name,
-          gender,
-          room_number,
-          status,
-          coordinator:coordinator_id(name)
-        )
-      `)
-      .eq('day_of_week', dayOfWeek)
-      .eq('is_active', true);
-
-    if (patternError) {
-      throw new DoctorError(
-        DoctorErrorCode.INVALID_REQUEST,
-        `스케줄 패턴 조회에 실패했습니다: ${patternError.message}`,
-      );
-    }
-
-    // 활성 환자만 필터링
-    patientList = (patternPatients || [])
-      .filter((pp: any) => pp.patients?.status === 'active')
-      .map((pp: any) => ({
-        patient_id: pp.patient_id,
-        patients: pp.patients,
-      }));
-  }
+  const patientList = (allPatients || []).map((p: any) => ({
+    patient_id: p.id,
+    patients: p,
+  }));
 
   if (patientList.length === 0) {
     return [];
@@ -409,6 +363,19 @@ export async function getWaitingPatients(
     (consultations || []).map((c: any) => c.patient_id)
   );
 
+  // 오늘 미확인 전달사항 조회
+  const { data: unreadMessages } = await (supabase
+    .from('messages') as any)
+    .select('patient_id')
+    .eq('date', date)
+    .eq('is_read', false)
+    .in('patient_id', patientIds);
+
+  const unreadMap = new Map<string, number>();
+  (unreadMessages || []).forEach((m: any) => {
+    unreadMap.set(m.patient_id, (unreadMap.get(m.patient_id) || 0) + 1);
+  });
+
   // 오늘 활력징후 조회
   const { data: vitals } = await (supabase
     .from('vitals') as any)
@@ -436,6 +403,7 @@ export async function getWaitingPatients(
     checked_at: attendanceMap.get(p.patient_id) || null,  // 출석 시간 (없으면 null)
     vitals: vitalsMap.get(p.patient_id) || null,
     has_consultation: consultedPatientIds.has(p.patient_id),
+    unread_message_count: unreadMap.get(p.patient_id) || 0,
   }));
 }
 

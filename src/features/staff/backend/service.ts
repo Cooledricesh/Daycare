@@ -35,22 +35,35 @@ export async function getMyPatients(
 ): Promise<PatientSummary[]> {
   const date = params.date || new Date().toISOString().split('T')[0];
 
-  const { data, error } = await (supabase.rpc as any)('get_coordinator_patients', {
-    p_coordinator_id: coordinatorId,
-    p_date: date,
-  });
+  const showAll = params.show_all === 'true';
 
-  if (error) {
-    // RPC가 없는 경우 직접 쿼리
-    // 먼저 담당 환자 목록 조회 (출석 여부와 관계없이)
-    const { data: patients, error: patientsError } = await (supabase
+  // show_all=true이면 RPC 스킵하고 직접 전체 환자 조회
+  if (!showAll) {
+    const { data, error } = await (supabase.rpc as any)('get_coordinator_patients', {
+      p_coordinator_id: coordinatorId,
+      p_date: date,
+    });
+
+    if (!error && data) {
+      return data as PatientSummary[];
+    }
+  }
+
+  {
+    // 환자 목록 조회: show_all이면 전체, 아니면 담당만
+    let patientsQuery = (supabase
       .from('patients') as any)
       .select(`
         id,
         name
       `)
-      .eq('coordinator_id', coordinatorId)
       .eq('status', 'active');
+
+    if (!showAll) {
+      patientsQuery = patientsQuery.eq('coordinator_id', coordinatorId);
+    }
+
+    const { data: patients, error: patientsError } = await patientsQuery;
 
     if (patientsError) {
       throw new StaffError(
@@ -131,8 +144,6 @@ export async function getMyPatients(
       };
     });
   }
-
-  return data as PatientSummary[];
 }
 
 /**
@@ -160,16 +171,7 @@ export async function getPatientDetail(
     );
   }
 
-  // 담당자 확인 (admin은 모든 환자 접근 가능)
-  const isAdmin = userRole === 'admin';
-  const isCoordinator = (patient as any).coordinator_id === coordinatorId;
-
-  if (!isAdmin && !isCoordinator) {
-    throw new StaffError(
-      StaffErrorCode.UNAUTHORIZED,
-      '담당 환자가 아닙니다',
-    );
-  }
+  // 코디네이터는 전체 환자 조회 가능 (전체 환자 보기 모드 지원)
 
   // 오늘 출석 정보
   const { data: attendance } = await (supabase

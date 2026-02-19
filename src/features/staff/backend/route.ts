@@ -31,6 +31,7 @@ staffRoutes.get('/my-patients', async (c) => {
   const supabase = c.get('supabase');
   const user = c.get('user');
   const date = c.req.query('date');
+  const show_all = c.req.query('show_all');
 
   if (!user) {
     return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
@@ -39,7 +40,7 @@ staffRoutes.get('/my-patients', async (c) => {
   const staffId = user.sub; // JWT의 sub 필드에서 사용자 ID 추출
 
   try {
-    const params = getMyPatientsSchema.parse({ date });
+    const params = getMyPatientsSchema.parse({ date, show_all });
     const patients = await getMyPatients(supabase, staffId, params);
 
     return respond(c, success({ patients }, 200));
