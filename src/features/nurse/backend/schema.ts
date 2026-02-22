@@ -56,3 +56,27 @@ export type Message = {
   content: string;
   created_at: string;
 };
+
+// 간호사 환자 목록 조회 스키마
+export const getNursePatientsSchema = z.object({
+  date: z.string().optional(),
+  filter: z.enum(['all', 'pending', 'completed']).optional(),
+});
+
+export type GetNursePatientsParams = z.infer<typeof getNursePatientsSchema>;
+
+// 간호사용 환자 요약 타입
+export type NursePatientSummary = {
+  id: string;
+  name: string;
+  is_attended: boolean;
+  attendance_time: string | null;
+  is_consulted: boolean;
+  has_nurse_task: boolean;
+  task_content: string | null;
+  task_completed: boolean;
+  consultation_id: string | null;
+  task_completion_id: string | null;
+  doctor_name: string | null;
+  note: string | null;
+};

@@ -1,92 +1,71 @@
 'use client';
 
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PrescriptionCard } from '@/features/nurse/components/PrescriptionCard';
-import { FilterTabs } from '@/features/nurse/components/FilterTabs';
-import { usePrescriptions } from '@/features/nurse/hooks/usePrescriptions';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNursePatients } from '@/features/nurse/hooks/useNursePatients';
+import { NursePatientListPanel } from '@/features/nurse/components/NursePatientListPanel';
+import { NurseDetailPanel } from '@/features/nurse/components/NurseDetailPanel';
+import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
 export default function NursePrescriptionsPage() {
   const today = new Date().toISOString().split('T')[0];
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const { data, isLoading, refetch } = useNursePatients({ date: today });
+  const patients = data?.patients || [];
 
-  const { data, isLoading, error } = usePrescriptions({ date: today, filter });
+  const [selectedPatient, setSelectedPatient] = useState<NursePatientSummary | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const prescriptions = data?.prescriptions || [];
+  const handleSelectPatient = useCallback((patient: NursePatientSummary) => {
+    setSelectedPatient(patient);
+  }, []);
 
-  const stats = {
-    total: prescriptions.length,
-    completed: prescriptions.filter((p) => p.is_completed).length,
-    pending: prescriptions.filter((p) => !p.is_completed).length,
-  };
+  // 환자 목록이 갱신되면 선택된 환자도 갱신
+  useEffect(() => {
+    if (selectedPatient && patients.length > 0) {
+      const updated = patients.find(p => p.id === selectedPatient.id);
+      if (updated) {
+        setSelectedPatient(updated);
+      }
+    }
+  }, [patients, selectedPatient]);
 
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
-      </div>
-    );
-  }
+  // 키보드 단축키
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/' && !isTyping) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        searchInputRef.current?.blur();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">처방 변경 관리</h1>
-        <p className="text-gray-600">
-          {format(new Date(), 'yyyy.MM.dd EEEE', { locale: ko })}
-        </p>
+    <div className="flex h-full">
+      {/* 왼쪽: 환자 목록 패널 */}
+      <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
+        <NursePatientListPanel
+          patients={patients}
+          isLoading={isLoading}
+          selectedPatientId={selectedPatient?.id || null}
+          onSelectPatient={handleSelectPatient}
+          onRefresh={() => refetch()}
+          searchInputRef={searchInputRef}
+        />
       </div>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>오늘 진료 기록 ({stats.total}건)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-orange-600">
-                {stats.pending}
-              </div>
-              <div className="text-sm text-gray-600">미처리</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-green-600">
-                {stats.completed}
-              </div>
-              <div className="text-sm text-gray-600">완료</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <FilterTabs value={filter} onChange={setFilter} />
-
-      <div>
-        {isLoading && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">로딩 중...</p>
-          </div>
-        )}
-
-        {!isLoading && prescriptions.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">
-              {filter === 'pending' && '미처리 건이 없습니다.'}
-              {filter === 'completed' && '완료 건이 없습니다.'}
-              {filter === 'all' && '처방 변경 건이 없습니다.'}
-            </p>
-          </div>
-        )}
-
-        {!isLoading &&
-          prescriptions.map((prescription) => (
-            <PrescriptionCard
-              key={prescription.consultation_id}
-              prescription={prescription}
-            />
-          ))}
+      {/* 오른쪽: 상세 패널 */}
+      <div className="flex-1 overflow-y-auto">
+        <NurseDetailPanel patient={selectedPatient} />
       </div>
     </div>
   );
