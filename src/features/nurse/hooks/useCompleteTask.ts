@@ -29,6 +29,7 @@ export const useCompleteTask = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nurse', 'prescriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['nurse', 'patients'] });
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error);

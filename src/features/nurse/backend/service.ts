@@ -2,9 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import type {
   GetPrescriptionsParams,
+  GetNursePatientsParams,
   CompleteTaskRequest,
   CreateMessageRequest,
   PrescriptionItem,
+  NursePatientSummary,
   TaskCompletion,
   Message,
 } from './schema';
@@ -18,6 +20,102 @@ import {
   MessageError,
 } from '@/server/services/message';
 import { getTodayString } from '@/lib/date';
+
+/**
+ * 간호사 환자 목록 조회 (전체 활성 환자)
+ */
+export async function getNursePatients(
+  supabase: SupabaseClient<Database>,
+  params: GetNursePatientsParams,
+): Promise<NursePatientSummary[]> {
+  const date = params.date || getTodayString();
+
+  // 1. 모든 활성 환자 조회
+  const { data: patients, error: patientsError } = await (supabase
+    .from('patients') as any)
+    .select('id, name')
+    .eq('status', 'active')
+    .order('name');
+
+  if (patientsError) {
+    throw new NurseError(
+      NurseErrorCode.INVALID_REQUEST,
+      `환자 목록 조회에 실패했습니다: ${patientsError.message}`,
+    );
+  }
+
+  const patientIds = (patients || []).map((p: any) => p.id);
+  if (patientIds.length === 0) return [];
+
+  // 2. 오늘 출석 정보
+  const { data: attendances } = await (supabase
+    .from('attendances') as any)
+    .select('patient_id, checked_at')
+    .in('patient_id', patientIds)
+    .eq('date', date);
+
+  // 3. 오늘 진료 기록 + 지시사항 + 담당의
+  const { data: consultations } = await (supabase
+    .from('consultations') as any)
+    .select(`
+      id,
+      patient_id,
+      note,
+      has_task,
+      task_content,
+      task_target,
+      staff!consultations_doctor_id_fkey(name),
+      task_completions(id, is_completed, completed_at, role)
+    `)
+    .in('patient_id', patientIds)
+    .eq('date', date);
+
+  // 4. Map 생성
+  const attendanceMap = new Map<string, any>(
+    (attendances || []).map((a: any) => [a.patient_id, a]),
+  );
+  const consultationMap = new Map<string, any>(
+    (consultations || []).map((c: any) => [c.patient_id, c]),
+  );
+
+  // 5. 데이터 변환
+  const hasNurseTask = (c: any) =>
+    c?.has_task && (c?.task_target === 'nurse' || c?.task_target === 'both');
+
+  const items: NursePatientSummary[] = (patients || []).map((p: any) => {
+    const attendance = attendanceMap.get(p.id);
+    const consultation = consultationMap.get(p.id);
+    const nurseTaskCompletion = consultation?.task_completions?.find(
+      (tc: any) => tc.role === 'nurse',
+    );
+
+    return {
+      id: p.id,
+      name: p.name,
+      is_attended: !!attendance,
+      attendance_time: attendance?.checked_at || null,
+      is_consulted: !!consultation,
+      has_nurse_task: hasNurseTask(consultation),
+      task_content: consultation?.task_content || null,
+      task_completed: hasNurseTask(consultation)
+        ? (nurseTaskCompletion?.is_completed || false)
+        : false,
+      consultation_id: consultation?.id || null,
+      task_completion_id: nurseTaskCompletion?.id || null,
+      doctor_name: consultation?.staff?.name || null,
+      note: consultation?.note || null,
+    };
+  });
+
+  // 6. 필터 적용
+  if (params.filter === 'pending') {
+    return items.filter((item) => item.has_nurse_task && !item.task_completed);
+  }
+  if (params.filter === 'completed') {
+    return items.filter((item) => !item.has_nurse_task || item.task_completed);
+  }
+  return items;
+}
 
 /**
  * 처방 변경 목록 조회

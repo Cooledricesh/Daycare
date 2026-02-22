@@ -4,10 +4,11 @@ import { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
-import type { ConsultationRecord } from '../backend/schema';
+import type { ConsultationRecord, MessageRecord } from '../backend/schema';
 
 interface ConsultationHistoryProps {
   consultations: ConsultationRecord[];
+  messages?: MessageRecord[];
 }
 
 function formatDate(dateStr: string): string {
@@ -40,14 +41,19 @@ function recordsToText(records: ConsultationRecord[]): string {
   return records.map(recordToText).join('\n\n');
 }
 
-// 플랫 기록 아이템 - 날짜 + 내용 바로 노출
-function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
+// 통합 타임라인 아이템 타입
+type TimelineItem =
+  | { type: 'consultation'; date: string; data: ConsultationRecord }
+  | { type: 'message'; date: string; data: MessageRecord };
+
+function hasContent(c: ConsultationRecord): boolean {
+  return !!(c.note || (c.has_task && c.task_content));
+}
+
+// 진찰 기록 아이템
+function ConsultationItem({ consultation }: { consultation: ConsultationRecord }) {
   return (
-    <div className="py-2.5 border-b last:border-b-0">
-      <div className="text-sm">
-        <span className="font-medium text-gray-900">{formatDate(consultation.date)}</span>
-        <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>
-      </div>
+    <>
       {consultation.note && (
         <p className="text-sm whitespace-pre-wrap text-gray-700 mt-1">{consultation.note}</p>
       )}
@@ -62,27 +68,135 @@ function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
           </span>
         </div>
       )}
-      {!consultation.note && !consultation.has_task && (
-        <p className="text-sm text-gray-400 mt-1">메모 없음</p>
+    </>
+  );
+}
+
+// 전달사항 아이템
+function MessageItem({ message }: { message: MessageRecord }) {
+  const roleLabel = message.author_role === 'coordinator' ? '코디' : '간호사';
+  return (
+    <div className="mt-1.5 p-2 bg-blue-50 rounded text-sm">
+      <span className="text-blue-700 font-medium">전달({roleLabel}): </span>
+      <span>{message.content}</span>
+      <span className="text-gray-400 text-xs ml-1">({message.author_name})</span>
+    </div>
+  );
+}
+
+// 날짜별 통합 아이템
+function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
+  if (!hasContent(consultation)) return null;
+  return (
+    <div className="py-2.5 border-b last:border-b-0">
+      <div className="text-sm">
+        <span className="font-medium text-gray-900">{formatDate(consultation.date)}</span>
+        <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>
+      </div>
+      <ConsultationItem consultation={consultation} />
+    </div>
+  );
+}
+
+// 타임라인 아이템을 날짜별로 그룹핑
+function buildTimeline(consultations: ConsultationRecord[], messages: MessageRecord[]): Map<string, TimelineItem[]> {
+  const map = new Map<string, TimelineItem[]>();
+
+  for (const c of consultations) {
+    if (hasContent(c)) {
+      if (!map.has(c.date)) map.set(c.date, []);
+      map.get(c.date)!.push({ type: 'consultation', date: c.date, data: c });
+    }
+  }
+  for (const m of messages) {
+    if (!map.has(m.date)) map.set(m.date, []);
+    map.get(m.date)!.push({ type: 'message', date: m.date, data: m });
+  }
+
+  // 날짜 내림차순 정렬
+  return new Map([...map.entries()].sort(([a], [b]) => b.localeCompare(a)));
+}
+
+function TimelineDateGroup({ date, items }: { date: string; items: TimelineItem[] }) {
+  const firstConsultation = items.find(i => i.type === 'consultation');
+  const doctorName = firstConsultation ? (firstConsultation.data as ConsultationRecord).doctor_name : null;
+
+  return (
+    <div className="py-2.5 border-b last:border-b-0">
+      <div className="text-sm">
+        <span className="font-medium text-gray-900">{formatDate(date)}</span>
+        {doctorName && <span className="text-gray-400 ml-1.5 text-xs">({doctorName})</span>}
+      </div>
+      {items.map((item, i) =>
+        item.type === 'consultation' ? (
+          <ConsultationItem key={`c-${i}`} consultation={item.data as ConsultationRecord} />
+        ) : (
+          <MessageItem key={`m-${i}`} message={item.data as MessageRecord} />
+        )
       )}
     </div>
   );
 }
 
-export function ConsultationHistory({ consultations }: ConsultationHistoryProps) {
+export function ConsultationHistory({ consultations, messages = [] }: ConsultationHistoryProps) {
   const [showOlder, setShowOlder] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const hasMessages = messages.length > 0;
+
+  // 내용 있는 기록만 필터
+  const meaningfulConsultations = useMemo(
+    () => consultations.filter(hasContent),
+    [consultations],
+  );
+
+  // 통합 타임라인 (messages가 있을 때)
+  const timeline = useMemo(
+    () => hasMessages ? buildTimeline(consultations, messages) : null,
+    [consultations, messages, hasMessages],
+  );
+
   // 최근 1개월 / 1개월 이전 분리
-  const { recentConsultations, olderConsultations, olderGrouped } = useMemo(() => {
+  const { recentDates, olderDates, recentConsultations, olderConsultations, olderGrouped } = useMemo(() => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
     const monthCutoff = oneMonthAgo.toISOString().split('T')[0];
 
+    if (timeline) {
+      // 통합 타임라인 모드
+      const recentD: [string, TimelineItem[]][] = [];
+      const olderD: [string, TimelineItem[]][] = [];
+
+      for (const [date, items] of timeline) {
+        if (date >= monthCutoff) {
+          recentD.push([date, items]);
+        } else {
+          olderD.push([date, items]);
+        }
+      }
+
+      // 이전 기록 월별 그룹핑
+      const grouped: Record<string, [string, TimelineItem[]][]> = {};
+      for (const entry of olderD) {
+        const label = formatMonthLabel(entry[0]);
+        if (!grouped[label]) grouped[label] = [];
+        grouped[label].push(entry);
+      }
+
+      return {
+        recentDates: recentD,
+        olderDates: olderD,
+        recentConsultations: [] as ConsultationRecord[],
+        olderConsultations: [] as ConsultationRecord[],
+        olderGrouped: {} as Record<string, ConsultationRecord[]>,
+      };
+    }
+
+    // 기존 모드 (consultation만)
     const recent: ConsultationRecord[] = [];
     const older: ConsultationRecord[] = [];
 
-    for (const c of consultations) {
+    for (const c of meaningfulConsultations) {
       if (c.date >= monthCutoff) {
         recent.push(c);
       } else {
@@ -90,7 +204,6 @@ export function ConsultationHistory({ consultations }: ConsultationHistoryProps)
       }
     }
 
-    // 이전 기록 월별 그룹핑
     const grouped: Record<string, ConsultationRecord[]> = {};
     for (const c of older) {
       const label = formatMonthLabel(c.date);
@@ -98,28 +211,41 @@ export function ConsultationHistory({ consultations }: ConsultationHistoryProps)
       grouped[label].push(c);
     }
 
-    return { recentConsultations: recent, olderConsultations: older, olderGrouped: grouped };
-  }, [consultations]);
+    return {
+      recentDates: [] as [string, TimelineItem[]][],
+      olderDates: [] as [string, TimelineItem[]][],
+      recentConsultations: recent,
+      olderConsultations: older,
+      olderGrouped: grouped,
+    };
+  }, [timeline, meaningfulConsultations]);
+
+  const totalCount = timeline ? timeline.size : meaningfulConsultations.length;
+  const olderCount = timeline ? olderDates.length : olderConsultations.length;
 
   // 현재 보이는 기록 전체 복사
   const handleCopy = useCallback(async () => {
     const visible = showOlder
-      ? consultations
-      : recentConsultations;
+      ? meaningfulConsultations
+      : meaningfulConsultations.filter(c => {
+          const oneMonthAgo = new Date();
+          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+          return c.date >= oneMonthAgo.toISOString().split('T')[0];
+        });
     const text = recordsToText(visible);
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [consultations, recentConsultations, showOlder]);
+  }, [meaningfulConsultations, showOlder]);
 
-  if (consultations.length === 0) {
+  if (totalCount === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>진찰 기록</CardTitle>
+          <CardTitle>기록</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-500 text-center py-4">진찰 기록이 없습니다.</p>
+          <p className="text-gray-500 text-center py-4">기록이 없습니다.</p>
         </CardContent>
       </Card>
     );
@@ -128,7 +254,7 @@ export function ConsultationHistory({ consultations }: ConsultationHistoryProps)
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>진찰 기록 ({consultations.length}건)</CardTitle>
+        <CardTitle>기록 ({totalCount}건)</CardTitle>
         <Button
           variant="ghost"
           size="sm"
@@ -149,19 +275,33 @@ export function ConsultationHistory({ consultations }: ConsultationHistoryProps)
         </Button>
       </CardHeader>
       <CardContent>
-        {/* 최근 1개월: 모두 바로 노출 */}
-        {recentConsultations.length > 0 ? (
-          <div>
-            {recentConsultations.map((c) => (
-              <FlatItem key={c.id} consultation={c} />
-            ))}
-          </div>
+        {/* 최근 1개월 */}
+        {timeline ? (
+          // 통합 타임라인 모드
+          recentDates.length > 0 ? (
+            <div>
+              {recentDates.map(([date, items]) => (
+                <TimelineDateGroup key={date} date={date} items={items} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm py-2">최근 1개월 내 기록이 없습니다.</p>
+          )
         ) : (
-          <p className="text-gray-500 text-sm py-2">최근 1개월 내 기록이 없습니다.</p>
+          // 기존 모드
+          recentConsultations.length > 0 ? (
+            <div>
+              {recentConsultations.map((c) => (
+                <FlatItem key={c.id} consultation={c} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm py-2">최근 1개월 내 기록이 없습니다.</p>
+          )
         )}
 
         {/* 1개월 이전: 토글 */}
-        {olderConsultations.length > 0 && (
+        {olderCount > 0 && (
           <div className="mt-3 border-t pt-3">
             <Button
               variant="ghost"
@@ -177,21 +317,42 @@ export function ConsultationHistory({ consultations }: ConsultationHistoryProps)
               ) : (
                 <>
                   <ChevronDown className="w-4 h-4 mr-1" />
-                  이전 기록 보기 ({olderConsultations.length}건)
+                  이전 기록 보기 ({olderCount}건)
                 </>
               )}
             </Button>
 
             {showOlder && (
               <div className="mt-2">
-                {Object.entries(olderGrouped).map(([monthLabel, records]) => (
-                  <div key={monthLabel}>
-                    <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
-                    {records.map((c) => (
-                      <FlatItem key={c.id} consultation={c} />
-                    ))}
-                  </div>
-                ))}
+                {timeline ? (
+                  // 통합 타임라인
+                  (() => {
+                    const grouped: Record<string, [string, TimelineItem[]][]> = {};
+                    for (const entry of olderDates) {
+                      const label = formatMonthLabel(entry[0]);
+                      if (!grouped[label]) grouped[label] = [];
+                      grouped[label].push(entry);
+                    }
+                    return Object.entries(grouped).map(([monthLabel, entries]) => (
+                      <div key={monthLabel}>
+                        <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
+                        {entries.map(([date, items]) => (
+                          <TimelineDateGroup key={date} date={date} items={items} />
+                        ))}
+                      </div>
+                    ));
+                  })()
+                ) : (
+                  // 기존 모드
+                  Object.entries(olderGrouped).map(([monthLabel, records]) => (
+                    <div key={monthLabel}>
+                      <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
+                      {records.map((c) => (
+                        <FlatItem key={c.id} consultation={c} />
+                      ))}
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
