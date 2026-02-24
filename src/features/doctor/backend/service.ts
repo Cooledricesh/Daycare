@@ -129,19 +129,56 @@ export async function getPatientHistory(
   // months=0이면 전체 기간 조회
   const fromDate = months === 0 ? '2000-01-01' : getMonthsAgoString(months || 1);
 
-  // 환자 기본 정보 조회
-  const { data: patient, error: patientError } = await (supabase
-    .from('patients') as any)
-    .select(`
-      id,
-      name,
-      gender,
-      room_number,
-      coordinator:coordinator_id(name),
-      doctor:doctor_id(name)
-    `)
-    .eq('id', patient_id)
-    .single();
+  // 모든 쿼리를 병렬로 실행
+  const [
+    { data: patient, error: patientError },
+    { data: consultations },
+    { data: messages },
+    { data: vitals },
+  ] = await Promise.all([
+    (supabase.from('patients') as any)
+      .select(`
+        id,
+        name,
+        gender,
+        room_number,
+        coordinator:coordinator_id(name),
+        doctor:doctor_id(name)
+      `)
+      .eq('id', patient_id)
+      .single(),
+    (supabase.from('consultations') as any)
+      .select(`
+        id,
+        date,
+        note,
+        has_task,
+        task_content,
+        task_target,
+        doctor:doctor_id(name)
+      `)
+      .eq('patient_id', patient_id)
+      .gte('date', fromDate)
+      .order('date', { ascending: false }),
+    (supabase.from('messages') as any)
+      .select(`
+        id,
+        date,
+        content,
+        is_read,
+        author_role,
+        created_at,
+        author:author_id(name)
+      `)
+      .eq('patient_id', patient_id)
+      .gte('date', fromDate)
+      .order('date', { ascending: false }),
+    (supabase.from('vitals') as any)
+      .select('date, systolic, diastolic, blood_sugar')
+      .eq('patient_id', patient_id)
+      .gte('date', fromDate)
+      .order('date', { ascending: false }),
+  ]);
 
   if (patientError || !patient) {
     throw new DoctorError(
@@ -149,46 +186,6 @@ export async function getPatientHistory(
       '환자를 찾을 수 없습니다',
     );
   }
-
-  // 진찰 기록 조회
-  const { data: consultations } = await (supabase
-    .from('consultations') as any)
-    .select(`
-      id,
-      date,
-      note,
-      has_task,
-      task_content,
-      task_target,
-      doctor:doctor_id(name)
-    `)
-    .eq('patient_id', patient_id)
-    .gte('date', fromDate)
-    .order('date', { ascending: false });
-
-  // 전달사항 조회
-  const { data: messages } = await (supabase
-    .from('messages') as any)
-    .select(`
-      id,
-      date,
-      content,
-      is_read,
-      author_role,
-      created_at,
-      author:author_id(name)
-    `)
-    .eq('patient_id', patient_id)
-    .gte('date', fromDate)
-    .order('date', { ascending: false });
-
-  // 활력징후 조회
-  const { data: vitals } = await (supabase
-    .from('vitals') as any)
-    .select('date, systolic, diastolic, blood_sugar')
-    .eq('patient_id', patient_id)
-    .gte('date', fromDate)
-    .order('date', { ascending: false });
 
   return {
     patient: {

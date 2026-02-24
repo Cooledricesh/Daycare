@@ -47,28 +47,29 @@ export async function getNursePatients(
   const patientIds = (patients || []).map((p: any) => p.id);
   if (patientIds.length === 0) return [];
 
-  // 2. 오늘 출석 정보
-  const { data: attendances } = await (supabase
-    .from('attendances') as any)
-    .select('patient_id, checked_at')
-    .in('patient_id', patientIds)
-    .eq('date', date);
-
-  // 3. 오늘 진료 기록 + 지시사항 + 담당의
-  const { data: consultations } = await (supabase
-    .from('consultations') as any)
-    .select(`
-      id,
-      patient_id,
-      note,
-      has_task,
-      task_content,
-      task_target,
-      staff!consultations_doctor_id_fkey(name),
-      task_completions(id, is_completed, completed_at, role)
-    `)
-    .in('patient_id', patientIds)
-    .eq('date', date);
+  // 2+3. 출석 + 진료 기록을 병렬로 조회
+  const [
+    { data: attendances },
+    { data: consultations },
+  ] = await Promise.all([
+    (supabase.from('attendances') as any)
+      .select('patient_id, checked_at')
+      .in('patient_id', patientIds)
+      .eq('date', date),
+    (supabase.from('consultations') as any)
+      .select(`
+        id,
+        patient_id,
+        note,
+        has_task,
+        task_content,
+        task_target,
+        staff!consultations_doctor_id_fkey(name),
+        task_completions(id, is_completed, completed_at, role)
+      `)
+      .in('patient_id', patientIds)
+      .eq('date', date),
+  ]);
 
   // 4. Map 생성
   const attendanceMap = new Map<string, any>(

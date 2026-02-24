@@ -79,33 +79,32 @@ export async function getMyPatients(
       return [];
     }
 
-    // 해당 날짜의 출석 정보
-    const { data: attendances } = await (supabase
-      .from('attendances') as any)
-      .select('patient_id, checked_at')
-      .in('patient_id', patientIds)
-      .eq('date', date);
-
-    // 해당 날짜의 진찰 정보
-    const { data: consultations } = await (supabase
-      .from('consultations') as any)
-      .select(`
-        patient_id,
-        id,
-        has_task,
-        task_content,
-        task_target,
-        task_completions(is_completed)
-      `)
-      .in('patient_id', patientIds)
-      .eq('date', date);
-
-    // 해당 날짜의 메시지 정보
-    const { data: messages } = await (supabase
-      .from('messages') as any)
-      .select('patient_id, id, is_read')
-      .in('patient_id', patientIds)
-      .eq('date', date);
+    // 출석, 진찰, 메시지를 병렬로 조회
+    const [
+      { data: attendances },
+      { data: consultations },
+      { data: messages },
+    ] = await Promise.all([
+      (supabase.from('attendances') as any)
+        .select('patient_id, checked_at')
+        .in('patient_id', patientIds)
+        .eq('date', date),
+      (supabase.from('consultations') as any)
+        .select(`
+          patient_id,
+          id,
+          has_task,
+          task_content,
+          task_target,
+          task_completions(is_completed)
+        `)
+        .in('patient_id', patientIds)
+        .eq('date', date),
+      (supabase.from('messages') as any)
+        .select('patient_id, id, is_read')
+        .in('patient_id', patientIds)
+        .eq('date', date),
+    ]);
 
     // 데이터를 Map으로 변환
     const attendanceMap = new Map<string, any>((attendances || []).map((a: any) => [a.patient_id, a]));
@@ -157,12 +156,55 @@ export async function getPatientDetail(
 ): Promise<PatientDetail> {
   const date = params.date || new Date().toISOString().split('T')[0];
 
-  // 환자 기본 정보
-  const { data: patient, error: patientError } = await (supabase
-    .from('patients') as any)
-    .select('id, name, gender, coordinator_id')
-    .eq('id', params.patient_id)
-    .single();
+  // 최근 진찰 기록 조회를 위한 날짜
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  // 모든 쿼리를 병렬로 실행 (patient_id는 이미 알고 있으므로)
+  const [
+    { data: patient, error: patientError },
+    { data: attendance },
+    { data: consultation },
+    { data: vitals },
+    { data: recentConsultations },
+  ] = await Promise.all([
+    (supabase.from('patients') as any)
+      .select('id, name, gender, coordinator_id')
+      .eq('id', params.patient_id)
+      .single(),
+    (supabase.from('attendances') as any)
+      .select('checked_at')
+      .eq('patient_id', params.patient_id)
+      .eq('date', date)
+      .maybeSingle(),
+    (supabase.from('consultations') as any)
+      .select(`
+        id,
+        note,
+        has_task,
+        task_content,
+        task_target,
+        task_completions(id, is_completed, completed_at, memo, role)
+      `)
+      .eq('patient_id', params.patient_id)
+      .eq('date', date)
+      .maybeSingle(),
+    (supabase.from('vitals') as any)
+      .select('systolic, diastolic, blood_sugar')
+      .eq('patient_id', params.patient_id)
+      .eq('date', date)
+      .maybeSingle(),
+    (supabase.from('consultations') as any)
+      .select(`
+        date,
+        note,
+        staff:doctor_id(name)
+      `)
+      .eq('patient_id', params.patient_id)
+      .gte('date', oneMonthAgo.toISOString().split('T')[0])
+      .order('date', { ascending: false })
+      .limit(10),
+  ]);
 
   if (patientError || !patient) {
     throw new StaffError(
@@ -170,55 +212,6 @@ export async function getPatientDetail(
       '환자를 찾을 수 없습니다',
     );
   }
-
-  // 코디네이터는 전체 환자 조회 가능 (전체 환자 보기 모드 지원)
-
-  // 오늘 출석 정보
-  const { data: attendance } = await (supabase
-    .from('attendances') as any)
-    .select('checked_at')
-    .eq('patient_id', params.patient_id)
-    .eq('date', date)
-    .maybeSingle();
-
-  // 오늘 진찰 정보
-  const { data: consultation } = await (supabase
-    .from('consultations') as any)
-    .select(`
-      id,
-      note,
-      has_task,
-      task_content,
-      task_target,
-      task_completions(id, is_completed, completed_at, memo, role)
-    `)
-    .eq('patient_id', params.patient_id)
-    .eq('date', date)
-    .maybeSingle();
-
-  // 오늘 활력징후
-  const { data: vitals } = await (supabase
-    .from('vitals') as any)
-    .select('systolic, diastolic, blood_sugar')
-    .eq('patient_id', params.patient_id)
-    .eq('date', date)
-    .maybeSingle();
-
-  // 최근 진찰 기록 (1개월)
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-
-  const { data: recentConsultations } = await (supabase
-    .from('consultations') as any)
-    .select(`
-      date,
-      note,
-      staff:doctor_id(name)
-    `)
-    .eq('patient_id', params.patient_id)
-    .gte('date', oneMonthAgo.toISOString().split('T')[0])
-    .order('date', { ascending: false })
-    .limit(10);
 
   // task_completions에서 coordinator 역할만 필터링
   const coordinatorTaskCompletion =
