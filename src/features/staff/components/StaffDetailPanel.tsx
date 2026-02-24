@@ -5,34 +5,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { User, ChevronDown, ChevronUp, Stethoscope } from 'lucide-react';
+import { User, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { useNursePatientDetail } from '../hooks/useNursePatientDetail';
-import { useNursePatientHistory } from '../hooks/useNursePatientHistory';
+import { usePatientDetail } from '../hooks/usePatientDetail';
+import { useStaffPatientHistory } from '../hooks/usePatientHistory';
 import { useCompleteTask } from '../hooks/useCompleteTask';
-import { NurseMessageForm } from './NurseMessageForm';
+import { MessageForm } from './MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
-import type { NursePatientSummary } from '../backend/schema';
+import type { PatientSummary } from '../backend/schema';
 
-interface NurseDetailPanelProps {
-  patient: NursePatientSummary | null;
+interface StaffDetailPanelProps {
+  patient: PatientSummary | null;
 }
 
-export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
+export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
   const today = new Date().toISOString().split('T')[0];
   const [showFullHistory, setShowFullHistory] = useState(false);
   const { toast } = useToast();
 
-  const { data: detailData, isLoading: detailLoading } = useNursePatientDetail({
+  const { data: detailData, isLoading: detailLoading } = usePatientDetail({
     patientId: patient?.id || '',
     date: today,
     enabled: !!patient,
   });
 
-  const { data: historyData, isLoading: historyLoading } = useNursePatientHistory({
+  const { data: historyData, isLoading: historyLoading } = useStaffPatientHistory({
     patientId: patient?.id || '',
     months: 3,
     enabled: !!patient && showFullHistory,
@@ -40,12 +39,11 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
 
   const { mutate: completeTask, isPending: isCompleting } = useCompleteTask();
 
-  // 환자 미선택 시 안내
   if (!patient) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
         <div className="text-center">
-          <Stethoscope className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p className="text-lg font-medium">환자를 선택해주세요</p>
           <p className="text-sm mt-1">왼쪽 목록에서 환자를 클릭하면 상세 정보를 확인할 수 있습니다.</p>
         </div>
@@ -54,9 +52,6 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
   }
 
   const detail = detailData?.patient;
-
-  const hasNurseTask = detail?.consultation.has_task &&
-    (detail?.consultation.task_target === 'nurse' || detail?.consultation.task_target === 'both');
 
   const handleTaskComplete = (value: boolean | 'indeterminate') => {
     if (value === true && detail?.consultation.consultation_id) {
@@ -87,7 +82,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
             {patient.is_consulted && (
               <Badge className="bg-green-100 text-green-700 text-xs">진찰 완료</Badge>
             )}
-            {patient.has_nurse_task && !patient.task_completed && (
+            {patient.has_task && !patient.task_completed && (
               <Badge className="bg-orange-100 text-orange-700 text-xs">지시 미처리</Badge>
             )}
           </div>
@@ -95,7 +90,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
             {patient.is_attended
               ? `${patient.attendance_time ? format(new Date(patient.attendance_time), 'HH:mm', { locale: ko }) + ' ' : ''}출석`
               : '미출석'}
-            {patient.doctor_name && ` · 담당의: ${patient.doctor_name}`}
+            {patient.unread_message_count > 0 && ` · 미확인 전달사항 ${patient.unread_message_count}건`}
           </p>
         </div>
       </div>
@@ -119,34 +114,34 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
       )}
 
       {/* 진찰 메모 */}
-      {patient.note && (
+      {detail?.consultation.note && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">진찰 메모</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-700">{patient.note}</p>
+            <p className="text-sm text-gray-700">{detail.consultation.note}</p>
           </CardContent>
         </Card>
       )}
 
-      {/* 간호 지시사항 */}
-      {hasNurseTask && (
+      {/* 지시사항 */}
+      {detail?.consultation.has_task && (
         <Card className="border-orange-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-orange-700">간호 지시사항</CardTitle>
+            <CardTitle className="text-sm text-orange-700">지시사항</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-gray-800">{detail?.consultation.task_content || '-'}</p>
+            <p className="text-sm text-gray-800">{detail.consultation.task_content || '-'}</p>
 
-            {detail?.consultation.consultation_id && !detail?.consultation.is_task_completed ? (
+            {detail.consultation.consultation_id && !detail.consultation.is_task_completed ? (
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="nurse-task-panel"
+                  id="staff-task-panel"
                   onCheckedChange={handleTaskComplete}
                   disabled={isCompleting}
                 />
-                <label htmlFor="nurse-task-panel" className="text-sm font-medium leading-none">
+                <label htmlFor="staff-task-panel" className="text-sm font-medium leading-none">
                   처리 완료
                 </label>
               </div>
@@ -165,7 +160,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
           <CardTitle className="text-sm">주치의에게 전달사항</CardTitle>
         </CardHeader>
         <CardContent>
-          <NurseMessageForm patientId={patient.id} date={today} />
+          <MessageForm patientId={patient.id} date={today} />
         </CardContent>
       </Card>
 

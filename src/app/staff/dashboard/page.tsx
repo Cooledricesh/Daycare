@@ -1,117 +1,74 @@
 'use client';
 
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { PatientCard } from '@/features/staff/components/PatientCard';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMyPatients } from '@/features/staff/hooks/useMyPatients';
+import { StaffPatientListPanel } from '@/features/staff/components/StaffPatientListPanel';
+import { StaffDetailPanel } from '@/features/staff/components/StaffDetailPanel';
+import type { PatientSummary } from '@/features/staff/backend/schema';
 
 export default function StaffDashboardPage() {
   const today = new Date().toISOString().split('T')[0];
   const [showAll, setShowAll] = useState(false);
-  const { data, isLoading, error } = useMyPatients({ date: today, showAll });
-
+  const { data, isLoading, refetch } = useMyPatients({ date: today, showAll });
   const patients = data?.patients || [];
 
-  const stats = {
-    total: patients.length,
-    attended: patients.filter((p) => p.is_attended).length,
-    consulted: patients.filter((p) => p.is_consulted).length,
-    hasTasks: patients.filter((p) => p.has_task && !p.task_completed).length,
-  };
+  const [selectedPatient, setSelectedPatient] = useState<PatientSummary | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
-        <p className="text-sm text-gray-500 mt-2">{error.message}</p>
-      </div>
-    );
-  }
+  const handleSelectPatient = useCallback((patient: PatientSummary) => {
+    setSelectedPatient(patient);
+  }, []);
+
+  // 환자 목록이 갱신되면 선택된 환자도 갱신
+  useEffect(() => {
+    if (selectedPatient && patients.length > 0) {
+      const updated = patients.find(p => p.id === selectedPatient.id);
+      if (updated) {
+        setSelectedPatient(updated);
+      }
+    }
+  }, [patients, selectedPatient]);
+
+  // 키보드 단축키
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/' && !isTyping) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        searchInputRef.current?.blur();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">담당 환자 관리</h1>
-        <p className="text-gray-600">
-          {format(new Date(), 'yyyy.MM.dd EEEE', { locale: ko })}
-        </p>
+    <div className="flex h-full">
+      {/* 왼쪽: 환자 목록 패널 */}
+      <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
+        <StaffPatientListPanel
+          patients={patients}
+          isLoading={isLoading}
+          showAll={showAll}
+          onShowAllChange={setShowAll}
+          selectedPatientId={selectedPatient?.id || null}
+          onSelectPatient={handleSelectPatient}
+          onRefresh={() => refetch()}
+          searchInputRef={searchInputRef}
+        />
       </div>
 
-      {/* 담당/전체 환자 토글 */}
-      <div className="flex gap-2 mb-4">
-        <Button
-          variant={!showAll ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setShowAll(false)}
-        >
-          담당 환자
-        </Button>
-        <Button
-          variant={showAll ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setShowAll(true)}
-        >
-          전체 환자
-        </Button>
-      </div>
-
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>
-            {showAll ? '전체 환자' : '내 담당 환자'} ({stats.total}명)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-blue-600">
-                {stats.attended}
-              </div>
-              <div className="text-sm text-gray-600">출석</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-green-600">
-                {stats.consulted}
-              </div>
-              <div className="text-sm text-gray-600">진찰</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-orange-600">
-                {stats.hasTasks}
-              </div>
-              <div className="text-sm text-gray-600">🔔 지시</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div>
-        <h2 className="text-lg font-semibold mb-3">환자 목록</h2>
-
-        {isLoading && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">로딩 중...</p>
-          </div>
-        )}
-
-        {!isLoading && patients.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">
-              {showAll ? '등록된 환자가 없습니다.' : '담당 환자가 없습니다.'}
-            </p>
-          </div>
-        )}
-
-        {!isLoading && patients.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {patients.map((patient) => (
-              <PatientCard key={patient.id} patient={patient} />
-            ))}
-          </div>
-        )}
+      {/* 오른쪽: 상세 패널 */}
+      <div className="flex-1 overflow-y-auto">
+        <StaffDetailPanel patient={selectedPatient} />
       </div>
     </div>
   );
