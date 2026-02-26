@@ -122,6 +122,7 @@ export interface WaitingPatient {
   } | null;
   has_consultation: boolean;
   unread_message_count: number;
+  task_status: 'none' | 'pending' | 'completed';  // 지시사항 상태: none=없음, pending=미처리, completed=이행완료
 }
 
 // 진찰 기록 생성 요청
