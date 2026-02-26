@@ -155,6 +155,7 @@ export async function getPatientHistory(
         has_task,
         task_content,
         task_target,
+        created_at,
         doctor:doctor_id(name)
       `)
       .eq('patient_id', patient_id)
@@ -204,6 +205,7 @@ export async function getPatientHistory(
       has_task: c.has_task,
       task_content: c.task_content,
       task_target: c.task_target,
+      created_at: c.created_at || null,
     })),
     messages: (messages || []).map((m: any) => ({
       id: m.id,

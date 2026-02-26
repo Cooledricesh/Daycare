@@ -26,6 +26,8 @@ import type {
   StatsSummary,
   GetDailyStatsQuery,
   DailyStatsItem,
+  BatchGenerateRequest,
+  BatchOperationResult,
   UpdateRoomMappingRequest,
   CreateRoomMappingRequest,
   RoomMappingItem,
@@ -596,10 +598,209 @@ export async function updateSchedulePattern(
   return { success: true };
 }
 
+// ========== Schedule Generation ==========
+
+export async function generateScheduledAttendances(
+  supabase: SupabaseClient<Database>,
+  date: string,
+): Promise<{ generated: number; skipped: number }> {
+  // 타임존 이슈 방지: 로컬 Date 생성
+  const [y, m, d] = date.split('-').map(Number);
+  const dayOfWeek = new Date(y, m - 1, d).getDay();
+
+  // 해당 요일의 active 패턴 조회 (active 환자만)
+  const { data: patterns, error: patternsError } = await (supabase
+    .from('scheduled_patterns') as any)
+    .select('patient_id, patients!inner(status)')
+    .eq('day_of_week', dayOfWeek)
+    .eq('is_active', true)
+    .eq('patients.status', 'active');
+
+  if (patternsError) {
+    throw new AdminError(
+      AdminErrorCode.SCHEDULE_GENERATE_FAILED,
+      `패턴 조회 실패: ${patternsError.message}`,
+    );
+  }
+
+  if (!patterns || patterns.length === 0) {
+    return { generated: 0, skipped: 0 };
+  }
+
+  const rows = patterns.map((p: any) => ({
+    patient_id: p.patient_id,
+    date,
+    source: 'auto',
+    is_cancelled: false,
+  }));
+
+  // ignoreDuplicates: 기존 수동/취소 레코드 보존
+  const { data: inserted, error: insertError } = await (supabase
+    .from('scheduled_attendances') as any)
+    .upsert(rows, { onConflict: 'patient_id,date', ignoreDuplicates: true })
+    .select('id');
+
+  if (insertError) {
+    throw new AdminError(
+      AdminErrorCode.SCHEDULE_GENERATE_FAILED,
+      `자동 스케줄 생성 실패: ${insertError.message}`,
+    );
+  }
+
+  const generated = inserted?.length ?? 0;
+  return { generated, skipped: rows.length - generated };
+}
+
+export async function calculateDailyStats(
+  supabase: SupabaseClient<Database>,
+  date: string,
+): Promise<DailyStatsItem> {
+  const { count: scheduledCount } = await (supabase
+    .from('scheduled_attendances') as any)
+    .select('*', { count: 'exact', head: true })
+    .eq('date', date)
+    .eq('is_cancelled', false);
+
+  const { count: attendanceCount } = await (supabase
+    .from('attendances') as any)
+    .select('*', { count: 'exact', head: true })
+    .eq('date', date);
+
+  const { count: consultationCount } = await (supabase
+    .from('consultations') as any)
+    .select('*', { count: 'exact', head: true })
+    .eq('date', date);
+
+  const sc = scheduledCount ?? 0;
+  const ac = attendanceCount ?? 0;
+  const cc = consultationCount ?? 0;
+
+  const attendanceRate = sc > 0 ? Math.round((ac / sc) * 10000) / 100 : null;
+  const consultationRate = sc > 0 ? Math.round((cc / sc) * 10000) / 100 : null;
+
+  const { data, error } = await (supabase
+    .from('daily_stats') as any)
+    .upsert({
+      date,
+      scheduled_count: sc,
+      attendance_count: ac,
+      consultation_count: cc,
+      attendance_rate: attendanceRate,
+      consultation_rate: consultationRate,
+      calculated_at: new Date().toISOString(),
+    }, { onConflict: 'date' })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new AdminError(
+      AdminErrorCode.STATS_FETCH_FAILED,
+      `통계 계산 실패: ${error?.message}`,
+    );
+  }
+
+  return data as DailyStatsItem;
+}
+
+async function ensureTodayScheduleGenerated(
+  supabase: SupabaseClient<Database>,
+  date: string,
+): Promise<void> {
+  const { count } = await (supabase
+    .from('scheduled_attendances') as any)
+    .select('*', { count: 'exact', head: true })
+    .eq('date', date)
+    .eq('source', 'auto');
+
+  if ((count ?? 0) === 0) {
+    await generateScheduledAttendances(supabase, date);
+  }
+}
+
+async function ensureYesterdayStatsClosed(
+  supabase: SupabaseClient<Database>,
+): Promise<void> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  const { count } = await (supabase
+    .from('daily_stats') as any)
+    .select('*', { count: 'exact', head: true })
+    .eq('date', yesterdayStr);
+
+  if ((count ?? 0) === 0) {
+    // 전일 스케줄도 생성되어 있어야 통계 의미 있음
+    await ensureTodayScheduleGenerated(supabase, yesterdayStr);
+    await calculateDailyStats(supabase, yesterdayStr);
+  }
+}
+
+export async function batchGenerateSchedules(
+  supabase: SupabaseClient<Database>,
+  request: BatchGenerateRequest,
+): Promise<BatchOperationResult> {
+  const results: Array<{ date: string; generated: number; skipped: number }> = [];
+  const errors: Array<{ date: string; error: string }> = [];
+
+  const start = new Date(request.start_date + 'T00:00:00');
+  const end = new Date(request.end_date + 'T00:00:00');
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    try {
+      const result = await generateScheduledAttendances(supabase, dateStr);
+      results.push({ date: dateStr, ...result });
+    } catch (err: any) {
+      errors.push({ date: dateStr, error: err.message });
+    }
+  }
+
+  return {
+    processed: results.length,
+    total_generated: results.reduce((sum, r) => sum + r.generated, 0),
+    total_skipped: results.reduce((sum, r) => sum + r.skipped, 0),
+    errors,
+  };
+}
+
+export async function batchCalculateStats(
+  supabase: SupabaseClient<Database>,
+  request: BatchGenerateRequest,
+): Promise<BatchOperationResult> {
+  const results: Array<{ date: string }> = [];
+  const errors: Array<{ date: string; error: string }> = [];
+
+  const start = new Date(request.start_date + 'T00:00:00');
+  const end = new Date(request.end_date + 'T00:00:00');
+  const today = new Date().toISOString().split('T')[0];
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    if (dateStr >= today) continue; // 오늘 이후는 스킵 (실시간 집계)
+    try {
+      await calculateDailyStats(supabase, dateStr);
+      results.push({ date: dateStr });
+    } catch (err: any) {
+      errors.push({ date: dateStr, error: err.message });
+    }
+  }
+
+  return {
+    processed: results.length,
+    total_generated: results.length,
+    total_skipped: 0,
+    errors,
+  };
+}
+
 export async function getDailySchedule(
   supabase: SupabaseClient<Database>,
   query: GetDailyScheduleQuery,
 ): Promise<DailyScheduleResponse> {
+  // Lazy 생성: 해당 날짜에 auto 레코드 없으면 패턴에서 생성
+  await ensureTodayScheduleGenerated(supabase, query.date);
+
   let queryBuilder = supabase
     .from('scheduled_attendances')
     .select(`
@@ -773,6 +974,9 @@ export async function getStatsSummary(
   supabase: SupabaseClient<Database>,
   query: GetStatsSummaryQuery,
 ): Promise<StatsSummary> {
+  // Lazy 마감: 전일 통계 미존재 시 계산
+  await ensureYesterdayStatsClosed(supabase);
+
   // 기간 통계
   const { data: periodStats } = await (supabase
     .from('daily_stats') as any)
@@ -861,6 +1065,9 @@ export async function getDailyStats(
   supabase: SupabaseClient<Database>,
   query: GetDailyStatsQuery,
 ): Promise<DailyStatsItem[]> {
+  // Lazy 마감: 전일 통계 미존재 시 계산
+  await ensureYesterdayStatsClosed(supabase);
+
   const { data, error } = await supabase
     .from('daily_stats')
     .select('*')

@@ -17,6 +17,8 @@ import {
   cancelScheduleSchema,
   getStatsSummaryQuerySchema,
   getDailyStatsQuerySchema,
+  generateScheduleRequestSchema,
+  batchGenerateSchema,
   updateRoomMappingSchema,
   createRoomMappingSchema,
   getSyncLogsQuerySchema,
@@ -38,6 +40,9 @@ import {
   addManualSchedule,
   cancelSchedule,
   deleteSchedule,
+  generateScheduledAttendances,
+  batchGenerateSchedules,
+  batchCalculateStats,
   getStatsSummary,
   getDailyStats,
   getRoomMappings,
@@ -430,7 +435,69 @@ adminRoutes.delete('/schedule/daily/:id', async (c) => {
   }
 });
 
+// ========== Schedule Generation Routes ==========
+
+/**
+ * POST /api/admin/schedule/generate
+ * 단일 날짜 스케줄 자동 생성
+ */
+adminRoutes.post('/schedule/generate', async (c) => {
+  const supabase = c.get('supabase');
+  const body = await c.req.json();
+
+  try {
+    const request = generateScheduleRequestSchema.parse(body);
+    const result = await generateScheduledAttendances(supabase, request.date);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/admin/schedule/generate/batch
+ * 기간 일괄 스케줄 생성
+ */
+adminRoutes.post('/schedule/generate/batch', async (c) => {
+  const supabase = c.get('supabase');
+  const body = await c.req.json();
+
+  try {
+    const request = batchGenerateSchema.parse(body);
+    const result = await batchGenerateSchedules(supabase, request);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
 // ========== Stats Routes ==========
+
+/**
+ * POST /api/admin/stats/recalculate
+ * 기간 통계 재계산
+ */
+adminRoutes.post('/stats/recalculate', async (c) => {
+  const supabase = c.get('supabase');
+  const body = await c.req.json();
+
+  try {
+    const request = batchGenerateSchema.parse(body);
+    const result = await batchCalculateStats(supabase, request);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
 
 /**
  * GET /api/admin/stats/summary

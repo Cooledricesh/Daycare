@@ -74,7 +74,7 @@ export function NurseMessageForm({ patientId, date, onSuccess }: NurseMessageFor
           name="content"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>주치의에게 전달사항</FormLabel>
+
               <FormControl>
                 <Textarea
                   placeholder="내용을 입력하세요..."

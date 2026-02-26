@@ -13,10 +13,12 @@ import {
 } from '@/components/ui/table';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, TrendingUp, TrendingDown } from 'lucide-react';
+import { CalendarIcon, TrendingUp, TrendingDown, Calculator, Loader2 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { useStatsSummary, useDailyStats } from '@/features/admin/hooks/useStats';
+import { useStatsSummary, useDailyStats, useBatchRecalculateStats } from '@/features/admin/hooks/useStats';
+import { useBatchGenerateSchedules } from '@/features/admin/hooks/useSchedule';
+import { useToast } from '@/hooks/use-toast';
 import {
   LineChart,
   Line,
@@ -44,6 +46,37 @@ export default function StatsPage() {
     start_date: startDateStr,
     end_date: endDateStr,
   });
+
+  const batchGenerateSchedules = useBatchGenerateSchedules();
+  const batchRecalculateStats = useBatchRecalculateStats();
+  const { toast } = useToast();
+
+  const handleRecalculate = async () => {
+    try {
+      // 1. 스케줄 먼저 생성 (통계 계산에 필요)
+      await batchGenerateSchedules.mutateAsync({
+        start_date: startDateStr,
+        end_date: endDateStr,
+      });
+      // 2. 통계 재계산
+      const result = await batchRecalculateStats.mutateAsync({
+        start_date: startDateStr,
+        end_date: endDateStr,
+      });
+      toast({
+        title: '통계 재계산 완료',
+        description: `${result.processed}일 처리됨`,
+      });
+    } catch (error: any) {
+      toast({
+        title: '통계 재계산 실패',
+        description: error.response?.data?.message || '다시 시도해주세요.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const isRecalculating = batchGenerateSchedules.isPending || batchRecalculateStats.isPending;
 
   // 차트 데이터 변환
   const chartData =
@@ -114,6 +147,18 @@ export default function StatsPage() {
               />
             </PopoverContent>
           </Popover>
+          <Button
+            variant="outline"
+            onClick={handleRecalculate}
+            disabled={isRecalculating}
+          >
+            {isRecalculating ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Calculator className="mr-2 h-4 w-4" />
+            )}
+            통계 재계산
+          </Button>
         </div>
       </div>
 

@@ -58,6 +58,7 @@ export interface ConsultationRecord {
   has_task: boolean;
   task_content: string | null;
   task_target: 'coordinator' | 'nurse' | 'both' | null;
+  created_at: string | null;
 }
 
 // 전달사항 기록

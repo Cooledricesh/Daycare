@@ -11,6 +11,7 @@ import type {
   SchedulePatternItem,
   DailyScheduleResponse,
   DailyScheduleItem,
+  BatchOperationResult,
 } from '../backend/schema';
 
 interface SchedulePatternsResponse {
@@ -126,6 +127,40 @@ export function useDeleteSchedule() {
     mutationFn: async (id: string) => {
       const response = await apiClient.delete<{ success: boolean }>(
         `/api/admin/schedule/daily/${id}`
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+    },
+  });
+}
+
+export function useGenerateSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (date: string) => {
+      const response = await apiClient.post<{ generated: number; skipped: number }>(
+        '/api/admin/schedule/generate',
+        { date }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+    },
+  });
+}
+
+export function useBatchGenerateSchedules() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { start_date: string; end_date: string }) => {
+      const response = await apiClient.post<BatchOperationResult>(
+        '/api/admin/schedule/generate/batch',
+        data
       );
       return response.data;
     },
