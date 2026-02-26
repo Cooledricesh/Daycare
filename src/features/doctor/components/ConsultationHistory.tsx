@@ -27,6 +27,9 @@ function formatMonthLabel(dateStr: string): string {
 // 기록을 텍스트로 변환 (복사용)
 function recordToText(c: ConsultationRecord): string {
   let text = formatDate(c.date);
+  if (isAppEntered(c.date, c.created_at)) {
+    text += ` (${c.doctor_name})`;
+  }
   if (c.note) text += ` ${c.note}`;
   if (c.has_task && c.task_content) {
     const target = c.task_target === 'coordinator' ? '코디' :
@@ -48,6 +51,15 @@ type TimelineItem =
 
 function hasContent(c: ConsultationRecord): boolean {
   return !!(c.note || (c.has_task && c.task_content));
+}
+
+// 앱에서 직접 입력한 데이터인지 판별 (created_at이 date와 2일 이내)
+function isAppEntered(date: string, createdAt: string | null): boolean {
+  if (!createdAt) return false;
+  const d = new Date(date + 'T00:00:00');
+  const c = new Date(createdAt);
+  const diffMs = Math.abs(c.getTime() - d.getTime());
+  return diffMs < 2 * 24 * 60 * 60 * 1000; // 2일 이내
 }
 
 // 진찰 기록 아이템
@@ -87,11 +99,12 @@ function MessageItem({ message }: { message: MessageRecord }) {
 // 날짜별 통합 아이템
 function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
   if (!hasContent(consultation)) return null;
+  const showName = isAppEntered(consultation.date, consultation.created_at);
   return (
     <div className="py-2.5 border-b last:border-b-0">
       <div className="text-sm">
         <span className="font-medium text-gray-900">{formatDate(consultation.date)}</span>
-        <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>
+        {showName && <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>}
       </div>
       <ConsultationItem consultation={consultation} />
     </div>
@@ -119,13 +132,14 @@ function buildTimeline(consultations: ConsultationRecord[], messages: MessageRec
 
 function TimelineDateGroup({ date, items }: { date: string; items: TimelineItem[] }) {
   const firstConsultation = items.find(i => i.type === 'consultation');
-  const doctorName = firstConsultation ? (firstConsultation.data as ConsultationRecord).doctor_name : null;
+  const consultation = firstConsultation ? (firstConsultation.data as ConsultationRecord) : null;
+  const showName = consultation && isAppEntered(consultation.date, consultation.created_at);
 
   return (
     <div className="py-2.5 border-b last:border-b-0">
       <div className="text-sm">
         <span className="font-medium text-gray-900">{formatDate(date)}</span>
-        {doctorName && <span className="text-gray-400 ml-1.5 text-xs">({doctorName})</span>}
+        {showName && <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>}
       </div>
       {items.map((item, i) =>
         item.type === 'consultation' ? (

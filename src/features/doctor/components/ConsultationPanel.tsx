@@ -15,6 +15,7 @@ import {
   History,
   User,
   CheckCircle2,
+  Check,
 } from 'lucide-react';
 import { useCreateConsultation } from '../hooks/useCreateConsultation';
 import { usePatientMessages } from '../hooks/usePatientMessages';
@@ -62,6 +63,17 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
       has_task: hasTask,
       task_content: hasTask ? taskContent : undefined,
       task_target: hasTask ? taskTarget : undefined,
+    });
+
+    resetForm();
+    onConsultationComplete();
+  };
+
+  const handleQuickCheck = async () => {
+    if (!patient) return;
+
+    await createConsultation.mutateAsync({
+      patient_id: patient.id,
     });
 
     resetForm();
@@ -240,13 +252,26 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
           </div>
 
           {/* 제출 버튼 */}
-          <Button
-            onClick={handleSubmit}
-            disabled={createConsultation.isPending}
-            className="w-full bg-purple-600 hover:bg-purple-700"
-          >
-            {createConsultation.isPending ? '저장 중...' : '진찰 완료'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSubmit}
+              disabled={createConsultation.isPending}
+              className="flex-1 bg-purple-600 hover:bg-purple-700"
+            >
+              {createConsultation.isPending ? '저장 중...' : '진찰 완료'}
+            </Button>
+            {!patient.has_consultation && (
+              <Button
+                variant="outline"
+                onClick={handleQuickCheck}
+                disabled={createConsultation.isPending}
+                className="border-purple-300 text-purple-600 hover:bg-purple-50"
+              >
+                <Check className="w-4 h-4 mr-1" />
+                진찰 참석만 체크
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 

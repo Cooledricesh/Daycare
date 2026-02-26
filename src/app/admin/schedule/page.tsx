@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Edit, Search, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Edit, Search, X, Calendar as CalendarIcon, RefreshCw, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useScheduleStore } from '@/features/admin/stores/useScheduleStore';
@@ -29,9 +29,11 @@ import {
   useDailySchedule,
   useCancelSchedule,
   useDeleteSchedule,
+  useGenerateSchedule,
 } from '@/features/admin/hooks/useSchedule';
 import { SchedulePatternModal } from '@/features/admin/components/SchedulePatternModal';
 import { ManualScheduleModal } from '@/features/admin/components/ManualScheduleModal';
+import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from 'react-use';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -88,6 +90,24 @@ export default function SchedulePage() {
 
   const cancelSchedule = useCancelSchedule();
   const deleteSchedule = useDeleteSchedule();
+  const generateSchedule = useGenerateSchedule();
+  const { toast } = useToast();
+
+  const handleGenerateSchedule = async () => {
+    try {
+      const result = await generateSchedule.mutateAsync(selectedDate);
+      toast({
+        title: '스케줄 생성 완료',
+        description: `${result.generated}명 생성, ${result.skipped}명 기존`,
+      });
+    } catch (error: any) {
+      toast({
+        title: '스케줄 생성 실패',
+        description: error.response?.data?.message || '다시 시도해주세요.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleCancelToggle = async (id: string, currentlyCancelled: boolean) => {
     try {
@@ -262,6 +282,19 @@ export default function SchedulePage() {
                 onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
               >
                 오늘
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleGenerateSchedule}
+                disabled={generateSchedule.isPending}
+              >
+                {generateSchedule.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                스케줄 생성
               </Button>
 
               <div className="ml-auto">

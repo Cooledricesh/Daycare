@@ -126,6 +126,17 @@ export const getDailyStatsQuerySchema = z.object({
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+// ========== Schedule/Stats Generation Schemas ==========
+
+export const generateScheduleRequestSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '올바른 날짜 형식이 아닙니다'),
+});
+
+export const batchGenerateSchema = z.object({
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
 // ========== Type Exports ==========
 
 export type GetPatientsQuery = z.infer<typeof getPatientsQuerySchema>;
@@ -145,6 +156,9 @@ export type CancelScheduleRequest = z.infer<typeof cancelScheduleSchema>;
 
 export type GetStatsSummaryQuery = z.infer<typeof getStatsSummaryQuerySchema>;
 export type GetDailyStatsQuery = z.infer<typeof getDailyStatsQuerySchema>;
+
+export type GenerateScheduleRequest = z.infer<typeof generateScheduleRequestSchema>;
+export type BatchGenerateRequest = z.infer<typeof batchGenerateSchema>;
 
 export type UpdateRoomMappingRequest = z.infer<typeof updateRoomMappingSchema>;
 export type CreateRoomMappingRequest = z.infer<typeof createRoomMappingSchema>;
@@ -247,6 +261,15 @@ export interface DailyStatsItem {
   attendance_rate: number | null;
   consultation_rate: number | null;
   calculated_at: string;
+}
+
+// ========== Batch Operation Types ==========
+
+export interface BatchOperationResult {
+  processed: number;
+  total_generated: number;
+  total_skipped: number;
+  errors: Array<{ date: string; error: string }>;
 }
 
 // ========== Room Mapping Types ==========
