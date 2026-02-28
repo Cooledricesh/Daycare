@@ -1,14 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Stethoscope,
   MessageSquare,
@@ -16,11 +14,13 @@ import {
   User,
   CheckCircle2,
   Check,
+  Pencil,
 } from 'lucide-react';
 import { useCreateConsultation } from '../hooks/useCreateConsultation';
 import { usePatientMessages } from '../hooks/usePatientMessages';
 import { usePatientHistory } from '../hooks/usePatientHistory';
 import { ConsultationHistory } from './ConsultationHistory';
+import { getTodayString } from '@/lib/date';
 import type { WaitingPatient } from '../backend/schema';
 
 interface ConsultationPanelProps {
@@ -30,9 +30,8 @@ interface ConsultationPanelProps {
 
 export function ConsultationPanel({ patient, onConsultationComplete }: ConsultationPanelProps) {
   const [consultationNote, setConsultationNote] = useState('');
-  const [hasTask, setHasTask] = useState(false);
   const [taskContent, setTaskContent] = useState('');
-  const [taskTarget, setTaskTarget] = useState<'coordinator' | 'nurse' | 'both'>('coordinator');
+  const prevPatientId = useRef<string | null>(null);
 
   const createConsultation = useCreateConsultation();
 
@@ -47,22 +46,42 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
     months: 3,
   });
 
+  // 기존 진찰 기록 pre-fill
+  const isEditing = !!patient?.has_consultation;
+  const today = getTodayString();
+
+  useEffect(() => {
+    // 환자가 바뀌면 폼 리셋 후 기존 기록 pre-fill
+    if (patient?.id !== prevPatientId.current) {
+      prevPatientId.current = patient?.id || null;
+      setConsultationNote('');
+      setTaskContent('');
+    }
+
+    if (!patient?.has_consultation || !history) return;
+
+    const todayRecord = history.consultations.find((c) => c.date === today);
+    if (todayRecord) {
+      setConsultationNote(todayRecord.note || '');
+      setTaskContent(todayRecord.task_content || '');
+    }
+  }, [patient?.id, patient?.has_consultation, history, today]);
+
   const resetForm = () => {
     setConsultationNote('');
-    setHasTask(false);
     setTaskContent('');
-    setTaskTarget('coordinator');
   };
 
   const handleSubmit = async () => {
     if (!patient) return;
 
+    const hasTaskContent = !!taskContent.trim();
     await createConsultation.mutateAsync({
       patient_id: patient.id,
       note: consultationNote || undefined,
-      has_task: hasTask,
-      task_content: hasTask ? taskContent : undefined,
-      task_target: hasTask ? taskTarget : undefined,
+      has_task: hasTaskContent,
+      task_content: hasTaskContent ? taskContent : undefined,
+      task_target: hasTaskContent ? 'both' : undefined,
     });
 
     resetForm();
@@ -166,7 +185,6 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
                 <div key={msg.id} className="p-2 bg-blue-50 rounded border border-blue-100">
                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
                     <span className="font-medium">{msg.author_name}</span>
-                    <span>({msg.author_role === 'coordinator' ? '코디' : '간호사'})</span>
                     <span>·</span>
                     <span>
                       {new Date(msg.created_at).toLocaleTimeString('ko-KR', {
@@ -190,13 +208,13 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <Stethoscope className="w-4 h-4 text-purple-600" />
-            진찰 기록 작성
+            {isEditing ? '진찰 기록 수정' : '진찰 기록 작성'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* 진찰 메모 */}
+          {/* 진료 메모 */}
           <div>
-            <Label htmlFor="note" className="text-sm">진찰 메모</Label>
+            <Label htmlFor="note" className="text-sm">진료 메모</Label>
             <Textarea
               id="note"
               placeholder="진찰 내용을 입력하세요..."
@@ -207,48 +225,17 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
             />
           </div>
 
-          {/* 지시사항 */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="hasTask"
-                checked={hasTask}
-                onCheckedChange={(checked) => setHasTask(!!checked)}
-              />
-              <Label htmlFor="hasTask" className="text-sm">지시사항 추가</Label>
-            </div>
-
-            {hasTask && (
-              <>
-                <Textarea
-                  placeholder="지시사항 내용을 입력하세요..."
-                  value={taskContent}
-                  onChange={(e) => setTaskContent(e.target.value)}
-                  rows={2}
-                />
-                <div>
-                  <Label className="mb-2 block text-sm">지시 대상</Label>
-                  <RadioGroup
-                    value={taskTarget}
-                    onValueChange={(value) => setTaskTarget(value as typeof taskTarget)}
-                    className="flex gap-4"
-                  >
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="coordinator" id="target-coordinator" />
-                      <Label htmlFor="target-coordinator" className="text-sm">코디네이터</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="nurse" id="target-nurse" />
-                      <Label htmlFor="target-nurse" className="text-sm">간호사</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="both" id="target-both" />
-                      <Label htmlFor="target-both" className="text-sm">모두</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              </>
-            )}
+          {/* 투약 변경 및 전달사항 */}
+          <div>
+            <Label htmlFor="task" className="text-sm">투약 변경 및 그 외 전달사항</Label>
+            <Textarea
+              id="task"
+              placeholder="투약 변경, 전달사항 등을 입력하세요..."
+              value={taskContent}
+              onChange={(e) => setTaskContent(e.target.value)}
+              className="mt-1"
+              rows={2}
+            />
           </div>
 
           {/* 제출 버튼 */}
@@ -258,7 +245,11 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
               disabled={createConsultation.isPending}
               className="flex-1 bg-purple-600 hover:bg-purple-700"
             >
-              {createConsultation.isPending ? '저장 중...' : '진찰 완료'}
+              {createConsultation.isPending
+                ? '저장 중...'
+                : isEditing
+                  ? (<><Pencil className="w-4 h-4 mr-1" />기록 수정</>)
+                  : '진찰 완료'}
             </Button>
             {!patient.has_consultation && (
               <Button

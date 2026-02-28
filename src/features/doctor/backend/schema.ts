@@ -65,6 +65,7 @@ export interface ConsultationRecord {
 export interface MessageRecord {
   id: string;
   date: string;
+  author_id: string;
   author_name: string;
   author_role: 'coordinator' | 'nurse';
   content: string;
@@ -121,6 +122,8 @@ export interface WaitingPatient {
     blood_sugar: number | null;
   } | null;
   has_consultation: boolean;
+  has_task: boolean;
+  task_completed: boolean;
   unread_message_count: number;
 }
 

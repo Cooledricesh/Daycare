@@ -15,6 +15,7 @@ import {
   getPatientDetail,
   completeTask,
   createMessage,
+  deleteMessage,
   getMyPatientsSchedulePatterns,
   updateMyPatientSchedulePattern,
   getMyMessages,
@@ -158,6 +159,32 @@ staffRoutes.post('/messages', async (c) => {
     const message = await createMessage(supabase, staffId, params);
 
     return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/staff/messages/:id
+ * 전달사항 삭제
+ */
+staffRoutes.delete('/messages/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    await deleteMessage(supabase, staffId, messageId, user.role === 'admin');
+    return respond(c, success({ deleted: true }, 200));
   } catch (error) {
     if (error instanceof StaffError) {
       return respond(c, failure(400, error.code, error.message));

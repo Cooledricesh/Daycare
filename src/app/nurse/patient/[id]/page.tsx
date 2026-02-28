@@ -16,6 +16,7 @@ import { useCompleteTask } from '@/features/nurse/hooks/useCompleteTask';
 import { NurseMessageForm } from '@/features/nurse/components/NurseMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { useToast } from '@/hooks/use-toast';
+import { getTodayString } from '@/lib/date';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -24,7 +25,7 @@ type PageProps = {
 export default function NursePatientDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const patientId = resolvedParams.id;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayString();
   const [showFullHistory, setShowFullHistory] = useState(false);
 
   const { data, isLoading, error } = useNursePatientDetail({

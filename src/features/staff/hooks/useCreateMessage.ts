@@ -32,6 +32,7 @@ export const useCreateMessage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'patient'] });
+      queryClient.invalidateQueries({ queryKey: ['staff', 'patient-history'] });
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error);

@@ -4,10 +4,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNursePatients } from '@/features/nurse/hooks/useNursePatients';
 import { NursePatientListPanel } from '@/features/nurse/components/NursePatientListPanel';
 import { NurseDetailPanel } from '@/features/nurse/components/NurseDetailPanel';
+import { getTodayString } from '@/lib/date';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
 export default function NursePrescriptionsPage() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayString();
   const { data, isLoading, refetch } = useNursePatients({ date: today });
   const patients = data?.patients || [];
 

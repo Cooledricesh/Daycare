@@ -14,6 +14,7 @@ import { useStaffPatientHistory } from '@/features/staff/hooks/usePatientHistory
 import { TaskCompletionButton } from '@/features/staff/components/TaskCompletionButton';
 import { MessageForm } from '@/features/staff/components/MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { getTodayString } from '@/lib/date';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -22,7 +23,7 @@ type PageProps = {
 export default function StaffPatientDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const patientId = resolvedParams.id;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayString();
   const [showFullHistory, setShowFullHistory] = useState(false);
 
   const { data, isLoading, error } = usePatientDetail({

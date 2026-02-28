@@ -23,6 +23,18 @@ import {
   createRoomMappingSchema,
   getSyncLogsQuerySchema,
 } from './schema';
+import { getNursePatients } from '@/features/nurse/backend/service';
+import { getPatientDetail as getStaffPatientDetail } from '@/features/staff/backend/service';
+import { getPatientHistory } from '@/features/doctor/backend/service';
+import {
+  createMessage as createMessageShared,
+  deleteMessage as deleteMessageShared,
+  MessageError,
+} from '@/server/services/message';
+import {
+  completeTask as completeTaskShared,
+  TaskError,
+} from '@/server/services/task';
 import {
   getPatients,
   getPatientDetail,
@@ -730,6 +742,149 @@ adminRoutes.post('/sync', async (c) => {
       c,
       failure(500, 'SYNC_FAILED', error.message || '동기화 중 오류가 발생했습니다')
     );
+  }
+});
+
+// ========== Dashboard Routes ==========
+
+/**
+ * GET /api/admin/dashboard/patients
+ * 대시보드 환자 목록 (전체 활성 환자)
+ */
+adminRoutes.get('/dashboard/patients', async (c) => {
+  const supabase = c.get('supabase');
+  const date = c.req.query('date');
+
+  try {
+    const patients = await getNursePatients(supabase, { date });
+    return respond(c, success({ patients }, 200));
+  } catch (error) {
+    return respond(c, failure(400, 'FETCH_FAILED', '환자 목록을 불러올 수 없습니다'));
+  }
+});
+
+/**
+ * GET /api/admin/dashboard/patient/:id
+ * 대시보드 환자 상세
+ */
+adminRoutes.get('/dashboard/patient/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const patient_id = c.req.param('id');
+  const date = c.req.query('date');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const patient = await getStaffPatientDetail(supabase, user.sub, user.role, {
+      patient_id,
+      date,
+    });
+    return respond(c, success({ patient }, 200));
+  } catch (error) {
+    return respond(c, failure(400, 'FETCH_FAILED', '환자 상세를 불러올 수 없습니다'));
+  }
+});
+
+/**
+ * GET /api/admin/dashboard/patient/:id/history
+ * 대시보드 환자 히스토리
+ */
+adminRoutes.get('/dashboard/patient/:id/history', async (c) => {
+  const supabase = c.get('supabase');
+  const patient_id = c.req.param('id');
+  const months = parseInt(c.req.query('months') || '24', 10);
+
+  try {
+    const history = await getPatientHistory(supabase, {
+      patient_id,
+      months: Math.min(Math.max(months, 0), 24),
+    });
+    return respond(c, success(history, 200));
+  } catch (error) {
+    return respond(c, failure(400, 'HISTORY_FETCH_FAILED', '히스토리를 불러올 수 없습니다'));
+  }
+});
+
+/**
+ * POST /api/admin/dashboard/messages
+ * 대시보드 전달사항 작성
+ */
+adminRoutes.post('/dashboard/messages', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const body = await c.req.json();
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const message = await createMessageShared(supabase, user.sub, 'coordinator', {
+      patient_id: body.patient_id,
+      date: body.date,
+      content: body.content,
+    });
+    return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof MessageError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/admin/dashboard/messages/:id
+ * 대시보드 전달사항 삭제 (admin은 모든 메시지 삭제 가능)
+ */
+adminRoutes.delete('/dashboard/messages/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    await deleteMessageShared(supabase, messageId, user.sub, true);
+    return respond(c, success({ deleted: true }, 200));
+  } catch (error) {
+    if (error instanceof MessageError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/admin/dashboard/task/:consultation_id/complete
+ * 대시보드 지시사항 처리 완료
+ */
+adminRoutes.post('/dashboard/task/:consultation_id/complete', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const consultation_id = c.req.param('consultation_id');
+  const body = await c.req.json().catch(() => ({}));
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const result = await completeTaskShared(supabase, user.sub, 'coordinator', {
+      consultation_id,
+      memo: body.memo,
+    });
+    return respond(c, success({ task_completion: result }, 200));
+  } catch (error) {
+    if (error instanceof TaskError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
   }
 });
 
