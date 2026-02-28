@@ -31,10 +31,13 @@ export function formatScheduleDays(days: number[]): string {
 }
 
 /**
- * 오늘 날짜를 YYYY-MM-DD 형식으로 반환
+ * 오늘 날짜를 YYYY-MM-DD 형식으로 반환 (한국 시간 기준)
  */
 export function getTodayString(): string {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  // UTC+9 (한국 시간)
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split('T')[0];
 }
 
 /**
@@ -56,10 +59,29 @@ export function isValidDateString(dateStr: string): boolean {
 }
 
 /**
- * N개월 전 날짜를 YYYY-MM-DD 형식으로 반환
+ * 어제 날짜를 YYYY-MM-DD 형식으로 반환 (한국 시간 기준)
+ */
+export function getYesterdayString(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  kst.setDate(kst.getDate() - 1);
+  return kst.toISOString().split('T')[0];
+}
+
+/**
+ * 현재 시각의 한국 시간 Date 객체 반환 (UTC+9 보정)
+ */
+export function getNowKST(): Date {
+  const now = new Date();
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000);
+}
+
+/**
+ * N개월 전 날짜를 YYYY-MM-DD 형식으로 반환 (한국 시간 기준)
  */
 export function getMonthsAgoString(months: number): string {
-  const date = new Date();
-  date.setMonth(date.getMonth() - months);
-  return date.toISOString().split('T')[0];
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  kst.setMonth(kst.getMonth() - months);
+  return kst.toISOString().split('T')[0];
 }

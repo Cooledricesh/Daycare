@@ -1,20 +1,21 @@
 'use client';
 
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { User, ChevronDown, ChevronUp, Stethoscope } from 'lucide-react';
+import { User, Stethoscope } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { useNursePatientDetail } from '../hooks/useNursePatientDetail';
 import { useNursePatientHistory } from '../hooks/useNursePatientHistory';
 import { useCompleteTask } from '../hooks/useCompleteTask';
+import { useNurseDeleteMessage } from '../hooks/useNurseDeleteMessage';
+import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { NurseMessageForm } from './NurseMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { getTodayString } from '@/lib/date';
 import type { NursePatientSummary } from '../backend/schema';
 
 interface NurseDetailPanelProps {
@@ -22,9 +23,9 @@ interface NurseDetailPanelProps {
 }
 
 export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
-  const today = new Date().toISOString().split('T')[0];
-  const [showFullHistory, setShowFullHistory] = useState(false);
+  const today = getTodayString();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: detailData, isLoading: detailLoading } = useNursePatientDetail({
     patientId: patient?.id || '',
@@ -35,10 +36,23 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
   const { data: historyData, isLoading: historyLoading } = useNursePatientHistory({
     patientId: patient?.id || '',
     months: 3,
-    enabled: !!patient && showFullHistory,
+    enabled: !!patient,
   });
 
   const { mutate: completeTask, isPending: isCompleting } = useCompleteTask();
+  const { mutate: deleteMessageMutate } = useNurseDeleteMessage();
+
+  const handleDeleteMessage = (messageId: string) => {
+    deleteMessageMutate(messageId, {
+      onSuccess: () => {
+        toast({ title: '삭제 완료', description: '전달사항이 삭제되었습니다.' });
+      },
+      onError: (error) => {
+        const message = extractApiErrorMessage(error, '삭제에 실패했습니다.');
+        toast({ title: '삭제 실패', description: message, variant: 'destructive' });
+      },
+    });
+  };
 
   // 환자 미선택 시 안내
   if (!patient) {
@@ -55,8 +69,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
 
   const detail = detailData?.patient;
 
-  const hasNurseTask = detail?.consultation.has_task &&
-    (detail?.consultation.task_target === 'nurse' || detail?.consultation.task_target === 'both');
+  const hasNurseTask = !!detail?.consultation.has_task;
 
   const handleTaskComplete = (value: boolean | 'indeterminate') => {
     if (value === true && detail?.consultation.consultation_id) {
@@ -134,7 +147,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
       {hasNurseTask && (
         <Card className="border-orange-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-orange-700">간호 지시사항</CardTitle>
+            <CardTitle className="text-sm text-orange-700">투약 변경 및 전달사항</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-gray-800">{detail?.consultation.task_content || '-'}</p>
@@ -169,77 +182,27 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
         </CardContent>
       </Card>
 
-      {/* 최근 히스토리 */}
-      {!showFullHistory ? (
+      {/* 기록 */}
+      {historyLoading ? (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">최근 기록</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {detailLoading ? (
-              <p className="text-sm text-gray-500">로딩 중...</p>
-            ) : (() => {
-              const meaningful = detail?.recent_consultations?.filter(r => r.note) || [];
-              return meaningful.length > 0 ? (
-                <div className="space-y-3">
-                  {meaningful.map((record, index) => (
-                    <div key={index} className="border-b last:border-0 pb-3 last:pb-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">
-                          {format(new Date(record.date), 'MM/dd (EEE)', { locale: ko })}
-                        </span>
-                        <span className="text-xs text-gray-500">{record.doctor_name}</span>
-                      </div>
-                      <p className="text-sm text-gray-700">{record.note}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">최근 기록이 없습니다.</p>
-              );
-            })()}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full mt-4 text-gray-500"
-              onClick={() => setShowFullHistory(true)}
-            >
-              <ChevronDown className="w-4 h-4 mr-1" />
-              전체 기록 보기
-            </Button>
+          <CardContent className="py-8 text-center text-gray-500">
+            기록을 불러오는 중...
           </CardContent>
         </Card>
+      ) : historyData && (historyData.consultations.length > 0 || (historyData.messages && historyData.messages.length > 0)) ? (
+        <ConsultationHistory
+          consultations={historyData.consultations}
+          messages={historyData.messages}
+          currentUserId={user?.id}
+          currentUserRole={user?.role}
+          onDeleteMessage={handleDeleteMessage}
+        />
       ) : (
-        <div>
-          <div className="mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-gray-500"
-              onClick={() => setShowFullHistory(false)}
-            >
-              <ChevronUp className="w-4 h-4 mr-1" />
-              간략히 보기
-            </Button>
-          </div>
-
-          {historyLoading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-gray-500">
-                기록을 불러오는 중...
-              </CardContent>
-            </Card>
-          ) : historyData && (historyData.consultations.length > 0 || (historyData.messages && historyData.messages.length > 0)) ? (
-            <ConsultationHistory consultations={historyData.consultations} messages={historyData.messages} />
-          ) : (
-            <Card>
-              <CardContent className="py-8 text-center text-gray-500">
-                기록이 없습니다.
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        <Card>
+          <CardContent className="py-8 text-center text-gray-500">
+            기록이 없습니다.
+          </CardContent>
+        </Card>
       )}
     </div>
   );

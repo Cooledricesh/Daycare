@@ -3,12 +3,15 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Check, X } from 'lucide-react';
 import type { ConsultationRecord, MessageRecord } from '../backend/schema';
 
 interface ConsultationHistoryProps {
   consultations: ConsultationRecord[];
   messages?: MessageRecord[];
+  currentUserId?: string;
+  currentUserRole?: string;
+  onDeleteMessage?: (messageId: string) => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -32,10 +35,7 @@ function recordToText(c: ConsultationRecord): string {
   }
   if (c.note) text += ` ${c.note}`;
   if (c.has_task && c.task_content) {
-    const target = c.task_target === 'coordinator' ? '코디' :
-      c.task_target === 'nurse' ? '간호사' :
-      c.task_target === 'both' ? '코디+간호사' : '';
-    text += `\n지시: ${c.task_content}${target ? ` (${target})` : ''}`;
+    text += `\n투약/전달: ${c.task_content}`;
   }
   return text;
 }
@@ -71,13 +71,8 @@ function ConsultationItem({ consultation }: { consultation: ConsultationRecord }
       )}
       {consultation.has_task && consultation.task_content && (
         <div className="mt-1.5 p-2 bg-yellow-50 rounded text-sm">
-          <span className="text-yellow-700 font-medium">지시: </span>
+          <span className="text-yellow-700 font-medium">투약/전달: </span>
           <span>{consultation.task_content}</span>
-          <span className="text-gray-400 text-xs ml-1">
-            ({consultation.task_target === 'coordinator' ? '코디' :
-              consultation.task_target === 'nurse' ? '간호사' :
-              consultation.task_target === 'both' ? '코디+간호사' : '-'})
-          </span>
         </div>
       )}
     </>
@@ -85,13 +80,21 @@ function ConsultationItem({ consultation }: { consultation: ConsultationRecord }
 }
 
 // 전달사항 아이템
-function MessageItem({ message }: { message: MessageRecord }) {
-  const roleLabel = message.author_role === 'coordinator' ? '코디' : '간호사';
+function MessageItem({ message, onDelete }: { message: MessageRecord; onDelete?: (id: string) => void }) {
   return (
-    <div className="mt-1.5 p-2 bg-blue-50 rounded text-sm">
-      <span className="text-blue-700 font-medium">전달({roleLabel}): </span>
+    <div className="mt-1.5 p-2 bg-blue-50 rounded text-sm group relative">
+      <span className="text-blue-700 font-medium">{message.author_name}: </span>
       <span>{message.content}</span>
-      <span className="text-gray-400 text-xs ml-1">({message.author_name})</span>
+      {onDelete && (
+        <button
+          type="button"
+          className="absolute top-1.5 right-1.5 p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => onDelete(message.id)}
+          title="삭제"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -130,7 +133,7 @@ function buildTimeline(consultations: ConsultationRecord[], messages: MessageRec
   return new Map([...map.entries()].sort(([a], [b]) => b.localeCompare(a)));
 }
 
-function TimelineDateGroup({ date, items }: { date: string; items: TimelineItem[] }) {
+function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessage }: { date: string; items: TimelineItem[]; currentUserId?: string; isAdmin?: boolean; onDeleteMessage?: (id: string) => void }) {
   const firstConsultation = items.find(i => i.type === 'consultation');
   const consultation = firstConsultation ? (firstConsultation.data as ConsultationRecord) : null;
   const showName = consultation && isAppEntered(consultation.date, consultation.created_at);
@@ -141,18 +144,20 @@ function TimelineDateGroup({ date, items }: { date: string; items: TimelineItem[
         <span className="font-medium text-gray-900">{formatDate(date)}</span>
         {showName && <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>}
       </div>
-      {items.map((item, i) =>
-        item.type === 'consultation' ? (
-          <ConsultationItem key={`c-${i}`} consultation={item.data as ConsultationRecord} />
-        ) : (
-          <MessageItem key={`m-${i}`} message={item.data as MessageRecord} />
-        )
-      )}
+      {items.map((item, i) => {
+        if (item.type === 'consultation') {
+          return <ConsultationItem key={`c-${i}`} consultation={item.data as ConsultationRecord} />;
+        }
+        const msg = item.data as MessageRecord;
+        const canDelete = isAdmin || (currentUserId && msg.author_id === currentUserId);
+        return <MessageItem key={`m-${i}`} message={msg} onDelete={canDelete ? onDeleteMessage : undefined} />;
+      })}
     </div>
   );
 }
 
-export function ConsultationHistory({ consultations, messages = [] }: ConsultationHistoryProps) {
+export function ConsultationHistory({ consultations, messages = [], currentUserId, currentUserRole, onDeleteMessage }: ConsultationHistoryProps) {
+  const isAdmin = currentUserRole === 'admin';
   const [showOlder, setShowOlder] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -295,7 +300,7 @@ export function ConsultationHistory({ consultations, messages = [] }: Consultati
           recentDates.length > 0 ? (
             <div>
               {recentDates.map(([date, items]) => (
-                <TimelineDateGroup key={date} date={date} items={items} />
+                <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} />
               ))}
             </div>
           ) : (
@@ -351,7 +356,7 @@ export function ConsultationHistory({ consultations, messages = [] }: Consultati
                       <div key={monthLabel}>
                         <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
                         {entries.map(([date, items]) => (
-                          <TimelineDateGroup key={date} date={date} items={items} />
+                          <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} />
                         ))}
                       </div>
                     ));

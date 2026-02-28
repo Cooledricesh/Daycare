@@ -165,6 +165,7 @@ export async function getPatientHistory(
       .select(`
         id,
         date,
+        author_id,
         content,
         is_read,
         author_role,
@@ -210,6 +211,7 @@ export async function getPatientHistory(
     messages: (messages || []).map((m: any) => ({
       id: m.id,
       date: m.date,
+      author_id: m.author_id,
       author_name: m.author?.name || '알 수 없음',
       author_role: m.author_role,
       content: m.content,
@@ -350,16 +352,16 @@ export async function getWaitingPatients(
     attendanceMap.set(a.patient_id, a.checked_at);
   });
 
-  // 오늘 진찰 기록 조회
+  // 오늘 진찰 기록 조회 (지시사항 포함)
   const { data: consultations } = await (supabase
     .from('consultations') as any)
-    .select('patient_id')
+    .select('patient_id, has_task, task_completions(is_completed)')
     .eq('date', date)
     .in('patient_id', patientIds);
 
-  // 진찰 완료 환자 ID Set
-  const consultedPatientIds = new Set(
-    (consultations || []).map((c: any) => c.patient_id)
+  // 진찰 기록 Map (지시사항 상태 포함)
+  const consultationMap = new Map<string, any>(
+    (consultations || []).map((c: any) => [c.patient_id, c])
   );
 
   // 오늘 미확인 전달사항 조회
@@ -433,9 +435,9 @@ export async function getWaitingPatients(
     gender: p.patients.gender,
     room_number: p.patients.room_number,
     coordinator_name: p.patients.coordinator?.name || null,
-    checked_at: attendanceMap.get(p.patient_id) || null,  // 출석 시간 (없으면 null)
+    checked_at: attendanceMap.get(p.patient_id) || null,
     vitals: vitalsMap.get(p.patient_id) || null,
-    has_consultation: consultedPatientIds.has(p.patient_id),
+    has_consultation: !!consultationMap.get(p.patient_id),
     unread_message_count: unreadMap.get(p.patient_id) || 0,
     task_status: taskStatusMap.get(p.patient_id) || 'none',
   }));
@@ -485,10 +487,10 @@ export async function createConsultation(
       });
   }
 
-  // 진찰 기록 생성
+  // 진찰 기록 생성 (같은 환자+날짜에 이미 기록이 있으면 업데이트)
   const { data: consultation, error: consultationError } = await (supabase
     .from('consultations') as any)
-    .insert({
+    .upsert({
       patient_id: params.patient_id,
       doctor_id: doctorId,
       date,
@@ -496,7 +498,7 @@ export async function createConsultation(
       has_task: params.has_task || false,
       task_content: params.task_content || null,
       task_target: params.task_target || null,
-    })
+    }, { onConflict: 'patient_id,date' })
     .select()
     .single();
 
@@ -507,8 +509,15 @@ export async function createConsultation(
     );
   }
 
-  // has_task가 true인 경우 task_completions 레코드 생성
+  // has_task가 true인 경우 task_completions 레코드 생성 (기존 레코드 삭제 후 재생성)
   if (params.has_task && params.task_target) {
+    // 기존 미완료 task_completions 삭제 (이미 완료된 건 유지)
+    await (supabase
+      .from('task_completions') as any)
+      .delete()
+      .eq('consultation_id', consultation.id)
+      .eq('is_completed', false);
+
     const completionRecords: any[] = [];
 
     if (params.task_target === 'coordinator' || params.task_target === 'both') {
@@ -523,7 +532,7 @@ export async function createConsultation(
     if (params.task_target === 'nurse' || params.task_target === 'both') {
       completionRecords.push({
         consultation_id: consultation.id,
-        completed_by: doctorId,  // 간호사 지정 전까지 의사 ID로 placeholder
+        completed_by: doctorId,
         role: 'nurse',
         is_completed: false,
       });

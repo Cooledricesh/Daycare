@@ -1,26 +1,24 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useMyPatients } from '@/features/staff/hooks/useMyPatients';
-import { StaffPatientListPanel } from '@/features/staff/components/StaffPatientListPanel';
-import { StaffDetailPanel } from '@/features/staff/components/StaffDetailPanel';
+import { useAdminPatients } from '@/features/admin/hooks/useDashboard';
+import { AdminPatientListPanel } from '@/features/admin/components/AdminPatientListPanel';
+import { AdminDetailPanel } from '@/features/admin/components/AdminDetailPanel';
 import { getTodayString } from '@/lib/date';
-import type { PatientSummary } from '@/features/staff/backend/schema';
+import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
-export default function StaffDashboardPage() {
+export default function AdminDashboardPage() {
   const today = getTodayString();
-  const [showAll, setShowAll] = useState(false);
-  const { data, isLoading, refetch } = useMyPatients({ date: today, showAll });
+  const { data, isLoading, refetch } = useAdminPatients({ date: today });
   const patients = data?.patients || [];
 
-  const [selectedPatient, setSelectedPatient] = useState<PatientSummary | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<NursePatientSummary | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleSelectPatient = useCallback((patient: PatientSummary) => {
+  const handleSelectPatient = useCallback((patient: NursePatientSummary) => {
     setSelectedPatient(patient);
   }, []);
 
-  // 환자 목록이 갱신되면 선택된 환자도 갱신
   useEffect(() => {
     if (selectedPatient && patients.length > 0) {
       const updated = patients.find(p => p.id === selectedPatient.id);
@@ -30,7 +28,6 @@ export default function StaffDashboardPage() {
     }
   }, [patients, selectedPatient]);
 
-  // 키보드 단축키
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -53,13 +50,10 @@ export default function StaffDashboardPage() {
 
   return (
     <div className="flex h-full">
-      {/* 왼쪽: 환자 목록 패널 */}
       <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
-        <StaffPatientListPanel
+        <AdminPatientListPanel
           patients={patients}
           isLoading={isLoading}
-          showAll={showAll}
-          onShowAllChange={setShowAll}
           selectedPatientId={selectedPatient?.id || null}
           onSelectPatient={handleSelectPatient}
           onRefresh={() => refetch()}
@@ -67,9 +61,8 @@ export default function StaffDashboardPage() {
         />
       </div>
 
-      {/* 오른쪽: 상세 패널 */}
       <div className="flex-1 overflow-y-auto">
-        <StaffDetailPanel patient={selectedPatient} />
+        <AdminDetailPanel patient={selectedPatient} />
       </div>
     </div>
   );

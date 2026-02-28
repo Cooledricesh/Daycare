@@ -8,7 +8,7 @@ import {
   completeTaskSchema,
   createMessageSchema,
 } from './schema';
-import { getNursePatients, getPrescriptions, completeTask, createMessage } from './service';
+import { getNursePatients, getPrescriptions, completeTask, createMessage, deleteMessage } from './service';
 import { getPatientDetail } from '@/features/staff/backend/service';
 import { StaffError } from '@/features/staff/backend/error';
 import { getPatientHistory } from '@/features/doctor/backend/service';
@@ -161,6 +161,32 @@ nurseRoutes.post('/messages', async (c) => {
     const message = await createMessage(supabase, staffId, params);
 
     return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof NurseError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/nurse/messages/:id
+ * 전달사항 삭제
+ */
+nurseRoutes.delete('/messages/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    await deleteMessage(supabase, staffId, messageId, user.role === 'admin');
+    return respond(c, success({ deleted: true }, 200));
   } catch (error) {
     if (error instanceof NurseError) {
       return respond(c, failure(400, error.code, error.message));

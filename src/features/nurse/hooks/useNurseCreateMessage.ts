@@ -32,6 +32,7 @@ export const useNurseCreateMessage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nurse', 'patient'] });
+      queryClient.invalidateQueries({ queryKey: ['nurse', 'patient-history'] });
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error);

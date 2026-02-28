@@ -8,9 +8,10 @@ import { PatientCard } from '@/features/staff/components/PatientCard';
 import { useMyPatients } from '@/features/staff/hooks/useMyPatients';
 import { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
+import { getTodayString } from '@/lib/date';
 
 export default function StaffPatientsPage() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayString();
   const { data, isLoading, error } = useMyPatients({ date: today });
   const [searchTerm, setSearchTerm] = useState('');
 

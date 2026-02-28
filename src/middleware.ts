@@ -60,7 +60,7 @@ function getRoleBasedRedirect(role: string): string {
         case "nurse":
             return "/nurse/prescriptions";
         case "admin":
-            return "/admin/patients";
+            return "/admin/dashboard";
         default:
             return "/";
     }

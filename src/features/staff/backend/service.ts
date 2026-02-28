@@ -21,6 +21,7 @@ import {
 } from '@/server/services/task';
 import {
   createMessage as createMessageShared,
+  deleteMessage as deleteMessageShared,
   MessageError,
 } from '@/server/services/message';
 import { getMonthsAgoString, getTodayString } from '@/lib/date';
@@ -33,7 +34,7 @@ export async function getMyPatients(
   coordinatorId: string,
   params: GetMyPatientsParams,
 ): Promise<PatientSummary[]> {
-  const date = params.date || new Date().toISOString().split('T')[0];
+  const date = params.date || getTodayString();
 
   const showAll = params.show_all === 'true';
 
@@ -130,14 +131,11 @@ export async function getMyPatients(
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
         is_consulted: !!consultation,
-        has_task:
-          consultation?.has_task &&
-          (consultation?.task_target === 'coordinator' ||
-            consultation?.task_target === 'both'),
+        has_task: !!consultation?.has_task,
         task_content: consultation?.task_content || null,
         task_completed:
           taskCompletions.length > 0
-            ? taskCompletions.every((tc: any) => tc.is_completed)
+            ? taskCompletions.some((tc: any) => tc.is_completed)
             : false,
         unread_message_count: patientMessages.filter((m: any) => !m.is_read).length,
       };
@@ -154,11 +152,10 @@ export async function getPatientDetail(
   userRole: string,
   params: GetPatientDetailParams,
 ): Promise<PatientDetail> {
-  const date = params.date || new Date().toISOString().split('T')[0];
+  const date = params.date || getTodayString();
 
-  // 최근 진찰 기록 조회를 위한 날짜
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+  // 최근 진찰 기록 조회를 위한 날짜 (한국 시간 기준)
+  const oneMonthAgoStr = getMonthsAgoString(1);
 
   // 모든 쿼리를 병렬로 실행 (patient_id는 이미 알고 있으므로)
   const [
@@ -201,7 +198,7 @@ export async function getPatientDetail(
         staff:doctor_id(name)
       `)
       .eq('patient_id', params.patient_id)
-      .gte('date', oneMonthAgo.toISOString().split('T')[0])
+      .gte('date', oneMonthAgoStr)
       .order('date', { ascending: false })
       .limit(10),
   ]);
@@ -213,10 +210,10 @@ export async function getPatientDetail(
     );
   }
 
-  // task_completions에서 coordinator 역할만 필터링
-  const coordinatorTaskCompletion =
+  // task_completions에서 완료된 항목이 하나라도 있는지 확인
+  const anyTaskCompletion =
     (consultation as any)?.task_completions?.find(
-      (tc: any) => tc.role === 'coordinator',
+      (tc: any) => tc.is_completed,
     ) || null;
 
   return {
@@ -230,15 +227,12 @@ export async function getPatientDetail(
     consultation: {
       is_consulted: !!consultation,
       note: (consultation as any)?.note || null,
-      has_task:
-        (consultation as any)?.has_task &&
-        ((consultation as any)?.task_target === 'coordinator' ||
-          (consultation as any)?.task_target === 'both'),
+      has_task: !!(consultation as any)?.has_task,
       task_content: (consultation as any)?.task_content || null,
       task_target: (consultation as any)?.task_target || null,
       consultation_id: (consultation as any)?.id || null,
-      task_completion_id: coordinatorTaskCompletion?.id || null,
-      is_task_completed: coordinatorTaskCompletion?.is_completed || false,
+      task_completion_id: anyTaskCompletion?.id || null,
+      is_task_completed: anyTaskCompletion?.is_completed || false,
     },
     vitals: vitals || null,
     recent_consultations: (recentConsultations || []).map((rc: any) => ({
@@ -297,6 +291,25 @@ export async function createMessage(
   } catch (error) {
     if (error instanceof MessageError) {
       throw new StaffError(StaffErrorCode.MESSAGE_SAVE_FAILED, error.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 전달사항 삭제
+ */
+export async function deleteMessage(
+  supabase: SupabaseClient<Database>,
+  staffId: string,
+  messageId: string,
+  isAdmin = false,
+): Promise<void> {
+  try {
+    await deleteMessageShared(supabase, messageId, staffId, isAdmin);
+  } catch (error) {
+    if (error instanceof MessageError) {
+      throw new StaffError(StaffErrorCode.MESSAGE_DELETE_FAILED, error.message);
     }
     throw error;
   }

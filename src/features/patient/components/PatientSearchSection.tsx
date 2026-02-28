@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useSearchPatients } from '../hooks/useSearchPatients';
@@ -88,6 +89,12 @@ export function PatientSearchSection({ onPatientSelect }: PatientSearchSectionPr
           )}
         </div>
       )}
+
+      <div className="mt-6 text-center">
+        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
+          ← 메인으로 돌아가기
+        </Link>
+      </div>
     </div>
   );
 }

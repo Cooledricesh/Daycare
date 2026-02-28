@@ -17,6 +17,7 @@ import {
 } from '@/server/services/task';
 import {
   createMessage as createMessageShared,
+  deleteMessage as deleteMessageShared,
   MessageError,
 } from '@/server/services/message';
 import { getTodayString } from '@/lib/date';
@@ -80,14 +81,13 @@ export async function getNursePatients(
   );
 
   // 5. 데이터 변환
-  const hasNurseTask = (c: any) =>
-    c?.has_task && (c?.task_target === 'nurse' || c?.task_target === 'both');
+  const hasNurseTask = (c: any) => !!c?.has_task;
 
   const items: NursePatientSummary[] = (patients || []).map((p: any) => {
     const attendance = attendanceMap.get(p.id);
     const consultation = consultationMap.get(p.id);
-    const nurseTaskCompletion = consultation?.task_completions?.find(
-      (tc: any) => tc.role === 'nurse',
+    const anyTaskCompletion = consultation?.task_completions?.find(
+      (tc: any) => tc.is_completed,
     );
 
     return {
@@ -99,10 +99,10 @@ export async function getNursePatients(
       has_nurse_task: hasNurseTask(consultation),
       task_content: consultation?.task_content || null,
       task_completed: hasNurseTask(consultation)
-        ? (nurseTaskCompletion?.is_completed || false)
+        ? (anyTaskCompletion?.is_completed || false)
         : false,
       consultation_id: consultation?.id || null,
-      task_completion_id: nurseTaskCompletion?.id || null,
+      task_completion_id: anyTaskCompletion?.id || null,
       doctor_name: consultation?.staff?.name || null,
       note: consultation?.note || null,
     };
@@ -125,7 +125,7 @@ export async function getPrescriptions(
   supabase: SupabaseClient<Database>,
   params: GetPrescriptionsParams,
 ): Promise<PrescriptionItem[]> {
-  const date = params.date || new Date().toISOString().split('T')[0];
+  const date = params.date || getTodayString();
 
   // 오늘 모든 진료 기록 조회 (간호사가 투약 변경/진료 메모 확인용)
   let query = (supabase
@@ -158,13 +158,12 @@ export async function getPrescriptions(
   }
 
   // 데이터 변환 및 필터링
-  const hasNurseTask = (c: any) =>
-    c.has_task && (c.task_target === 'nurse' || c.task_target === 'both');
+  const hasNurseTask = (c: any) => !!c.has_task;
 
   const items: PrescriptionItem[] = (data as any[])
     .map((c) => {
-      const nurseTaskCompletion = c.task_completions?.find(
-        (tc: any) => tc.role === 'nurse',
+      const anyTaskCompletion = c.task_completions?.find(
+        (tc: any) => tc.is_completed,
       );
 
       return {
@@ -177,10 +176,10 @@ export async function getPrescriptions(
         has_task: hasNurseTask(c),
         task_content: c.task_content || '',
         is_completed: hasNurseTask(c)
-          ? (nurseTaskCompletion?.is_completed || false)
+          ? (anyTaskCompletion?.is_completed || false)
           : true, // 지시사항이 없으면 완료 처리
-        completed_at: nurseTaskCompletion?.completed_at || null,
-        task_completion_id: nurseTaskCompletion?.id || null,
+        completed_at: anyTaskCompletion?.completed_at || null,
+        task_completion_id: anyTaskCompletion?.id || null,
         created_at: c.created_at,
       };
     })
@@ -245,6 +244,25 @@ export async function createMessage(
   } catch (error) {
     if (error instanceof MessageError) {
       throw new NurseError(NurseErrorCode.MESSAGE_SAVE_FAILED, error.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 전달사항 삭제
+ */
+export async function deleteMessage(
+  supabase: SupabaseClient<Database>,
+  staffId: string,
+  messageId: string,
+  isAdmin = false,
+): Promise<void> {
+  try {
+    await deleteMessageShared(supabase, messageId, staffId, isAdmin);
+  } catch (error) {
+    if (error instanceof MessageError) {
+      throw new NurseError(NurseErrorCode.MESSAGE_DELETE_FAILED, error.message);
     }
     throw error;
   }

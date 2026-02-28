@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import bcrypt from 'bcryptjs';
-import { formatScheduleDays } from '@/lib/date';
+import { formatScheduleDays, getTodayString, getYesterdayString } from '@/lib/date';
 import { AdminError, AdminErrorCode } from './error';
 import type {
   GetPatientsQuery,
@@ -720,9 +720,7 @@ async function ensureTodayScheduleGenerated(
 async function ensureYesterdayStatsClosed(
   supabase: SupabaseClient<Database>,
 ): Promise<void> {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const yesterdayStr = getYesterdayString();
 
   const { count } = await (supabase
     .from('daily_stats') as any)
@@ -773,11 +771,11 @@ export async function batchCalculateStats(
 
   const start = new Date(request.start_date + 'T00:00:00');
   const end = new Date(request.end_date + 'T00:00:00');
-  const today = new Date().toISOString().split('T')[0];
+  const todayKST = getTodayString();
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().split('T')[0];
-    if (dateStr >= today) continue; // 오늘 이후는 스킵 (실시간 집계)
+    if (dateStr >= todayKST) continue; // 오늘 이후는 스킵 (실시간 집계)
     try {
       await calculateDailyStats(supabase, dateStr);
       results.push({ date: dateStr });
@@ -997,7 +995,7 @@ export async function getStatsSummary(
     : 0;
 
   // 오늘 통계 (실시간)
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayString();
   const { data: todayScheduled, count: scheduledCount } = await (supabase
     .from('scheduled_attendances') as any)
     .select('*', { count: 'exact', head: true })

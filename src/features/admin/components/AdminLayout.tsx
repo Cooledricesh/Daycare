@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  LayoutDashboard,
   Users,
   UserCog,
   Calendar,
@@ -15,6 +16,11 @@ interface AdminLayoutProps {
 }
 
 const navItems: NavItem[] = [
+  {
+    href: '/admin/dashboard',
+    label: '대시보드',
+    icon: LayoutDashboard,
+  },
   {
     href: '/admin/patients',
     label: '환자 관리',

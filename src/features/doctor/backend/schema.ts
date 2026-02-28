@@ -65,6 +65,7 @@ export interface ConsultationRecord {
 export interface MessageRecord {
   id: string;
   date: string;
+  author_id: string;
   author_name: string;
   author_role: 'coordinator' | 'nurse';
   content: string;
