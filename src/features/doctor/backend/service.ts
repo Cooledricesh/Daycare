@@ -394,26 +394,53 @@ export async function getWaitingPatients(
     });
   });
 
-  // 결과 변환 - 출석 체크 여부와 상관없이 모든 예정 환자 반환
-  return patientList.map((p: any) => {
-    const consultation = consultationMap.get(p.patient_id);
-    const taskCompletions = consultation?.task_completions || [];
-    return {
-      id: p.patients.id,
-      name: p.patients.name,
-      gender: p.patients.gender,
-      room_number: p.patients.room_number,
-      coordinator_name: p.patients.coordinator?.name || null,
-      checked_at: attendanceMap.get(p.patient_id) || null,
-      vitals: vitalsMap.get(p.patient_id) || null,
-      has_consultation: !!consultation,
-      has_task: !!consultation?.has_task,
-      task_completed: taskCompletions.length > 0
-        ? taskCompletions.some((tc: any) => tc.is_completed)
-        : false,
-      unread_message_count: unreadMap.get(p.patient_id) || 0,
-    };
+  // 오늘 지시사항이 있는 진찰 기록 조회
+  const { data: taskConsultations } = await (supabase
+    .from('consultations') as any)
+    .select('id, patient_id, task_target')
+    .eq('date', date)
+    .eq('has_task', true)
+    .in('patient_id', patientIds);
+
+  // 지시사항 완료 상태 조회
+  const taskConsultationIds = (taskConsultations || []).map((c: any) => c.id);
+  let taskCompletions: any[] = [];
+  if (taskConsultationIds.length > 0) {
+    const { data } = await (supabase
+      .from('task_completions') as any)
+      .select('consultation_id, role, is_completed')
+      .in('consultation_id', taskConsultationIds);
+    taskCompletions = data || [];
+  }
+
+  // 환자별 지시사항 상태 Map: 'none' | 'pending' | 'completed'
+  const taskStatusMap = new Map<string, 'none' | 'pending' | 'completed'>();
+  (taskConsultations || []).forEach((c: any) => {
+    const completions = taskCompletions.filter((tc: any) => tc.consultation_id === c.id);
+    const allCompleted = completions.length > 0 && completions.every((tc: any) => tc.is_completed);
+
+    const currentStatus = taskStatusMap.get(c.patient_id);
+    if (!currentStatus || currentStatus === 'none') {
+      taskStatusMap.set(c.patient_id, allCompleted ? 'completed' : 'pending');
+    } else if (currentStatus === 'completed' && !allCompleted) {
+      // 하나라도 미완료면 pending으로 변경
+      taskStatusMap.set(c.patient_id, 'pending');
+    }
   });
+
+  // 결과 변환 - 출석 체크 여부와 상관없이 모든 예정 환자 반환
+  return patientList.map((p: any) => ({
+    id: p.patients.id,
+    name: p.patients.name,
+    gender: p.patients.gender,
+    room_number: p.patients.room_number,
+    coordinator_name: p.patients.coordinator?.name || null,
+    checked_at: attendanceMap.get(p.patient_id) || null,
+    vitals: vitalsMap.get(p.patient_id) || null,
+    has_consultation: !!consultationMap.get(p.patient_id),
+    unread_message_count: unreadMap.get(p.patient_id) || 0,
+    task_status: taskStatusMap.get(p.patient_id) || 'none',
+  }));
 }
 
 /**

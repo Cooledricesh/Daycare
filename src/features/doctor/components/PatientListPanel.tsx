@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, RefreshCw, User, Check, Clock, MessageSquare, Bell } from 'lucide-react';
+import { Search, RefreshCw, User, Check, Clock, MessageSquare, Bell, CheckCircle } from 'lucide-react';
 import { matchesChosung } from '@/lib/chosung';
 import { cn } from '@/lib/utils';
 import type { WaitingPatient } from '../backend/schema';
@@ -198,18 +198,17 @@ export function PatientListPanel({
                       </Badge>
                     )}
                     {/* 지시사항 상태 */}
-                    {patient.has_task && (
-                      patient.task_completed ? (
-                        <Badge variant="secondary" className="bg-green-50 text-green-600 text-[10px] px-1.5 py-0">
-                          <Check className="w-2.5 h-2.5 mr-0.5" />
-                          처리
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
-                          <Bell className="w-2.5 h-2.5 mr-0.5" />
-                          미처리
-                        </Badge>
-                      )
+                    {patient.task_status === 'pending' && (
+                      <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
+                        <Bell className="w-2.5 h-2.5 mr-0.5" />
+                        지시
+                      </Badge>
+                    )}
+                    {patient.task_status === 'completed' && (
+                      <Badge variant="secondary" className="bg-teal-50 text-teal-600 text-[10px] px-1.5 py-0">
+                        <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                        이행
+                      </Badge>
                     )}
                     {/* 미확인 메시지 */}
                     {patient.unread_message_count > 0 && (
