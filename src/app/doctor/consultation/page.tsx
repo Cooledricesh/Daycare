@@ -5,6 +5,7 @@ import { useWaitingPatients } from '@/features/doctor/hooks/useWaitingPatients';
 import { PatientListPanel } from '@/features/doctor/components/PatientListPanel';
 import { ConsultationPanel } from '@/features/doctor/components/ConsultationPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { WaitingPatient } from '@/features/doctor/backend/schema';
 
 export default function DoctorConsultationPage() {
@@ -32,27 +33,37 @@ export default function DoctorConsultationPage() {
     }
   }, [patients, selectedPatient]);
 
-  // 키보드 단축키: Ctrl+K 또는 / → 검색 포커스, Esc → 검색 해제
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // 입력 중일 때는 / 단축키 무시
-      const target = e.target as HTMLElement;
-      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+  // 환자 목록 탐색: 이전/다음
+  const handleNavigatePrev = useCallback(() => {
+    if (!patients || patients.length === 0) return;
+    if (!selectedPatient) {
+      setSelectedPatient(patients[patients.length - 1]);
+      return;
+    }
+    const idx = patients.findIndex(p => p.id === selectedPatient.id);
+    if (idx > 0) {
+      setSelectedPatient(patients[idx - 1]);
+    }
+  }, [patients, selectedPatient]);
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === '/' && !isTyping) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
-        searchInputRef.current?.blur();
-      }
-    };
+  const handleNavigateNext = useCallback(() => {
+    if (!patients || patients.length === 0) return;
+    if (!selectedPatient) {
+      setSelectedPatient(patients[0]);
+      return;
+    }
+    const idx = patients.findIndex(p => p.id === selectedPatient.id);
+    if (idx < patients.length - 1) {
+      setSelectedPatient(patients[idx + 1]);
+    }
+  }, [patients, selectedPatient]);
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  // 키보드 단축키
+  useKeyboardShortcuts({
+    searchInputRef,
+    onNavigatePrev: handleNavigatePrev,
+    onNavigateNext: handleNavigateNext,
+  });
 
   return (
     <MasterDetailLayout

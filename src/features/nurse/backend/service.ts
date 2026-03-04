@@ -11,6 +11,7 @@ import type {
   Message,
 } from './schema';
 import { NurseError, NurseErrorCode } from './error';
+import { ensureScheduleGenerated } from '@/server/services/schedule';
 import {
   completeTask as completeTaskShared,
   TaskError,
@@ -48,10 +49,14 @@ export async function getNursePatients(
   const patientIds = (patients || []).map((p: any) => p.id);
   if (patientIds.length === 0) return [];
 
-  // 2+3. 출석 + 진료 기록을 병렬로 조회
+  // 오늘 스케줄이 없으면 패턴에서 자동 생성
+  await ensureScheduleGenerated(supabase, date);
+
+  // 2+3. 출석 + 진료 기록 + 출석예정을 병렬로 조회
   const [
     { data: attendances },
     { data: consultations },
+    { data: scheduledAttendances },
   ] = await Promise.all([
     (supabase.from('attendances') as any)
       .select('patient_id, checked_at')
@@ -70,6 +75,11 @@ export async function getNursePatients(
       `)
       .in('patient_id', patientIds)
       .eq('date', date),
+    (supabase.from('scheduled_attendances') as any)
+      .select('patient_id')
+      .eq('date', date)
+      .eq('is_cancelled', false)
+      .in('patient_id', patientIds),
   ]);
 
   // 4. Map 생성
@@ -78,6 +88,9 @@ export async function getNursePatients(
   );
   const consultationMap = new Map<string, any>(
     (consultations || []).map((c: any) => [c.patient_id, c]),
+  );
+  const scheduledSet = new Set<string>(
+    (scheduledAttendances || []).map((s: any) => s.patient_id),
   );
 
   // 5. 데이터 변환
@@ -97,6 +110,7 @@ export async function getNursePatients(
       coordinator_name: p.coordinator?.name || null,
       is_attended: !!attendance,
       attendance_time: attendance?.checked_at || null,
+      is_scheduled: scheduledSet.has(p.id),
       is_consulted: !!consultation,
       has_nurse_task: hasNurseTask(consultation),
       task_content: consultation?.task_content || null,

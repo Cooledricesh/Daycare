@@ -11,6 +11,7 @@ import adminRoutes from '@/features/admin/backend/route';
 import staffRoutes from '@/features/staff/backend/route';
 import nurseRoutes from '@/features/nurse/backend/route';
 import doctorRoutes from '@/features/doctor/backend/route';
+import sharedRoutes from '@/features/shared/backend/route';
 
 let singletonApp: Hono<AppEnv> | null = null;
 
@@ -34,6 +35,7 @@ export const createHonoApp = () => {
   app.use('/api/admin/schedule/patterns/*', withAuth(), requireRole('coordinator', 'admin'));
   app.use('/api/admin/schedule/patterns', withAuth(), requireRole('coordinator', 'admin'));
   app.use('/api/admin/*', withAuth(), requireRole('admin'));
+  app.use('/api/shared/*', withAuth(), requireRole('doctor', 'nurse', 'coordinator', 'admin'));
   app.use('/api/me', withAuth());
 
   // 현재 로그인한 사용자 정보 조회
@@ -55,6 +57,7 @@ export const createHonoApp = () => {
   app.route('/api/staff', staffRoutes);
   app.route('/api/nurse', nurseRoutes);
   app.route('/api/doctor', doctorRoutes);
+  app.route('/api/shared', sharedRoutes);
 
   singletonApp = app;
 

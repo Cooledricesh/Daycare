@@ -20,6 +20,7 @@ import { useCreateConsultation } from '../hooks/useCreateConsultation';
 import { usePatientMessages } from '../hooks/usePatientMessages';
 import { usePatientHistory } from '../hooks/usePatientHistory';
 import { ConsultationHistory } from './ConsultationHistory';
+import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { getTodayString } from '@/lib/date';
 import type { WaitingPatient } from '../backend/schema';
 
@@ -34,6 +35,9 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
   const prevPatientId = useRef<string | null>(null);
 
   const createConsultation = useCreateConsultation();
+
+  // handleSubmit을 ref로 관리하여 Ctrl+S 단축키에서 항상 최신 함수 참조
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   // 선택된 환자의 오늘 전달사항
   const { data: messages, isLoading: messagesLoading } = usePatientMessages({
@@ -88,6 +92,21 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
     onConsultationComplete();
   };
 
+  // 항상 최신 handleSubmit을 ref에 반영
+  handleSubmitRef.current = handleSubmit;
+
+  // Ctrl+S / Cmd+S: 진찰 저장
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSubmitRef.current();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleQuickCheck = async () => {
     if (!patient) return;
 
@@ -113,9 +132,9 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-3xl">
+    <div className="p-6 h-full">
       {/* 환자 정보 헤더 */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
             <User className="w-5 h-5 text-purple-600" />
@@ -149,142 +168,151 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
         </Link>
       </div>
 
-      {/* 활력징후 */}
-      {patient.vitals && (
-        <div className="flex gap-2">
-          {patient.vitals.systolic && patient.vitals.diastolic && (
-            <Badge variant="outline">
-              혈압 {patient.vitals.systolic}/{patient.vitals.diastolic}
-            </Badge>
+      {/* 2컬럼 레이아웃: 좌(입력) / 우(히스토리) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 좌측: 바이탈 + 전달사항 + 진찰 폼 */}
+        <div className="space-y-5">
+          {/* 활력징후 */}
+          {patient.vitals && (
+            <div className="flex gap-2">
+              {patient.vitals.systolic && patient.vitals.diastolic && (
+                <Badge variant="outline">
+                  혈압 {patient.vitals.systolic}/{patient.vitals.diastolic}
+                </Badge>
+              )}
+              {patient.vitals.blood_sugar && (
+                <Badge variant="outline">
+                  혈당 {patient.vitals.blood_sugar}
+                </Badge>
+              )}
+            </div>
           )}
-          {patient.vitals.blood_sugar && (
-            <Badge variant="outline">
-              혈당 {patient.vitals.blood_sugar}
-            </Badge>
+
+          {/* 오늘 전달사항 */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-blue-600" />
+                오늘 전달사항
+                {messages && messages.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">{messages.length}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {messagesLoading ? (
+                <p className="text-sm text-gray-500">로딩 중...</p>
+              ) : messages && messages.length > 0 ? (
+                <div className="space-y-2">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className="p-2 bg-blue-50 rounded border border-blue-100">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                        <span className="font-medium">{msg.author_name}</span>
+                        <span>·</span>
+                        <span>
+                          {new Date(msg.created_at).toLocaleTimeString('ko-KR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-sm">{msg.content}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">오늘 전달사항이 없습니다.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 진찰 폼 */}
+          <Card className="border-purple-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Stethoscope className="w-4 h-4 text-purple-600" />
+                {isEditing ? '진찰 기록 수정' : '진찰 기록 작성'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 진료 메모 */}
+              <div>
+                <Label htmlFor="note" className="text-sm">진료 메모</Label>
+                <Textarea
+                  id="note"
+                  placeholder="진찰 내용을 입력하세요..."
+                  value={consultationNote}
+                  onChange={(e) => setConsultationNote(e.target.value)}
+                  className="mt-1"
+                  rows={4}
+                />
+              </div>
+
+              {/* 투약 변경 및 전달사항 */}
+              <div>
+                <Label htmlFor="task" className="text-sm">투약 변경 및 그 외 전달사항</Label>
+                <Textarea
+                  id="task"
+                  placeholder="투약 변경, 전달사항 등을 입력하세요..."
+                  value={taskContent}
+                  onChange={(e) => setTaskContent(e.target.value)}
+                  className="mt-1"
+                  rows={2}
+                />
+              </div>
+
+              {/* 제출 버튼 */}
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={createConsultation.isPending}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                >
+                  {createConsultation.isPending
+                    ? '저장 중...'
+                    : isEditing
+                      ? (<><Pencil className="w-4 h-4 mr-1" />기록 수정</>)
+                      : '진찰 완료'}
+                </Button>
+                {!patient.has_consultation && (
+                  <Button
+                    variant="outline"
+                    onClick={handleQuickCheck}
+                    disabled={createConsultation.isPending}
+                    className="border-purple-300 text-purple-600 hover:bg-purple-50"
+                  >
+                    <Check className="w-4 h-4 mr-1" />
+                    진찰 참석만 체크
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 우측: 출석 캘린더 + 최근 히스토리 */}
+        <div className="lg:overflow-y-auto lg:max-h-[calc(100vh-12rem)] space-y-4">
+          <AttendanceCalendar patientId={patient.id} />
+          {historyLoading ? (
+            <Card>
+              <CardContent className="py-6">
+                <p className="text-sm text-gray-500 text-center">히스토리 로딩 중...</p>
+              </CardContent>
+            </Card>
+          ) : history && history.consultations.length > 0 ? (
+            <ConsultationHistory consultations={history.consultations} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">최근 진찰 기록</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-400 text-center">최근 3개월 내 기록이 없습니다.</p>
+              </CardContent>
+            </Card>
           )}
         </div>
-      )}
-
-      {/* 오늘 전달사항 */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-blue-600" />
-            오늘 전달사항
-            {messages && messages.length > 0 && (
-              <Badge variant="secondary" className="text-xs">{messages.length}</Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {messagesLoading ? (
-            <p className="text-sm text-gray-500">로딩 중...</p>
-          ) : messages && messages.length > 0 ? (
-            <div className="space-y-2">
-              {messages.map((msg) => (
-                <div key={msg.id} className="p-2 bg-blue-50 rounded border border-blue-100">
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                    <span className="font-medium">{msg.author_name}</span>
-                    <span>·</span>
-                    <span>
-                      {new Date(msg.created_at).toLocaleTimeString('ko-KR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                  <p className="text-sm">{msg.content}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">오늘 전달사항이 없습니다.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 진찰 폼 */}
-      <Card className="border-purple-200">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Stethoscope className="w-4 h-4 text-purple-600" />
-            {isEditing ? '진찰 기록 수정' : '진찰 기록 작성'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* 진료 메모 */}
-          <div>
-            <Label htmlFor="note" className="text-sm">진료 메모</Label>
-            <Textarea
-              id="note"
-              placeholder="진찰 내용을 입력하세요..."
-              value={consultationNote}
-              onChange={(e) => setConsultationNote(e.target.value)}
-              className="mt-1"
-              rows={4}
-            />
-          </div>
-
-          {/* 투약 변경 및 전달사항 */}
-          <div>
-            <Label htmlFor="task" className="text-sm">투약 변경 및 그 외 전달사항</Label>
-            <Textarea
-              id="task"
-              placeholder="투약 변경, 전달사항 등을 입력하세요..."
-              value={taskContent}
-              onChange={(e) => setTaskContent(e.target.value)}
-              className="mt-1"
-              rows={2}
-            />
-          </div>
-
-          {/* 제출 버튼 */}
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSubmit}
-              disabled={createConsultation.isPending}
-              className="flex-1 bg-purple-600 hover:bg-purple-700"
-            >
-              {createConsultation.isPending
-                ? '저장 중...'
-                : isEditing
-                  ? (<><Pencil className="w-4 h-4 mr-1" />기록 수정</>)
-                  : '진찰 완료'}
-            </Button>
-            {!patient.has_consultation && (
-              <Button
-                variant="outline"
-                onClick={handleQuickCheck}
-                disabled={createConsultation.isPending}
-                className="border-purple-300 text-purple-600 hover:bg-purple-50"
-              >
-                <Check className="w-4 h-4 mr-1" />
-                진찰 참석만 체크
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 최근 히스토리 */}
-      {historyLoading ? (
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-sm text-gray-500 text-center">히스토리 로딩 중...</p>
-          </CardContent>
-        </Card>
-      ) : history && history.consultations.length > 0 ? (
-        <ConsultationHistory consultations={history.consultations} />
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">최근 진찰 기록</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-400 text-center">최근 3개월 내 기록이 없습니다.</p>
-          </CardContent>
-        </Card>
-      )}
+      </div>
     </div>
   );
 }

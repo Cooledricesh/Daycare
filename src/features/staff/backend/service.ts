@@ -25,6 +25,7 @@ import {
   MessageError,
 } from '@/server/services/message';
 import { getMonthsAgoString, getTodayString } from '@/lib/date';
+import { ensureScheduleGenerated } from '@/server/services/schedule';
 
 /**
  * 담당 환자 목록 조회
@@ -38,6 +39,9 @@ export async function getMyPatients(
 
   const showAll = params.show_all === 'true';
 
+  // 오늘 스케줄이 없으면 패턴에서 자동 생성
+  await ensureScheduleGenerated(supabase, date);
+
   // show_all=true이면 RPC 스킵하고 직접 전체 환자 조회
   if (!showAll) {
     const { data, error } = await (supabase.rpc as any)('get_coordinator_patients', {
@@ -46,7 +50,29 @@ export async function getMyPatients(
     });
 
     if (!error && data) {
-      return data as PatientSummary[];
+      const rpcPatients = data as PatientSummary[];
+      const rpcPatientIds = rpcPatients.map((p) => p.id);
+
+      if (rpcPatientIds.length === 0) {
+        return rpcPatients;
+      }
+
+      // RPC 결과에 is_scheduled 정보를 추가
+      const { data: scheduledAttendances } = await (supabase
+        .from('scheduled_attendances') as any)
+        .select('patient_id')
+        .eq('date', date)
+        .eq('is_cancelled', false)
+        .in('patient_id', rpcPatientIds);
+
+      const scheduledSet = new Set<string>(
+        (scheduledAttendances || []).map((s: any) => s.patient_id),
+      );
+
+      return rpcPatients.map((p) => ({
+        ...p,
+        is_scheduled: scheduledSet.has(p.id),
+      }));
     }
   }
 
@@ -81,11 +107,12 @@ export async function getMyPatients(
       return [];
     }
 
-    // 출석, 진찰, 메시지를 병렬로 조회
+    // 출석, 진찰, 메시지, 출석예정을 병렬로 조회
     const [
       { data: attendances },
       { data: consultations },
       { data: messages },
+      { data: scheduledAttendances },
     ] = await Promise.all([
       (supabase.from('attendances') as any)
         .select('patient_id, checked_at')
@@ -106,6 +133,11 @@ export async function getMyPatients(
         .select('patient_id, id, is_read')
         .in('patient_id', patientIds)
         .eq('date', date),
+      (supabase.from('scheduled_attendances') as any)
+        .select('patient_id')
+        .eq('date', date)
+        .eq('is_cancelled', false)
+        .in('patient_id', patientIds),
     ]);
 
     // 데이터를 Map으로 변환
@@ -118,6 +150,9 @@ export async function getMyPatients(
       }
       messageMap.get(m.patient_id)!.push(m);
     });
+    const scheduledSet = new Set<string>(
+      (scheduledAttendances || []).map((s: any) => s.patient_id),
+    );
 
     // 데이터 변환 (Map에서 조회)
     return (patients || []).map((p: any) => {
@@ -132,6 +167,7 @@ export async function getMyPatients(
         gender: p.gender || null,
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
+        is_scheduled: scheduledSet.has(p.id),
         is_consulted: !!consultation,
         has_task: !!consultation?.has_task,
         task_content: consultation?.task_content || null,

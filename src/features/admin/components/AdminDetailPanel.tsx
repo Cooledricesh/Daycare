@@ -13,6 +13,7 @@ import { useAdminPatientDetail, useAdminPatientHistory, useAdminCompleteTask, us
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { AdminMessageForm } from './AdminMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
 interface AdminDetailPanelProps {
@@ -101,7 +102,9 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
           <p className="text-sm text-gray-500">
             {patient.is_attended
               ? `${patient.attendance_time ? format(new Date(patient.attendance_time), 'HH:mm', { locale: ko }) + ' ' : ''}출석`
-              : '미출석'}
+              : patient.is_scheduled
+                ? '미출석 (예정)'
+                : '미출석'}
             {patient.doctor_name && ` · 담당의: ${patient.doctor_name}`}
           </p>
         </div>
@@ -175,6 +178,9 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
           <AdminMessageForm patientId={patient.id} date={today} />
         </CardContent>
       </Card>
+
+      {/* 출석 캘린더 */}
+      <AttendanceCalendar patientId={patient.id} />
 
       {/* 기록 */}
       {historyLoading ? (

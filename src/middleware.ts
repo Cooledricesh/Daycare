@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyJWT } from "@/lib/token";
 
-const PROTECTED_PATHS = ["/staff", "/doctor", "/nurse", "/admin"];
+const PROTECTED_PATHS = ["/staff", "/doctor", "/nurse", "/admin", "/shared"];
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;

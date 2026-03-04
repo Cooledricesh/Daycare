@@ -116,6 +116,7 @@ export interface WaitingPatient {
   room_number: string | null;
   coordinator_name: string | null;
   checked_at: string | null;  // null이면 아직 출석 안 함
+  is_scheduled: boolean;  // 오늘 출석 예정 여부 (scheduled_attendances 기준)
   vitals: {
     systolic: number | null;
     diastolic: number | null;

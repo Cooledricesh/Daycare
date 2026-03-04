@@ -16,6 +16,7 @@ import type {
 } from './schema';
 import { DoctorError, DoctorErrorCode } from './error';
 import { getTodayString, getMonthsAgoString } from '@/lib/date';
+import { ensureScheduleGenerated } from '@/server/services/schedule';
 
 /**
  * 오늘 지시사항 목록 조회
@@ -394,6 +395,21 @@ export async function getWaitingPatients(
     });
   });
 
+  // 오늘 스케줄이 없으면 패턴에서 자동 생성
+  await ensureScheduleGenerated(supabase, date);
+
+  // 오늘 출석 예정 환자 조회 (scheduled_attendances)
+  const { data: scheduledAttendances } = await (supabase
+    .from('scheduled_attendances') as any)
+    .select('patient_id')
+    .eq('date', date)
+    .eq('is_cancelled', false)
+    .in('patient_id', patientIds);
+
+  const scheduledSet = new Set<string>(
+    (scheduledAttendances || []).map((s: any) => s.patient_id),
+  );
+
   // 오늘 지시사항이 있는 진찰 기록 조회
   const { data: taskConsultations } = await (supabase
     .from('consultations') as any)
@@ -436,6 +452,7 @@ export async function getWaitingPatients(
     room_number: p.patients.room_number,
     coordinator_name: p.patients.coordinator?.name || null,
     checked_at: attendanceMap.get(p.patient_id) || null,
+    is_scheduled: scheduledSet.has(p.patient_id),
     vitals: vitalsMap.get(p.patient_id) || null,
     has_consultation: !!consultationMap.get(p.patient_id),
     unread_message_count: unreadMap.get(p.patient_id) || 0,

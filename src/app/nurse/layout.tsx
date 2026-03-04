@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { Users } from 'lucide-react';
+import { Users, BarChart3, KeyRound } from 'lucide-react';
 import { AppLayout, type NavItem } from '@/components/layout/AppLayout';
 
 type NurseLayoutProps = {
@@ -13,6 +13,16 @@ const navItems: NavItem[] = [
     href: '/nurse/prescriptions',
     label: '환자 관리',
     icon: Users,
+  },
+  {
+    href: '/shared/stats',
+    label: '통계',
+    icon: BarChart3,
+  },
+  {
+    href: '/shared/change-password',
+    label: '비밀번호 변경',
+    icon: KeyRound,
   },
 ];
 

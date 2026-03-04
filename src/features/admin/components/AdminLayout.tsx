@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   RefreshCw,
+  KeyRound,
 } from 'lucide-react';
 import { AppLayout, type NavItem } from '@/components/layout/AppLayout';
 
@@ -50,6 +51,11 @@ const navItems: NavItem[] = [
     href: '/admin/settings/room-mapping',
     label: '호실 매핑',
     icon: Settings,
+  },
+  {
+    href: '/shared/change-password',
+    label: '비밀번호 변경',
+    icon: KeyRound,
   },
 ];
 

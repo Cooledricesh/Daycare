@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, RefreshCw, User, Check, Clock, MessageSquare, Bell, CheckCircle } from 'lucide-react';
+import { Search, RefreshCw, User, Check, Clock, AlertCircle, MessageSquare, Bell, CheckCircle } from 'lucide-react';
 import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
@@ -55,20 +55,30 @@ export function PatientListPanel({
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
-    // 정렬: 출석 → 미출석, 그 안에서 대기 → 완료
+    // 정렬: 미처리 지시/미읽은 메시지 → 출석 → 미출석 → 대기 → 완료 → 이름순
     result = [...result].sort((a, b) => {
-      // 출석 여부 (출석 먼저)
+      // 1. 미처리 지시사항 (pending task 먼저)
+      const aPending = a.task_status === 'pending' ? 0 : 1;
+      const bPending = b.task_status === 'pending' ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+
+      // 2. 미읽은 메시지 (unread 먼저)
+      const aUnread = a.unread_message_count > 0 ? 0 : 1;
+      const bUnread = b.unread_message_count > 0 ? 0 : 1;
+      if (aUnread !== bUnread) return aUnread - bUnread;
+
+      // 3. 출석 여부 (출석 먼저)
       const aAttended = a.checked_at ? 0 : 1;
       const bAttended = b.checked_at ? 0 : 1;
       if (aAttended !== bAttended) return aAttended - bAttended;
 
-      // 진찰 완료 여부 (대기 먼저)
+      // 4. 진찰 완료 여부 (대기 먼저)
       const aConsulted = a.has_consultation ? 1 : 0;
       const bConsulted = b.has_consultation ? 1 : 0;
       if (aConsulted !== bConsulted) return aConsulted - bConsulted;
 
-      // 호실 순
-      return (a.room_number || '').localeCompare(b.room_number || '');
+      // 5. 이름 오름차순
+      return a.name.localeCompare(b.name);
     });
 
     return result;
@@ -135,6 +145,11 @@ export function PatientListPanel({
         </div>
       </div>
 
+      {/* 키보드 단축키 힌트 */}
+      <div className="text-[10px] text-gray-400 px-4 py-1 border-b">
+        <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">/</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장
+      </div>
+
       {/* 환자 목록 */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
@@ -156,7 +171,9 @@ export function PatientListPanel({
                       ? 'border-l-green-400 bg-green-50/30'
                       : patient.checked_at
                         ? 'border-l-transparent'
-                        : 'border-l-yellow-400 bg-yellow-50/30'
+                        : patient.is_scheduled
+                          ? 'border-l-red-400 bg-red-50/30'
+                          : 'border-l-gray-200'
                 )}
                 onClick={() => onSelectPatient(patient)}
               >
@@ -186,10 +203,15 @@ export function PatientListPanel({
                         <Check className="w-2.5 h-2.5 mr-0.5" />
                         출석
                       </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-yellow-50 text-yellow-600 text-[10px] px-1.5 py-0">
-                        <Clock className="w-2.5 h-2.5 mr-0.5" />
+                    ) : patient.is_scheduled ? (
+                      <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
+                        <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
                         미출석
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-gray-50 text-gray-400 text-[10px] px-1.5 py-0">
+                        <Clock className="w-2.5 h-2.5 mr-0.5" />
+                        미예정
                       </Badge>
                     )}
                     {/* 진찰 완료 */}

@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify } from 'jose';
 const alg = 'HS256';
 
 function getSecret(): Uint8Array {
-  const jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = process.env.JWT_SECRET_KEY;
   if (!jwtSecret) {
     throw new Error('JWT_SECRET environment variable is required');
   }

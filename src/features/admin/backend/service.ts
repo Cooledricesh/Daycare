@@ -3,6 +3,7 @@ import type { Database } from '@/lib/supabase/types';
 import bcrypt from 'bcryptjs';
 import { formatScheduleDays, getTodayString, getYesterdayString } from '@/lib/date';
 import { AdminError, AdminErrorCode } from './error';
+import { ensureScheduleGenerated } from '@/server/services/schedule';
 import type {
   GetPatientsQuery,
   CreatePatientRequest,
@@ -706,15 +707,7 @@ async function ensureTodayScheduleGenerated(
   supabase: SupabaseClient<Database>,
   date: string,
 ): Promise<void> {
-  const { count } = await (supabase
-    .from('scheduled_attendances') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', date)
-    .eq('source', 'auto');
-
-  if ((count ?? 0) === 0) {
-    await generateScheduledAttendances(supabase, date);
-  }
+  await ensureScheduleGenerated(supabase, date);
 }
 
 async function ensureYesterdayStatsClosed(

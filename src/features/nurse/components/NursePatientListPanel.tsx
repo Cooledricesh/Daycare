@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, RefreshCw, User, Check, Clock, Bell } from 'lucide-react';
+import { Search, RefreshCw, User, Check, Clock, AlertCircle, Bell } from 'lucide-react';
 import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
@@ -130,6 +130,11 @@ export function NursePatientListPanel({
         </div>
       </div>
 
+      {/* 키보드 단축키 힌트 */}
+      <div className="text-[10px] text-gray-400 px-4 py-1 border-b">
+        <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">/</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장
+      </div>
+
       {/* 환자 목록 */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
@@ -153,7 +158,9 @@ export function NursePatientListPanel({
                         ? 'border-l-green-400 bg-green-50/30'
                         : patient.is_attended
                           ? 'border-l-transparent'
-                          : 'border-l-gray-200'
+                          : patient.is_scheduled
+                            ? 'border-l-red-400 bg-red-50/30'
+                            : 'border-l-gray-200'
                 )}
                 onClick={() => onSelectPatient(patient)}
               >
@@ -182,10 +189,15 @@ export function NursePatientListPanel({
                         <Check className="w-2.5 h-2.5 mr-0.5" />
                         출석
                       </Badge>
+                    ) : patient.is_scheduled ? (
+                      <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
+                        <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+                        미출석
+                      </Badge>
                     ) : (
                       <Badge variant="secondary" className="bg-gray-50 text-gray-400 text-[10px] px-1.5 py-0">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />
-                        미출석
+                        미예정
                       </Badge>
                     )}
                     {patient.is_consulted && (

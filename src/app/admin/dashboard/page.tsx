@@ -6,6 +6,7 @@ import { AdminPatientListPanel } from '@/features/admin/components/AdminPatientL
 import { AdminDetailPanel } from '@/features/admin/components/AdminDetailPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { getTodayString } from '@/lib/date';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
 export default function AdminDashboardPage() {
@@ -29,25 +30,37 @@ export default function AdminDashboardPage() {
     }
   }, [patients, selectedPatient]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+  // 환자 목록 탐색: 이전/다음
+  const handleNavigatePrev = useCallback(() => {
+    if (patients.length === 0) return;
+    if (!selectedPatient) {
+      setSelectedPatient(patients[patients.length - 1]);
+      return;
+    }
+    const idx = patients.findIndex(p => p.id === selectedPatient.id);
+    if (idx > 0) {
+      setSelectedPatient(patients[idx - 1]);
+    }
+  }, [patients, selectedPatient]);
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === '/' && !isTyping) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
-        searchInputRef.current?.blur();
-      }
-    };
+  const handleNavigateNext = useCallback(() => {
+    if (patients.length === 0) return;
+    if (!selectedPatient) {
+      setSelectedPatient(patients[0]);
+      return;
+    }
+    const idx = patients.findIndex(p => p.id === selectedPatient.id);
+    if (idx < patients.length - 1) {
+      setSelectedPatient(patients[idx + 1]);
+    }
+  }, [patients, selectedPatient]);
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  // 키보드 단축키
+  useKeyboardShortcuts({
+    searchInputRef,
+    onNavigatePrev: handleNavigatePrev,
+    onNavigateNext: handleNavigateNext,
+  });
 
   return (
     <MasterDetailLayout

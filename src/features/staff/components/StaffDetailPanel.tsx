@@ -15,6 +15,7 @@ import { useDeleteMessage } from '../hooks/useDeleteMessage';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { MessageForm } from './MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { getTodayString } from '@/lib/date';
 import type { PatientSummary } from '../backend/schema';
 
@@ -104,7 +105,9 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
           <p className="text-sm text-gray-500">
             {patient.is_attended
               ? `${patient.attendance_time ? format(new Date(patient.attendance_time), 'HH:mm', { locale: ko }) + ' ' : ''}출석`
-              : '미출석'}
+              : patient.is_scheduled
+                ? '미출석 (예정)'
+                : '미출석'}
             {patient.unread_message_count > 0 && ` · 미확인 전달사항 ${patient.unread_message_count}건`}
           </p>
         </div>
@@ -178,6 +181,9 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
           <MessageForm patientId={patient.id} date={today} />
         </CardContent>
       </Card>
+
+      {/* 출석 캘린더 */}
+      <AttendanceCalendar patientId={patient.id} />
 
       {/* 기록 */}
       {historyLoading ? (

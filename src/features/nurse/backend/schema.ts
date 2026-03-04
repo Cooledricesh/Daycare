@@ -73,6 +73,7 @@ export type NursePatientSummary = {
   coordinator_name: string | null;
   is_attended: boolean;
   attendance_time: string | null;
+  is_scheduled: boolean;  // 오늘 출석 예정 여부 (scheduled_attendances 기준)
   is_consulted: boolean;
   has_nurse_task: boolean;
   task_content: string | null;
