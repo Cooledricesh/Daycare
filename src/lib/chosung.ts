@@ -4,6 +4,36 @@ const CHOSUNG = [
   'ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ',
 ];
 
+// 단일 자음 목록 (쌍자음 제외)
+const SINGLE_CONSONANTS = [
+  'ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ',
+];
+
+// 쌍자음 → 단일 자음 매핑
+const DOUBLE_TO_SINGLE: Record<string, string> = {
+  'ㄲ': 'ㄱㄱ',
+  'ㄸ': 'ㄷㄷ',
+  'ㅃ': 'ㅂㅂ',
+  'ㅆ': 'ㅅㅅ',
+  'ㅉ': 'ㅈㅈ',
+};
+
+/**
+ * 쌍자음을 단일 자음으로 분리한다.
+ * 예: "ㄲㅅ" → "ㄱㄱㅅ", "ㅎㅁㅅ" → "ㅎㅁㅅ" (변화 없음)
+ */
+export function expandDoubleConsonants(query: string): string {
+  return [...query].map(c => DOUBLE_TO_SINGLE[c] ?? c).join('');
+}
+
+/**
+ * 문자열이 모두 한글 자음(초성)인지 확인한다.
+ * 쌍자음도 자음으로 인정한다.
+ */
+function isAllChosung(str: string): boolean {
+  return [...str].every(c => CHOSUNG.includes(c));
+}
+
 /**
  * 한글 문자의 초성을 추출한다.
  * 한글이 아닌 문자는 그대로 반환한다.
@@ -17,12 +47,13 @@ export function getChosung(char: string): string {
 /**
  * 이름이 검색어와 매칭되는지 확인한다.
  * - 초성만으로 이루어진 쿼리: 초성 매칭 (예: "ㄱㅅ" → "김승현")
+ * - 쌍자음은 자동 분리 (예: "ㄲ" → "ㄱㄱ"으로 검색)
  * - 일반 문자열: includes 매칭 (예: "김" → "김승현")
  */
 export function matchesChosung(name: string, query: string): boolean {
   if (!query) return true;
-  const isChosungQuery = [...query].every(c => CHOSUNG.includes(c));
-  if (!isChosungQuery) return name.includes(query);
+  if (!isAllChosung(query)) return name.includes(query);
+  const expanded = expandDoubleConsonants(query);
   const nameChosung = [...name].map(getChosung).join('');
-  return nameChosung.includes(query);
+  return nameChosung.includes(expanded);
 }

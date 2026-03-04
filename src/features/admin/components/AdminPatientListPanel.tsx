@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Search, RefreshCw, User, Check, Clock, Bell } from 'lucide-react';
 import { matchesChosung } from '@/lib/chosung';
+import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
@@ -28,7 +29,7 @@ export function AdminPatientListPanel({
   onRefresh,
   searchInputRef,
 }: AdminPatientListPanelProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
   const counts = useMemo(() => {
@@ -91,14 +92,13 @@ export function AdminPatientListPanel({
           <Input
             ref={searchInputRef}
             placeholder="환자 검색 (초성 지원: ㄱㅅㅎ)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            {...inputProps}
             className="pl-9 h-9"
           />
-          {searchQuery && (
+          {rawValue && (
             <button
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-              onClick={() => setSearchQuery('')}
+              onClick={clearSearch}
             >
               지우기
             </button>
@@ -129,7 +129,7 @@ export function AdminPatientListPanel({
           <p className="text-gray-500 text-center py-8 text-sm">로딩 중...</p>
         ) : filteredPatients.length === 0 ? (
           <p className="text-gray-500 text-center py-8 text-sm">
-            {searchQuery ? '검색 결과가 없습니다.' : '환자가 없습니다.'}
+            {rawValue ? '검색 결과가 없습니다.' : '환자가 없습니다.'}
           </p>
         ) : (
           <div>
