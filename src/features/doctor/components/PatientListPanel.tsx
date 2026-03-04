@@ -172,9 +172,11 @@ export function PatientListPanel({
                           {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-500">
-                        {patient.room_number ? `${patient.room_number}호` : '-'}
-                      </span>
+                      {patient.coordinator_name && (
+                        <span className="text-xs text-gray-400">
+                          {patient.coordinator_name}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
