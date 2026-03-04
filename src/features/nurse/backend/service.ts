@@ -34,7 +34,7 @@ export async function getNursePatients(
   // 1. 모든 활성 환자 조회
   const { data: patients, error: patientsError } = await (supabase
     .from('patients') as any)
-    .select('id, name')
+    .select('id, name, gender, coordinator:staff!patients_coordinator_id_fkey(name)')
     .eq('status', 'active')
     .order('name');
 
@@ -93,6 +93,8 @@ export async function getNursePatients(
     return {
       id: p.id,
       name: p.name,
+      gender: p.gender || null,
+      coordinator_name: p.coordinator?.name || null,
       is_attended: !!attendance,
       attendance_time: attendance?.checked_at || null,
       is_consulted: !!consultation,

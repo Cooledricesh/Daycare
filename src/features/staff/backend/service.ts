@@ -56,7 +56,8 @@ export async function getMyPatients(
       .from('patients') as any)
       .select(`
         id,
-        name
+        name,
+        gender
       `)
       .eq('status', 'active');
 
@@ -128,6 +129,7 @@ export async function getMyPatients(
       return {
         id: p.id,
         name: p.name,
+        gender: p.gender || null,
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
         is_consulted: !!consultation,

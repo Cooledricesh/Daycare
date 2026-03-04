@@ -185,7 +185,12 @@ export function StaffPatientListPanel({
                     <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                       <User className="w-3.5 h-3.5 text-gray-500" />
                     </div>
-                    <span className="font-medium text-sm truncate">{patient.name}</span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-medium text-sm truncate">{patient.name}</span>
+                      <span className="text-xs text-gray-400">
+                        {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {patient.is_attended ? (
