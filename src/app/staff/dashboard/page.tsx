@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMyPatients } from '@/features/staff/hooks/useMyPatients';
 import { StaffPatientListPanel } from '@/features/staff/components/StaffPatientListPanel';
 import { StaffDetailPanel } from '@/features/staff/components/StaffDetailPanel';
+import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { getTodayString } from '@/lib/date';
 import type { PatientSummary } from '@/features/staff/backend/schema';
 
@@ -52,9 +53,10 @@ export default function StaffDashboardPage() {
   }, []);
 
   return (
-    <div className="flex h-full">
-      {/* 왼쪽: 환자 목록 패널 */}
-      <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
+    <MasterDetailLayout
+      hasSelection={selectedPatient !== null}
+      onBack={() => setSelectedPatient(null)}
+      master={
         <StaffPatientListPanel
           patients={patients}
           isLoading={isLoading}
@@ -65,12 +67,10 @@ export default function StaffDashboardPage() {
           onRefresh={() => refetch()}
           searchInputRef={searchInputRef}
         />
-      </div>
-
-      {/* 오른쪽: 상세 패널 */}
-      <div className="flex-1 overflow-y-auto">
+      }
+      detail={
         <StaffDetailPanel patient={selectedPatient} />
-      </div>
-    </div>
+      }
+    />
   );
 }

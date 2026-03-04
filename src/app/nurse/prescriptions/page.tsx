@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNursePatients } from '@/features/nurse/hooks/useNursePatients';
 import { NursePatientListPanel } from '@/features/nurse/components/NursePatientListPanel';
 import { NurseDetailPanel } from '@/features/nurse/components/NurseDetailPanel';
+import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { getTodayString } from '@/lib/date';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
@@ -51,9 +52,10 @@ export default function NursePrescriptionsPage() {
   }, []);
 
   return (
-    <div className="flex h-full">
-      {/* 왼쪽: 환자 목록 패널 */}
-      <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
+    <MasterDetailLayout
+      hasSelection={selectedPatient !== null}
+      onBack={() => setSelectedPatient(null)}
+      master={
         <NursePatientListPanel
           patients={patients}
           isLoading={isLoading}
@@ -62,12 +64,10 @@ export default function NursePrescriptionsPage() {
           onRefresh={() => refetch()}
           searchInputRef={searchInputRef}
         />
-      </div>
-
-      {/* 오른쪽: 상세 패널 */}
-      <div className="flex-1 overflow-y-auto">
+      }
+      detail={
         <NurseDetailPanel patient={selectedPatient} />
-      </div>
-    </div>
+      }
+    />
   );
 }

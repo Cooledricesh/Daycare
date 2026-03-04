@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWaitingPatients } from '@/features/doctor/hooks/useWaitingPatients';
 import { PatientListPanel } from '@/features/doctor/components/PatientListPanel';
 import { ConsultationPanel } from '@/features/doctor/components/ConsultationPanel';
+import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import type { WaitingPatient } from '@/features/doctor/backend/schema';
 
 export default function DoctorConsultationPage() {
@@ -54,9 +55,10 @@ export default function DoctorConsultationPage() {
   }, []);
 
   return (
-    <div className="flex h-full">
-      {/* 왼쪽: 환자 목록 패널 */}
-      <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
+    <MasterDetailLayout
+      hasSelection={selectedPatient !== null}
+      onBack={() => setSelectedPatient(null)}
+      master={
         <PatientListPanel
           patients={patients || []}
           isLoading={isLoading}
@@ -65,15 +67,13 @@ export default function DoctorConsultationPage() {
           onRefresh={() => refetch()}
           searchInputRef={searchInputRef}
         />
-      </div>
-
-      {/* 오른쪽: 진찰 상세 패널 */}
-      <div className="flex-1 overflow-y-auto">
+      }
+      detail={
         <ConsultationPanel
           patient={selectedPatient}
           onConsultationComplete={handleConsultationComplete}
         />
-      </div>
-    </div>
+      }
+    />
   );
 }

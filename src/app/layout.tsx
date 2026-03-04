@@ -5,6 +5,9 @@ import Providers from "./providers";
 export const metadata: Metadata = {
   title: "낮병원 환자관리",
   description: "낮병원 환자 관리 시스템",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default async function RootLayout({

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAdminPatients } from '@/features/admin/hooks/useDashboard';
 import { AdminPatientListPanel } from '@/features/admin/components/AdminPatientListPanel';
 import { AdminDetailPanel } from '@/features/admin/components/AdminDetailPanel';
+import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { getTodayString } from '@/lib/date';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
@@ -49,8 +50,10 @@ export default function AdminDashboardPage() {
   }, []);
 
   return (
-    <div className="flex h-full">
-      <div className="w-[380px] border-r border-gray-200 flex-shrink-0">
+    <MasterDetailLayout
+      hasSelection={selectedPatient !== null}
+      onBack={() => setSelectedPatient(null)}
+      master={
         <AdminPatientListPanel
           patients={patients}
           isLoading={isLoading}
@@ -59,11 +62,10 @@ export default function AdminDashboardPage() {
           onRefresh={() => refetch()}
           searchInputRef={searchInputRef}
         />
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
+      }
+      detail={
         <AdminDetailPanel patient={selectedPatient} />
-      </div>
-    </div>
+      }
+    />
   );
 }

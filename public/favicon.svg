@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- 의료 십자가 + 태양 모티프: 낮병원(Daycare) -->
+  
+  <!-- 십자가 본체 - 둥근 모서리 -->
+  <rect x="196" y="96" width="120" height="320" rx="24" fill="#10B981"/>
+  <rect x="96" y="196" width="320" height="120" rx="24" fill="#10B981"/>
+  
+  <!-- 태양 광선 (낮병원의 '낮'을 상징) -->
+  <!-- 좌상 -->
+  <circle cx="120" cy="120" r="18" fill="#10B981" opacity="0.5"/>
+  <!-- 우상 -->
+  <circle cx="392" cy="120" r="18" fill="#10B981" opacity="0.5"/>
+  <!-- 좌하 -->
+  <circle cx="120" cy="392" r="18" fill="#10B981" opacity="0.5"/>
+  <!-- 우하 -->
+  <circle cx="392" cy="392" r="18" fill="#10B981" opacity="0.5"/>
+  
+  <!-- 상단 중앙 작은 광선 -->
+  <circle cx="256" cy="56" r="14" fill="#10B981" opacity="0.35"/>
+  <!-- 하단 -->
+  <circle cx="256" cy="456" r="14" fill="#10B981" opacity="0.35"/>
+  <!-- 좌측 -->
+  <circle cx="56" cy="256" r="14" fill="#10B981" opacity="0.35"/>
+  <!-- 우측 -->
+  <circle cx="456" cy="256" r="14" fill="#10B981" opacity="0.35"/>
+</svg>

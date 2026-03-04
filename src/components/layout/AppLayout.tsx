@@ -64,8 +64,8 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      {/* Desktop Sidebar — hidden on mobile */}
+      <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <h1 className="text-xl font-bold text-gray-900">{title}</h1>
         </div>
@@ -113,10 +113,58 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
         </div>
       </aside>
 
+      {/* Mobile Top Header — visible only on mobile */}
+      <div className="fixed top-0 left-0 right-0 z-30 md:hidden bg-white border-b border-gray-200">
+        <div className="h-12 flex items-center justify-between px-4">
+          <h1 className="text-lg font-bold text-gray-900">{title}</h1>
+          {user && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>{user.name}</span>
+              <span className={cn(colors.text)}>
+                ({roleLabels[user.role] || user.role})
+              </span>
+              <button
+                onClick={logout}
+                className="ml-1 p-1 rounded-md hover:bg-gray-100 text-gray-400"
+                aria-label="로그아웃"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto pt-12 pb-16 md:pt-0 md:pb-0">
         {children}
       </main>
+
+      {/* Mobile Bottom Tab Navigation — visible only on mobile */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-white border-t border-gray-200">
+        <div className="flex items-center justify-around h-14 px-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                  isActive
+                    ? `${colors.activeText}`
+                    : 'text-gray-400'
+                )}
+              >
+                <Icon className={cn('h-5 w-5', isActive && colors.activeText)} />
+                <span className="truncate max-w-[72px]">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
