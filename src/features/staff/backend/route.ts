@@ -9,6 +9,8 @@ import {
   createMessageSchema,
   updateSchedulePatternSchema,
   getMessagesSchema,
+  batchAttendanceSchema,
+  batchCancelAttendanceSchema,
 } from './schema';
 import {
   getMyPatients,
@@ -19,6 +21,8 @@ import {
   getMyPatientsSchedulePatterns,
   updateMyPatientSchedulePattern,
   getMyMessages,
+  batchCreateAttendance,
+  batchCancelAttendance,
 } from './service';
 import { getPatientHistory } from '@/features/doctor/backend/service';
 
@@ -262,6 +266,56 @@ staffRoutes.put('/schedule-patterns/:patient_id', async (c) => {
   try {
     const params = updateSchedulePatternSchema.parse(body);
     const result = await updateMyPatientSchedulePattern(supabase, staffId, patientId, params);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/staff/attendances/batch
+ * 일괄 출석 체크
+ */
+staffRoutes.post('/attendances/batch', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const body = await c.req.json();
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const params = batchAttendanceSchema.parse(body);
+    const result = await batchCreateAttendance(supabase, params);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/staff/attendances/cancel
+ * 일괄 출석 취소
+ */
+staffRoutes.post('/attendances/cancel', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const body = await c.req.json();
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const params = batchCancelAttendanceSchema.parse(body);
+    const result = await batchCancelAttendance(supabase, params);
     return respond(c, success(result, 200));
   } catch (error) {
     if (error instanceof StaffError) {

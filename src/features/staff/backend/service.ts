@@ -7,6 +7,8 @@ import type {
   CreateMessageRequest,
   UpdateSchedulePatternRequest,
   GetMessagesParams,
+  BatchAttendanceRequest,
+  BatchCancelAttendanceRequest,
   PatientSummary,
   PatientDetail,
   TaskCompletion,
@@ -504,4 +506,79 @@ export async function getMyMessages(
     is_read: m.is_read,
     created_at: m.created_at,
   }));
+}
+
+/**
+ * 일괄 출석 체크
+ */
+export async function batchCreateAttendance(
+  supabase: SupabaseClient<Database>,
+  params: BatchAttendanceRequest,
+): Promise<{ created: number; skipped: number }> {
+  const date = params.date || getTodayString();
+  const patientIds = params.patient_ids;
+
+  // 이미 출석한 환자 조회
+  const { data: existing } = await (supabase
+    .from('attendances') as any)
+    .select('patient_id')
+    .in('patient_id', patientIds)
+    .eq('date', date);
+
+  const existingSet = new Set<string>(
+    (existing || []).map((a: any) => a.patient_id),
+  );
+
+  // 미출석 환자만 필터
+  const toCreate = patientIds.filter((id) => !existingSet.has(id));
+
+  if (toCreate.length === 0) {
+    return { created: 0, skipped: patientIds.length };
+  }
+
+  const records = toCreate.map((patient_id) => ({
+    patient_id,
+    date,
+    checked_at: new Date().toISOString(),
+  }));
+
+  const { error } = await (supabase
+    .from('attendances') as any)
+    .insert(records);
+
+  if (error) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `출석 체크에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  return { created: toCreate.length, skipped: existingSet.size };
+}
+
+/**
+ * 일괄 출석 취소
+ */
+export async function batchCancelAttendance(
+  supabase: SupabaseClient<Database>,
+  params: BatchCancelAttendanceRequest,
+): Promise<{ cancelled: number }> {
+  const date = params.date || getTodayString();
+  const patientIds = params.patient_ids;
+
+  const { data: deleted, error } = await (supabase
+    .from('attendances') as any)
+    .delete()
+    .in('patient_id', patientIds)
+    .eq('date', date)
+    .select('patient_id');
+
+  if (error) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `출석 취소에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  return { cancelled: (deleted || []).length };
 }

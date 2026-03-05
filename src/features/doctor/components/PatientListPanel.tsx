@@ -34,7 +34,7 @@ export function PatientListPanel({
 
   // 카운트 계산
   const counts = useMemo(() => {
-    const waiting = patients.filter(p => !p.has_consultation).length;
+    const waiting = patients.filter(p => p.is_scheduled).length;
     const completed = patients.filter(p => p.has_consultation).length;
     return { all: patients.length, waiting, completed };
   }, [patients]);
@@ -45,7 +45,7 @@ export function PatientListPanel({
 
     // 필터 탭 적용
     if (filterTab === 'waiting') {
-      result = result.filter(p => !p.has_consultation);
+      result = result.filter(p => p.is_scheduled);
     } else if (filterTab === 'completed') {
       result = result.filter(p => p.has_consultation);
     }
@@ -55,15 +55,16 @@ export function PatientListPanel({
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
-    // 정렬 그룹: 0=지시/전달, 1=업무대상(예정미출석/출석미진찰), 2=완료, 3=미예정
+    // 정렬 그룹: 0=지시/전달, 1=출석(미진찰), 2=예정(미출석), 3=진찰완료, 4=미예정
     result = [...result].sort((a, b) => {
       const group = (p: WaitingPatient) => {
         const hasAction = p.task_status === 'pending' || p.unread_message_count > 0;
         if (hasAction) return 0;
-        if (!p.is_scheduled) return 3;
         const attended = !!p.checked_at;
-        if (attended && p.has_consultation) return 2;
-        return 1;
+        if (attended && !p.has_consultation) return 1;
+        if (p.has_consultation) return 3;
+        if (!p.is_scheduled) return 4;
+        return 2;
       };
       const diff = group(a) - group(b);
       if (diff !== 0) return diff;
@@ -75,7 +76,7 @@ export function PatientListPanel({
 
   const filterTabs: { key: FilterTab; label: string; count: number }[] = [
     { key: 'all', label: '전체', count: counts.all },
-    { key: 'waiting', label: '대기', count: counts.waiting },
+    { key: 'waiting', label: '예정', count: counts.waiting },
     { key: 'completed', label: '완료', count: counts.completed },
   ];
 

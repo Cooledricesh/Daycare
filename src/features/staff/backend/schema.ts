@@ -108,6 +108,22 @@ export type MyPatientSchedulePattern = {
   schedule_days: number[];
 };
 
+// 일괄 출석 체크 스키마
+export const batchAttendanceSchema = z.object({
+  patient_ids: z.array(z.string().uuid()).min(1),
+  date: z.string().optional(),
+});
+
+export type BatchAttendanceRequest = z.infer<typeof batchAttendanceSchema>;
+
+// 일괄 출석 취소 스키마
+export const batchCancelAttendanceSchema = z.object({
+  patient_ids: z.array(z.string().uuid()).min(1),
+  date: z.string().optional(),
+});
+
+export type BatchCancelAttendanceRequest = z.infer<typeof batchCancelAttendanceSchema>;
+
 // 전달사항 목록 조회 스키마
 export const getMessagesSchema = z.object({
   date: z.string().optional(),

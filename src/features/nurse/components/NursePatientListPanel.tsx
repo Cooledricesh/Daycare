@@ -10,7 +10,7 @@ import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
 import type { NursePatientSummary } from '../backend/schema';
 
-type FilterTab = 'all' | 'pending' | 'completed';
+type FilterTab = 'all' | 'scheduled' | 'completed';
 
 interface NursePatientListPanelProps {
   patients: NursePatientSummary[];
@@ -33,31 +33,32 @@ export function NursePatientListPanel({
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
   const counts = useMemo(() => {
-    const pending = patients.filter(p => p.has_nurse_task && !p.task_completed).length;
-    const completed = patients.filter(p => !p.has_nurse_task || p.task_completed).length;
-    return { all: patients.length, pending, completed };
+    const scheduled = patients.filter(p => p.is_scheduled).length;
+    const completed = patients.filter(p => p.is_consulted).length;
+    return { all: patients.length, scheduled, completed };
   }, [patients]);
 
   const filteredPatients = useMemo(() => {
     let result = patients;
 
-    if (filterTab === 'pending') {
-      result = result.filter(p => p.has_nurse_task && !p.task_completed);
+    if (filterTab === 'scheduled') {
+      result = result.filter(p => p.is_scheduled);
     } else if (filterTab === 'completed') {
-      result = result.filter(p => !p.has_nurse_task || p.task_completed);
+      result = result.filter(p => p.is_consulted);
     }
 
     if (searchQuery.trim()) {
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
-    // 정렬 그룹: 0=지시/전달, 1=업무대상(예정미출석/출석미진찰), 2=완료, 3=미예정
+    // 정렬 그룹: 0=지시/전달, 1=출석(미진찰), 2=예정(미출석), 3=진찰완료, 4=미예정
     result = [...result].sort((a, b) => {
       const group = (p: NursePatientSummary) => {
         if (p.has_nurse_task && !p.task_completed) return 0;
-        if (!p.is_scheduled) return 3;
-        if (p.is_attended && p.is_consulted) return 2;
-        return 1;
+        if (p.is_attended && !p.is_consulted) return 1;
+        if (p.is_consulted) return 3;
+        if (!p.is_scheduled) return 4;
+        return 2;
       };
       const diff = group(a) - group(b);
       if (diff !== 0) return diff;
@@ -69,7 +70,7 @@ export function NursePatientListPanel({
 
   const filterTabs: { key: FilterTab; label: string; count: number }[] = [
     { key: 'all', label: '전체', count: counts.all },
-    { key: 'pending', label: '미처리', count: counts.pending },
+    { key: 'scheduled', label: '예정', count: counts.scheduled },
     { key: 'completed', label: '완료', count: counts.completed },
   ];
 
