@@ -51,18 +51,16 @@ export function NursePatientListPanel({
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
-    // 정렬: 미처리 지시 → 출석 → 미출석, 그 안에서 이름순
+    // 정렬 그룹: 0=지시/전달, 1=업무대상(예정미출석/출석미진찰), 2=완료, 3=미예정
     result = [...result].sort((a, b) => {
-      // 미처리 지시가 있는 환자 우선
-      const aTask = a.has_nurse_task && !a.task_completed ? 0 : 1;
-      const bTask = b.has_nurse_task && !b.task_completed ? 0 : 1;
-      if (aTask !== bTask) return aTask - bTask;
-
-      // 출석 여부 (출석 먼저)
-      const aAttended = a.is_attended ? 0 : 1;
-      const bAttended = b.is_attended ? 0 : 1;
-      if (aAttended !== bAttended) return aAttended - bAttended;
-
+      const group = (p: NursePatientSummary) => {
+        if (p.has_nurse_task && !p.task_completed) return 0;
+        if (!p.is_scheduled) return 3;
+        if (p.is_attended && p.is_consulted) return 2;
+        return 1;
+      };
+      const diff = group(a) - group(b);
+      if (diff !== 0) return diff;
       return a.name.localeCompare(b.name);
     });
 

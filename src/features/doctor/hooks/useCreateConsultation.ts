@@ -19,7 +19,7 @@ export function useCreateConsultation() {
       // 대기 환자 목록 갱신
       queryClient.invalidateQueries({ queryKey: ['doctor', 'waiting-patients'] });
       // 지시사항 목록 갱신
-      queryClient.invalidateQueries({ queryKey: ['doctor', 'tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'tasks'] });
       // 환자 히스토리 갱신 (우측 패널 자동 반영)
       queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-history'] });
     },

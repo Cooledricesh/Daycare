@@ -55,16 +55,17 @@ export function StaffPatientListPanel({
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
+    // 정렬 그룹: 0=지시/전달, 1=업무대상(예정미출석/출석미진찰), 2=완료, 3=미예정
     result = [...result].sort((a, b) => {
-      // 미처리 지시 또는 미읽은 메시지 먼저
-      const aUrgent = (a.has_task && !a.task_completed) || a.unread_message_count > 0 ? 0 : 1;
-      const bUrgent = (b.has_task && !b.task_completed) || b.unread_message_count > 0 ? 0 : 1;
-      if (aUrgent !== bUrgent) return aUrgent - bUrgent;
-
-      const aAttended = a.is_attended ? 0 : 1;
-      const bAttended = b.is_attended ? 0 : 1;
-      if (aAttended !== bAttended) return aAttended - bAttended;
-
+      const group = (p: PatientSummary) => {
+        const hasAction = (p.has_task && !p.task_completed) || p.unread_message_count > 0;
+        if (hasAction) return 0;
+        if (!p.is_scheduled) return 3;
+        if (p.is_attended && p.is_consulted) return 2;
+        return 1;
+      };
+      const diff = group(a) - group(b);
+      if (diff !== 0) return diff;
       return a.name.localeCompare(b.name);
     });
 

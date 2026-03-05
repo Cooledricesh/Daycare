@@ -10,9 +10,131 @@ import {
   getStatsSummaryQuerySchema,
   getDailyStatsQuerySchema,
 } from '@/features/admin/backend/schema';
+import {
+  GetTasksParamsSchema,
+  GetMessagesParamsSchema,
+  MarkMessageReadRequestSchema,
+} from '@/features/doctor/backend/schema';
+import {
+  getTasks,
+  getMessages,
+  markMessageRead,
+} from '@/features/doctor/backend/service';
+import { DoctorError, DoctorErrorCode } from '@/features/doctor/backend/error';
 import { comparePassword, hashPassword } from '@/lib/auth';
 
 const sharedRoutes = new Hono<AppEnv>();
+
+// ========== Tasks & Messages Routes (전 역할 접근, 코디는 담당 환자만) ==========
+
+/**
+ * GET /api/shared/tasks
+ * 지시사항 목록 조회 (역할별 필터링)
+ * - doctor/nurse/admin: 전체 환자
+ * - coordinator: 담당 환자만
+ */
+sharedRoutes.get('/tasks', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const query = c.req.query();
+  const parseResult = GetTasksParamsSchema.safeParse({
+    date: query.date,
+    start_date: query.start_date,
+    end_date: query.end_date,
+    status: query.status,
+  });
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, 'INVALID_REQUEST', parseResult.error.message));
+  }
+
+  try {
+    const options = user.role === 'coordinator' ? { coordinatorId: user.sub } : undefined;
+    const tasks = await getTasks(supabase, user.sub, parseResult.data, options);
+    return respond(c, success(tasks, 200));
+  } catch (error) {
+    if (error instanceof DoctorError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * GET /api/shared/messages
+ * 전달사항 목록 조회 (역할별 필터링)
+ * - doctor/nurse/admin: 전체 환자
+ * - coordinator: 담당 환자만
+ */
+sharedRoutes.get('/messages', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const query = c.req.query();
+  const parseResult = GetMessagesParamsSchema.safeParse({
+    date: query.date,
+    start_date: query.start_date,
+    end_date: query.end_date,
+    is_read: query.is_read,
+  });
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, 'INVALID_REQUEST', parseResult.error.message));
+  }
+
+  try {
+    const options = user.role === 'coordinator' ? { coordinatorId: user.sub } : undefined;
+    const messages = await getMessages(supabase, parseResult.data, options);
+    return respond(c, success(messages, 200));
+  } catch (error) {
+    if (error instanceof DoctorError) {
+      return respond(c, failure(500, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/shared/messages/:messageId/read
+ * 메시지 읽음 처리
+ */
+sharedRoutes.post('/messages/:messageId/read', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const messageId = c.req.param('messageId');
+  const parseResult = MarkMessageReadRequestSchema.safeParse({
+    message_id: messageId,
+  });
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, 'INVALID_REQUEST', parseResult.error.message));
+  }
+
+  try {
+    const result = await markMessageRead(supabase, parseResult.data);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof DoctorError) {
+      const status = error.code === DoctorErrorCode.MESSAGE_NOT_FOUND ? 404 : 400;
+      return respond(c, failure(status, error.code, error.message));
+    }
+    throw error;
+  }
+});
 
 // ========== Stats Routes (읽기 전용, 전 역할 접근 가능) ==========
 

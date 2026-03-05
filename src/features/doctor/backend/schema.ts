@@ -3,6 +3,8 @@ import { z } from 'zod';
 // 지시사항 조회 파라미터
 export const GetTasksParamsSchema = z.object({
   date: z.string().optional(), // YYYY-MM-DD, 기본값: 오늘
+  start_date: z.string().optional(), // YYYY-MM-DD, date range 시작 (date보다 우선)
+  end_date: z.string().optional(), // YYYY-MM-DD, date range 끝
   status: z.enum(['all', 'pending', 'completed']).optional().default('all'),
 });
 
@@ -30,6 +32,7 @@ export interface TaskItem {
   patient_name: string;
   room_number: string | null;
   coordinator_name: string | null;
+  date: string;
   task_content: string;
   task_target: 'coordinator' | 'nurse' | 'both';
   created_at: string;
@@ -89,11 +92,22 @@ export interface PatientHistory {
   vitals: VitalsRecord[];
 }
 
-// 오늘 메시지 목록
-export interface TodayMessage {
+// 전달사항 조회 파라미터
+export const GetMessagesParamsSchema = z.object({
+  date: z.string().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  is_read: z.enum(['all', 'read', 'unread']).optional().default('all'),
+});
+
+export type GetMessagesParams = z.infer<typeof GetMessagesParamsSchema>;
+
+// 메시지 목록 항목
+export interface DoctorMessage {
   id: string;
   patient_id: string;
   patient_name: string;
+  date: string;
   author_name: string;
   author_role: 'coordinator' | 'nurse';
   content: string;

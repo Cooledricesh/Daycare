@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { Users, Calendar, BarChart3, KeyRound } from 'lucide-react';
+import { Users, Calendar, ClipboardList, BarChart3, KeyRound } from 'lucide-react';
 import { AppLayout, type NavItem } from '@/components/layout/AppLayout';
 
 type StaffLayoutProps = {
@@ -18,6 +18,11 @@ const navItems: NavItem[] = [
     href: '/staff/schedule',
     label: '출석 일정',
     icon: Calendar,
+  },
+  {
+    href: '/staff/tasks',
+    label: '처리 필요 항목',
+    icon: ClipboardList,
   },
   {
     href: '/shared/stats',

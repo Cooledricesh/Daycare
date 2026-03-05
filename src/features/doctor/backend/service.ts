@@ -3,13 +3,14 @@ import type { Database } from '@/lib/supabase/types';
 import type {
   GetTasksParams,
   GetPatientHistoryParams,
+  GetMessagesParams,
   MarkMessageReadRequest,
   GetWaitingPatientsParams,
   CreateConsultationRequest,
   GetPatientMessagesParams,
   TaskItem,
   PatientHistory,
-  TodayMessage,
+  DoctorMessage,
   WaitingPatient,
   CreatedConsultation,
   PatientMessage,
@@ -19,20 +20,20 @@ import { getTodayString, getMonthsAgoString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 
 /**
- * 오늘 지시사항 목록 조회
+ * 지시사항 목록 조회 (날짜 범위 지원)
  */
 export async function getTasks(
   supabase: SupabaseClient<Database>,
   doctorId: string,
   params: GetTasksParams,
+  options?: { coordinatorId?: string },
 ): Promise<TaskItem[]> {
-  const date = params.date || getTodayString();
-
-  // 오늘의 진찰 기록 중 has_task가 true인 것만 조회
-  const { data: consultations, error: consultationsError } = await (supabase
+  // 진찰 기록 중 has_task가 true인 것만 조회
+  let query = (supabase
     .from('consultations') as any)
     .select(`
       id,
+      date,
       patient_id,
       task_content,
       task_target,
@@ -41,12 +42,26 @@ export async function getTasks(
         id,
         name,
         room_number,
-        coordinator:coordinator_id(name)
+        coordinator:coordinator_id(name),
+        coordinator_id
       )
     `)
-    .eq('date', date)
     .eq('has_task', true)
     .order('created_at', { ascending: false });
+
+  // 코디네이터인 경우 담당 환자만 필터
+  if (options?.coordinatorId) {
+    query = query.eq('patients.coordinator_id', options.coordinatorId);
+  }
+
+  // date range 우선, 없으면 단일 date
+  if (params.start_date && params.end_date) {
+    query = query.gte('date', params.start_date).lte('date', params.end_date);
+  } else {
+    query = query.eq('date', params.date || getTodayString());
+  }
+
+  const { data: consultations, error: consultationsError } = await query;
 
   if (consultationsError) {
     throw new DoctorError(
@@ -89,6 +104,7 @@ export async function getTasks(
       patient_name: c.patients?.name || '알 수 없음',
       room_number: c.patients?.room_number || null,
       coordinator_name: c.patients?.coordinator?.name || null,
+      date: c.date,
       task_content: c.task_content || '',
       task_target: c.task_target,
       created_at: c.created_at,
@@ -99,21 +115,11 @@ export async function getTasks(
     };
   });
 
-  // 상태 필터링
+  // 상태 필터링 (둘 중 하나라도 완료하면 완료 처리)
   if (params.status === 'pending') {
-    return tasks.filter((task) => {
-      if (task.task_target === 'coordinator') return !task.coordinator_completed;
-      if (task.task_target === 'nurse') return !task.nurse_completed;
-      if (task.task_target === 'both') return !task.coordinator_completed || !task.nurse_completed;
-      return true;
-    });
+    return tasks.filter((task) => !task.coordinator_completed && !task.nurse_completed);
   } else if (params.status === 'completed') {
-    return tasks.filter((task) => {
-      if (task.task_target === 'coordinator') return task.coordinator_completed;
-      if (task.task_target === 'nurse') return task.nurse_completed;
-      if (task.task_target === 'both') return task.coordinator_completed && task.nurse_completed;
-      return false;
-    });
+    return tasks.filter((task) => task.coordinator_completed || task.nurse_completed);
   }
 
   return tasks;
@@ -229,28 +235,48 @@ export async function getPatientHistory(
 }
 
 /**
- * 오늘 전달사항 목록 조회
+ * 전달사항 목록 조회 (날짜 범위 지원)
  */
-export async function getTodayMessages(
+export async function getMessages(
   supabase: SupabaseClient<Database>,
-  date?: string,
-): Promise<TodayMessage[]> {
-  const targetDate = date || getTodayString();
-
-  const { data: messages, error } = await (supabase
+  params: GetMessagesParams,
+  options?: { coordinatorId?: string },
+): Promise<DoctorMessage[]> {
+  let query = (supabase
     .from('messages') as any)
     .select(`
       id,
       patient_id,
+      date,
       content,
       is_read,
       author_role,
       created_at,
-      patients!inner(name),
+      patients!inner(name, coordinator_id),
       author:author_id(name)
     `)
-    .eq('date', targetDate)
     .order('created_at', { ascending: false });
+
+  // 코디네이터인 경우 담당 환자만 필터
+  if (options?.coordinatorId) {
+    query = query.eq('patients.coordinator_id', options.coordinatorId);
+  }
+
+  // date range 우선, 없으면 단일 date
+  if (params.start_date && params.end_date) {
+    query = query.gte('date', params.start_date).lte('date', params.end_date);
+  } else {
+    query = query.eq('date', params.date || getTodayString());
+  }
+
+  // 읽음 상태 필터
+  if (params.is_read === 'read') {
+    query = query.eq('is_read', true);
+  } else if (params.is_read === 'unread') {
+    query = query.eq('is_read', false);
+  }
+
+  const { data: messages, error } = await query;
 
   if (error) {
     throw new DoctorError(
@@ -263,6 +289,7 @@ export async function getTodayMessages(
     id: m.id,
     patient_id: m.patient_id,
     patient_name: m.patients?.name || '알 수 없음',
+    date: m.date,
     author_name: m.author?.name || '알 수 없음',
     author_role: m.author_role,
     content: m.content,

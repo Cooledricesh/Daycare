@@ -55,29 +55,18 @@ export function PatientListPanel({
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
-    // 정렬: 미처리 지시/미읽은 메시지 → 출석 → 미출석 → 대기 → 완료 → 이름순
+    // 정렬 그룹: 0=지시/전달, 1=업무대상(예정미출석/출석미진찰), 2=완료, 3=미예정
     result = [...result].sort((a, b) => {
-      // 1. 미처리 지시사항 (pending task 먼저)
-      const aPending = a.task_status === 'pending' ? 0 : 1;
-      const bPending = b.task_status === 'pending' ? 0 : 1;
-      if (aPending !== bPending) return aPending - bPending;
-
-      // 2. 미읽은 메시지 (unread 먼저)
-      const aUnread = a.unread_message_count > 0 ? 0 : 1;
-      const bUnread = b.unread_message_count > 0 ? 0 : 1;
-      if (aUnread !== bUnread) return aUnread - bUnread;
-
-      // 3. 출석 여부 (출석 먼저)
-      const aAttended = a.checked_at ? 0 : 1;
-      const bAttended = b.checked_at ? 0 : 1;
-      if (aAttended !== bAttended) return aAttended - bAttended;
-
-      // 4. 진찰 완료 여부 (대기 먼저)
-      const aConsulted = a.has_consultation ? 1 : 0;
-      const bConsulted = b.has_consultation ? 1 : 0;
-      if (aConsulted !== bConsulted) return aConsulted - bConsulted;
-
-      // 5. 이름 오름차순
+      const group = (p: WaitingPatient) => {
+        const hasAction = p.task_status === 'pending' || p.unread_message_count > 0;
+        if (hasAction) return 0;
+        if (!p.is_scheduled) return 3;
+        const attended = !!p.checked_at;
+        if (attended && p.has_consultation) return 2;
+        return 1;
+      };
+      const diff = group(a) - group(b);
+      if (diff !== 0) return diff;
       return a.name.localeCompare(b.name);
     });
 

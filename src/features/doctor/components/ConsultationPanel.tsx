@@ -170,7 +170,7 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
 
       {/* 2컬럼 레이아웃: 좌(입력) / 우(히스토리) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 좌측: 바이탈 + 전달사항 + 진찰 폼 */}
+        {/* 좌측: 바이탈 + 전달사항 + 진찰 폼 + 캘린더 */}
         <div className="space-y-5">
           {/* 활력징후 */}
           {patient.vitals && (
@@ -288,19 +288,24 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
               </div>
             </CardContent>
           </Card>
+
+          {/* 출석 캘린더 */}
+          <AttendanceCalendar patientId={patient.id} />
         </div>
 
-        {/* 우측: 출석 캘린더 + 최근 히스토리 */}
-        <div className="lg:overflow-y-auto lg:max-h-[calc(100vh-12rem)] space-y-4">
-          <AttendanceCalendar patientId={patient.id} />
+        {/* 우측: 최근 히스토리 */}
+        <div className="lg:overflow-y-auto lg:max-h-[calc(100vh-12rem)]">
           {historyLoading ? (
             <Card>
               <CardContent className="py-6">
                 <p className="text-sm text-gray-500 text-center">히스토리 로딩 중...</p>
               </CardContent>
             </Card>
-          ) : history && history.consultations.length > 0 ? (
-            <ConsultationHistory consultations={history.consultations} />
+          ) : history && (history.consultations.length > 0 || (history.messages && history.messages.length > 0)) ? (
+            <ConsultationHistory
+              consultations={history.consultations}
+              messages={history.messages}
+            />
           ) : (
             <Card>
               <CardHeader>

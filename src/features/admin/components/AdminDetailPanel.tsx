@@ -83,9 +83,9 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
   };
 
   return (
-    <div className="p-6 space-y-5 max-w-3xl overflow-y-auto h-full">
+    <div className="p-6 h-full">
       {/* 환자 정보 헤더 */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-5">
         <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
           <User className="w-5 h-5 text-indigo-600" />
         </div>
@@ -110,100 +110,108 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
         </div>
       </div>
 
-      {/* 활력징후 */}
-      {detailLoading ? (
-        <p className="text-sm text-gray-400">상세 정보 로딩 중...</p>
-      ) : detail?.vitals && (
-        <div className="flex gap-2">
-          {detail.vitals.systolic && detail.vitals.diastolic && (
-            <Badge variant="outline">
-              혈압 {detail.vitals.systolic}/{detail.vitals.diastolic}
-            </Badge>
+      {/* 2컬럼 레이아웃: 좌(작업) / 우(캘린더+히스토리) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 좌측: 바이탈 + 진찰메모 + 지시사항 + 전달사항 */}
+        <div className="space-y-4">
+          {/* 활력징후 */}
+          {detailLoading ? (
+            <p className="text-sm text-gray-400">상세 정보 로딩 중...</p>
+          ) : detail?.vitals && (
+            <div className="flex gap-2">
+              {detail.vitals.systolic && detail.vitals.diastolic && (
+                <Badge variant="outline">
+                  혈압 {detail.vitals.systolic}/{detail.vitals.diastolic}
+                </Badge>
+              )}
+              {detail.vitals.blood_sugar && (
+                <Badge variant="outline">
+                  혈당 {detail.vitals.blood_sugar}
+                </Badge>
+              )}
+            </div>
           )}
-          {detail.vitals.blood_sugar && (
-            <Badge variant="outline">
-              혈당 {detail.vitals.blood_sugar}
-            </Badge>
+
+          {/* 진찰 메모 */}
+          {patient.note && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">진찰 메모</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-700">{patient.note}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 지시사항 */}
+          {detail?.consultation.has_task && (
+            <Card className="border-orange-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-orange-700">투약 변경 및 전달사항</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-gray-800">{detail.consultation.task_content || '-'}</p>
+
+                {detail.consultation.consultation_id && !detail.consultation.is_task_completed ? (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="admin-task-panel"
+                      onCheckedChange={handleTaskComplete}
+                      disabled={isCompleting}
+                    />
+                    <label htmlFor="admin-task-panel" className="text-sm font-medium leading-none">
+                      처리 완료
+                    </label>
+                  </div>
+                ) : (
+                  <Badge variant="secondary" className="bg-green-100 text-green-700">
+                    처리 완료
+                  </Badge>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 전달사항 작성 */}
+          <Card className="border-indigo-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">주치의에게 전달사항</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AdminMessageForm patientId={patient.id} date={today} />
+            </CardContent>
+          </Card>
+
+          {/* 출석 캘린더 */}
+          <AttendanceCalendar patientId={patient.id} />
+        </div>
+
+        {/* 우측: 히스토리 */}
+        <div className="lg:overflow-y-auto lg:max-h-[calc(100vh-12rem)]">
+          {historyLoading ? (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                기록을 불러오는 중...
+              </CardContent>
+            </Card>
+          ) : historyData && (historyData.consultations.length > 0 || (historyData.messages && historyData.messages.length > 0)) ? (
+            <ConsultationHistory
+              consultations={historyData.consultations}
+              messages={historyData.messages}
+              currentUserId={user?.id}
+              currentUserRole={user?.role}
+              onDeleteMessage={handleDeleteMessage}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                기록이 없습니다.
+              </CardContent>
+            </Card>
           )}
         </div>
-      )}
-
-      {/* 진찰 메모 */}
-      {patient.note && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">진찰 메모</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700">{patient.note}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 지시사항 */}
-      {detail?.consultation.has_task && (
-        <Card className="border-orange-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-orange-700">투약 변경 및 전달사항</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-gray-800">{detail.consultation.task_content || '-'}</p>
-
-            {detail.consultation.consultation_id && !detail.consultation.is_task_completed ? (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="admin-task-panel"
-                  onCheckedChange={handleTaskComplete}
-                  disabled={isCompleting}
-                />
-                <label htmlFor="admin-task-panel" className="text-sm font-medium leading-none">
-                  처리 완료
-                </label>
-              </div>
-            ) : (
-              <Badge variant="secondary" className="bg-green-100 text-green-700">
-                처리 완료
-              </Badge>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 전달사항 작성 */}
-      <Card className="border-indigo-200">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">주치의에게 전달사항</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AdminMessageForm patientId={patient.id} date={today} />
-        </CardContent>
-      </Card>
-
-      {/* 출석 캘린더 */}
-      <AttendanceCalendar patientId={patient.id} />
-
-      {/* 기록 */}
-      {historyLoading ? (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            기록을 불러오는 중...
-          </CardContent>
-        </Card>
-      ) : historyData && (historyData.consultations.length > 0 || (historyData.messages && historyData.messages.length > 0)) ? (
-        <ConsultationHistory
-          consultations={historyData.consultations}
-          messages={historyData.messages}
-          currentUserId={user?.id}
-          currentUserRole={user?.role}
-          onDeleteMessage={handleDeleteMessage}
-        />
-      ) : (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            기록이 없습니다.
-          </CardContent>
-        </Card>
-      )}
+      </div>
     </div>
   );
 }

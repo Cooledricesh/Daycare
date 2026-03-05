@@ -5,6 +5,7 @@ import {
   Users,
   UserCog,
   Calendar,
+  ClipboardList,
   BarChart3,
   Settings,
   RefreshCw,
@@ -36,6 +37,11 @@ const navItems: NavItem[] = [
     href: '/admin/schedule',
     label: '스케줄 관리',
     icon: Calendar,
+  },
+  {
+    href: '/admin/tasks',
+    label: '처리 필요 항목',
+    icon: ClipboardList,
   },
   {
     href: '/admin/stats',

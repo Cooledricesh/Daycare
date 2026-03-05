@@ -5,6 +5,7 @@ import { DoctorError, DoctorErrorCode } from './error';
 import {
   GetTasksParamsSchema,
   GetPatientHistoryParamsSchema,
+  GetMessagesParamsSchema,
   MarkMessageReadRequestSchema,
   GetWaitingPatientsParamsSchema,
   CreateConsultationRequestSchema,
@@ -13,7 +14,7 @@ import {
 import {
   getTasks,
   getPatientHistory,
-  getTodayMessages,
+  getMessages,
   markMessageRead,
   getWaitingPatients,
   createConsultation,
@@ -37,6 +38,8 @@ doctorRoutes.get('/tasks', async (c) => {
   const query = c.req.query();
   const parseResult = GetTasksParamsSchema.safeParse({
     date: query.date,
+    start_date: query.start_date,
+    end_date: query.end_date,
     status: query.status,
   });
 
@@ -99,7 +102,7 @@ doctorRoutes.get('/history/:patientId', async (c) => {
 
 /**
  * GET /api/doctor/messages
- * 오늘 전달사항 목록 조회
+ * 전달사항 목록 조회 (날짜 범위 지원)
  */
 doctorRoutes.get('/messages', async (c) => {
   const supabase = c.get('supabase');
@@ -110,9 +113,22 @@ doctorRoutes.get('/messages', async (c) => {
   }
 
   const query = c.req.query();
+  const parseResult = GetMessagesParamsSchema.safeParse({
+    date: query.date,
+    start_date: query.start_date,
+    end_date: query.end_date,
+    is_read: query.is_read,
+  });
+
+  if (!parseResult.success) {
+    return respond(
+      c,
+      failure(400, DoctorErrorCode.INVALID_REQUEST, parseResult.error.message),
+    );
+  }
 
   try {
-    const messages = await getTodayMessages(supabase, query.date);
+    const messages = await getMessages(supabase, parseResult.data);
     return respond(c, success(messages, 200));
   } catch (error) {
     if (error instanceof DoctorError) {
