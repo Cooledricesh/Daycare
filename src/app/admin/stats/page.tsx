@@ -83,8 +83,8 @@ export default function StatsPage() {
     dailyStats?.map((stat) => ({
       date: format(new Date(stat.date), 'MM/dd'),
       fullDate: stat.date,
-      attendanceRate: stat.attendance_rate || 0,
-      consultationRate: stat.consultation_rate || 0,
+      attendanceRate: stat.attendance_rate ?? null,
+      consultationRate: stat.consultation_rate ?? null,
       scheduled: stat.scheduled_count,
       attendance: stat.attendance_count,
       consultation: stat.consultation_count,
@@ -269,10 +269,10 @@ export default function StatsPage() {
                             <p>출석: {data.attendance}명</p>
                             <p>진찰: {data.consultation}명</p>
                             <p className="text-blue-600">
-                              출석률: {data.attendanceRate.toFixed(1)}%
+                              출석률: {data.attendanceRate != null ? `${data.attendanceRate.toFixed(1)}%` : '-'}
                             </p>
                             <p className="text-green-600">
-                              진찰 참석률: {data.consultationRate.toFixed(1)}%
+                              진찰 참석률: {data.consultationRate != null ? `${data.consultationRate.toFixed(1)}%` : '-'}
                             </p>
                           </div>
                         </div>
@@ -286,6 +286,7 @@ export default function StatsPage() {
                     stroke="#2563EB"
                     name="출석률 (%)"
                     strokeWidth={2}
+                    connectNulls
                   />
                   <Line
                     type="monotone"
@@ -293,6 +294,7 @@ export default function StatsPage() {
                     stroke="#16A34A"
                     name="진찰 참석률 (%)"
                     strokeWidth={2}
+                    connectNulls
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -331,10 +333,10 @@ export default function StatsPage() {
                           {stat.consultation_count}
                         </TableCell>
                         <TableCell className="text-right">
-                          {stat.attendance_rate?.toFixed(1) || '-'}%
+                          {stat.attendance_rate != null ? `${stat.attendance_rate.toFixed(1)}%` : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {stat.consultation_rate?.toFixed(1) || '-'}%
+                          {stat.consultation_rate != null ? `${stat.consultation_rate.toFixed(1)}%` : '-'}
                         </TableCell>
                       </TableRow>
                     ))}

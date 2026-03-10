@@ -19,6 +19,7 @@ import {
 import { useCreateConsultation } from '../hooks/useCreateConsultation';
 import { usePatientMessages } from '../hooks/usePatientMessages';
 import { usePatientHistory } from '../hooks/usePatientHistory';
+import { useToast } from '@/hooks/use-toast';
 import { ConsultationHistory } from './ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { getTodayString } from '@/lib/date';
@@ -35,6 +36,7 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
   const prevPatientId = useRef<string | null>(null);
 
   const createConsultation = useCreateConsultation();
+  const { toast } = useToast();
 
   // handleSubmit을 ref로 관리하여 Ctrl+S 단축키에서 항상 최신 함수 참조
   const handleSubmitRef = useRef<() => void>(() => {});
@@ -79,17 +81,25 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
   const handleSubmit = async () => {
     if (!patient) return;
 
-    const hasTaskContent = !!taskContent.trim();
-    await createConsultation.mutateAsync({
-      patient_id: patient.id,
-      note: consultationNote || undefined,
-      has_task: hasTaskContent,
-      task_content: hasTaskContent ? taskContent : undefined,
-      task_target: hasTaskContent ? 'both' : undefined,
-    });
+    try {
+      const hasTaskContent = !!taskContent.trim();
+      await createConsultation.mutateAsync({
+        patient_id: patient.id,
+        note: consultationNote || undefined,
+        has_task: hasTaskContent,
+        task_content: hasTaskContent ? taskContent : undefined,
+        task_target: hasTaskContent ? 'both' : undefined,
+      });
 
-    resetForm();
-    onConsultationComplete();
+      resetForm();
+      onConsultationComplete();
+    } catch {
+      toast({
+        title: '진찰 기록 저장 실패',
+        description: '다시 시도해주세요. 반복되면 관리자에게 문의하세요.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // 항상 최신 handleSubmit을 ref에 반영
@@ -110,12 +120,20 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
   const handleQuickCheck = async () => {
     if (!patient) return;
 
-    await createConsultation.mutateAsync({
-      patient_id: patient.id,
-    });
+    try {
+      await createConsultation.mutateAsync({
+        patient_id: patient.id,
+      });
 
-    resetForm();
-    onConsultationComplete();
+      resetForm();
+      onConsultationComplete();
+    } catch {
+      toast({
+        title: '진찰 참석 체크 실패',
+        description: '다시 시도해주세요. 반복되면 관리자에게 문의하세요.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // 환자 미선택 시 안내

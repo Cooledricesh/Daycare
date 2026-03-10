@@ -48,8 +48,8 @@ export default function SharedStatsPage() {
     dailyStats?.map((stat) => ({
       date: format(new Date(stat.date), 'MM/dd'),
       fullDate: stat.date,
-      attendanceRate: stat.attendance_rate || 0,
-      consultationRate: stat.consultation_rate || 0,
+      attendanceRate: stat.attendance_rate ?? null,
+      consultationRate: stat.consultation_rate ?? null,
       scheduled: stat.scheduled_count,
       attendance: stat.attendance_count,
       consultation: stat.consultation_count,
@@ -188,16 +188,16 @@ export default function SharedStatsPage() {
                             <p>예정: {data.scheduled}명</p>
                             <p>출석: {data.attendance}명</p>
                             <p>진찰: {data.consultation}명</p>
-                            <p className="text-blue-600">출석률: {data.attendanceRate.toFixed(1)}%</p>
-                            <p className="text-green-600">진찰 참석률: {data.consultationRate.toFixed(1)}%</p>
+                            <p className="text-blue-600">출석률: {data.attendanceRate != null ? `${data.attendanceRate.toFixed(1)}%` : '-'}</p>
+                            <p className="text-green-600">진찰 참석률: {data.consultationRate != null ? `${data.consultationRate.toFixed(1)}%` : '-'}</p>
                           </div>
                         </div>
                       );
                     }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="attendanceRate" stroke="#2563EB" name="출석률 (%)" strokeWidth={2} />
-                  <Line type="monotone" dataKey="consultationRate" stroke="#16A34A" name="진찰 참석률 (%)" strokeWidth={2} />
+                  <Line type="monotone" dataKey="attendanceRate" stroke="#2563EB" name="출석률 (%)" strokeWidth={2} connectNulls />
+                  <Line type="monotone" dataKey="consultationRate" stroke="#16A34A" name="진찰 참석률 (%)" strokeWidth={2} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -228,8 +228,8 @@ export default function SharedStatsPage() {
                         <TableCell className="text-right">{stat.scheduled_count}</TableCell>
                         <TableCell className="text-right">{stat.attendance_count}</TableCell>
                         <TableCell className="text-right">{stat.consultation_count}</TableCell>
-                        <TableCell className="text-right">{stat.attendance_rate?.toFixed(1) || '-'}%</TableCell>
-                        <TableCell className="text-right">{stat.consultation_rate?.toFixed(1) || '-'}%</TableCell>
+                        <TableCell className="text-right">{stat.attendance_rate != null ? `${stat.attendance_rate.toFixed(1)}%` : '-'}</TableCell>
+                        <TableCell className="text-right">{stat.consultation_rate != null ? `${stat.consultation_rate.toFixed(1)}%` : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

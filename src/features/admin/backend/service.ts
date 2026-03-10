@@ -673,12 +673,22 @@ export async function calculateDailyStats(
       .eq('date', date),
   ]);
 
-  const sc = scheduledCount ?? 0;
   const ac = attendanceCount ?? 0;
   const cc = consultationCount ?? 0;
+  let sc = scheduledCount ?? 0;
 
-  const attendanceRate = sc > 0 ? Math.round((ac / sc) * 10000) / 100 : null;
-  const consultationRate = sc > 0 ? Math.round((cc / sc) * 10000) / 100 : null;
+  // 예정 기록 없지만 활동 있는 경우 → 출석 수를 예정으로 사용
+  if (sc === 0 && (ac > 0 || cc > 0)) {
+    sc = Math.max(ac, cc);
+  }
+
+  const hasActivity = ac > 0 || cc > 0 || sc > 0;
+  const attendanceRate = hasActivity && sc > 0
+    ? Math.min(Math.round((ac / sc) * 10000) / 100, 100)
+    : null;
+  const consultationRate = hasActivity && sc > 0
+    ? Math.min(Math.round((cc / sc) * 10000) / 100, 100)
+    : null;
 
   const { data, error } = await (supabase
     .from('daily_stats') as any)
@@ -716,16 +726,10 @@ async function ensureYesterdayStatsClosed(
 ): Promise<void> {
   const yesterdayStr = getYesterdayString();
 
-  const { count } = await (supabase
-    .from('daily_stats') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', yesterdayStr);
-
-  if ((count ?? 0) === 0) {
-    // 전일 스케줄도 생성되어 있어야 통계 의미 있음
-    await ensureTodayScheduleGenerated(supabase, yesterdayStr);
-    await calculateDailyStats(supabase, yesterdayStr);
-  }
+  // 항상 재계산 (calculateDailyStats는 upsert 사용으로 멱등)
+  // 기존: 레코드 존재 시 스킵 → Apps Script가 stale 데이터 생성 시 갱신 안 됨
+  await ensureTodayScheduleGenerated(supabase, yesterdayStr);
+  await calculateDailyStats(supabase, yesterdayStr);
 }
 
 export async function batchGenerateSchedules(
@@ -1015,18 +1019,18 @@ export async function getStatsSummary(
 
   const validDays = (periodStats as any)?.filter((s: any) => s.attendance_rate !== null) || [];
   const avgAttendanceRate = validDays.length > 0
-    ? validDays.reduce((sum: number, s: any) => sum + (s.attendance_rate || 0), 0) / validDays.length
+    ? validDays.reduce((sum: number, s: any) => sum + Math.min(s.attendance_rate || 0, 100), 0) / validDays.length
     : 0;
   const avgConsultationRate = validDays.length > 0
-    ? validDays.reduce((sum: number, s: any) => sum + (s.consultation_rate || 0), 0) / validDays.length
+    ? validDays.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate || 0, 100), 0) / validDays.length
     : 0;
 
   const prevValidDays = (prevStats as any)?.filter((s: any) => s.attendance_rate !== null) || [];
   const prevAvgAttendanceRate = prevValidDays.length > 0
-    ? prevValidDays.reduce((sum: number, s: any) => sum + (s.attendance_rate || 0), 0) / prevValidDays.length
+    ? prevValidDays.reduce((sum: number, s: any) => sum + Math.min(s.attendance_rate || 0, 100), 0) / prevValidDays.length
     : 0;
   const prevAvgConsultationRate = prevValidDays.length > 0
-    ? prevValidDays.reduce((sum: number, s: any) => sum + (s.consultation_rate || 0), 0) / prevValidDays.length
+    ? prevValidDays.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate || 0, 100), 0) / prevValidDays.length
     : 0;
 
   return {

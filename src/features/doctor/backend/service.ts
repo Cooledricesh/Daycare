@@ -518,13 +518,17 @@ export async function createConsultation(
 
   // 출석 기록이 없으면 자동 생성
   if (!existingAttendance) {
-    await (supabase
+    const { error: attendanceError } = await (supabase
       .from('attendances') as any)
       .insert({
         patient_id: params.patient_id,
         date,
         checked_at: new Date().toISOString(),
       });
+
+    if (attendanceError) {
+      console.error('출석 기록 생성 실패:', attendanceError.message);
+    }
   }
 
   // 진찰 기록 생성 (같은 환자+날짜에 이미 기록이 있으면 업데이트)
