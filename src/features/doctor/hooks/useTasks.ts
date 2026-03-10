@@ -14,6 +14,7 @@ interface UseTasksParams {
 export function useTasks(params: UseTasksParams = {}) {
   return useQuery({
     queryKey: ['shared', 'tasks', params],
+    staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.startDate && params.endDate) {

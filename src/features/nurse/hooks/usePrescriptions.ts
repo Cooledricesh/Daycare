@@ -16,6 +16,7 @@ type UsePrescriptionsResponse = {
 export const usePrescriptions = (params: UsePrescriptionsParams = {}) => {
   return useQuery({
     queryKey: ['nurse', 'prescriptions', params.date, params.filter],
+    staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) {

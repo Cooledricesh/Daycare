@@ -11,6 +11,7 @@ interface UseMessagesParams {
 export function useMessages(params: UseMessagesParams = {}) {
   return useQuery({
     queryKey: ['staff', 'messages', params],
+    staleTime: 30 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) searchParams.set('date', params.date);

@@ -656,21 +656,22 @@ export async function calculateDailyStats(
   supabase: SupabaseClient<Database>,
   date: string,
 ): Promise<DailyStatsItem> {
-  const { count: scheduledCount } = await (supabase
-    .from('scheduled_attendances') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', date)
-    .eq('is_cancelled', false);
-
-  const { count: attendanceCount } = await (supabase
-    .from('attendances') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', date);
-
-  const { count: consultationCount } = await (supabase
-    .from('consultations') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', date);
+  const [
+    { count: scheduledCount },
+    { count: attendanceCount },
+    { count: consultationCount },
+  ] = await Promise.all([
+    (supabase.from('scheduled_attendances') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('date', date)
+      .eq('is_cancelled', false),
+    (supabase.from('attendances') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('date', date),
+    (supabase.from('consultations') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('date', date),
+  ]);
 
   const sc = scheduledCount ?? 0;
   const ac = attendanceCount ?? 0;
@@ -968,12 +969,45 @@ export async function getStatsSummary(
   // Lazy 마감: 전일 통계 미존재 시 계산
   await ensureYesterdayStatsClosed(supabase);
 
-  // 기간 통계
-  const { data: periodStats } = await (supabase
-    .from('daily_stats') as any)
-    .select('*')
-    .gte('date', query.start_date)
-    .lte('date', query.end_date);
+  // 날짜 계산을 먼저 수행
+  const today = getTodayString();
+  const daysDiff = Math.ceil(
+    (new Date(query.end_date).getTime() - new Date(query.start_date).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const prevStartDate = new Date(new Date(query.start_date).getTime() - daysDiff * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
+  const prevEndDate = new Date(new Date(query.start_date).getTime() - 1 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
+
+  // 5개 쿼리 병렬 실행
+  const [
+    { data: periodStats },
+    { count: scheduledCount },
+    { count: attendanceCount },
+    { count: consultationCount },
+    { data: prevStats },
+  ] = await Promise.all([
+    (supabase.from('daily_stats') as any)
+      .select('*')
+      .gte('date', query.start_date)
+      .lte('date', query.end_date),
+    (supabase.from('scheduled_attendances') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('date', today)
+      .eq('is_cancelled', false),
+    (supabase.from('attendances') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('date', today),
+    (supabase.from('consultations') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('date', today),
+    (supabase.from('daily_stats') as any)
+      .select('*')
+      .gte('date', prevStartDate)
+      .lte('date', prevEndDate),
+  ]);
 
   const totalScheduled = (periodStats as any)?.reduce((sum: number, s: any) => sum + s.scheduled_count, 0) || 0;
   const totalAttendance = (periodStats as any)?.reduce((sum: number, s: any) => sum + s.attendance_count, 0) || 0;
@@ -986,41 +1020,6 @@ export async function getStatsSummary(
   const avgConsultationRate = validDays.length > 0
     ? validDays.reduce((sum: number, s: any) => sum + (s.consultation_rate || 0), 0) / validDays.length
     : 0;
-
-  // 오늘 통계 (실시간)
-  const today = getTodayString();
-  const { data: todayScheduled, count: scheduledCount } = await (supabase
-    .from('scheduled_attendances') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', today)
-    .eq('is_cancelled', false);
-
-  const { data: todayAttendance, count: attendanceCount } = await (supabase
-    .from('attendances') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', today);
-
-  const { data: todayConsultation, count: consultationCount } = await (supabase
-    .from('consultations') as any)
-    .select('*', { count: 'exact', head: true })
-    .eq('date', today);
-
-  // 이전 기간 통계 (비교용)
-  const daysDiff = Math.ceil(
-    (new Date(query.end_date).getTime() - new Date(query.start_date).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  const prevStartDate = new Date(new Date(query.start_date).getTime() - daysDiff * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split('T')[0];
-  const prevEndDate = new Date(new Date(query.start_date).getTime() - 1 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split('T')[0];
-
-  const { data: prevStats } = await (supabase
-    .from('daily_stats') as any)
-    .select('*')
-    .gte('date', prevStartDate)
-    .lte('date', prevEndDate);
 
   const prevValidDays = (prevStats as any)?.filter((s: any) => s.attendance_rate !== null) || [];
   const prevAvgAttendanceRate = prevValidDays.length > 0
@@ -1081,20 +1080,25 @@ export async function getDailyStats(
 export async function getRoomMappings(
   supabase: SupabaseClient<Database>,
 ): Promise<RoomMappingItem[]> {
-  // 매핑 데이터 조회
-  const { data: mappings, error } = await (supabase
-    .from('room_coordinator_mapping') as any)
-    .select(`
-      id,
-      room_prefix,
-      coordinator_id,
-      description,
-      is_active,
-      created_at,
-      updated_at,
-      coordinator:staff!coordinator_id(id, name)
-    `)
-    .order('room_prefix');
+  // 매핑 데이터와 환자 목록을 병렬 조회
+  const [{ data: mappings, error }, { data: patients }] = await Promise.all([
+    (supabase.from('room_coordinator_mapping') as any)
+      .select(`
+        id,
+        room_prefix,
+        coordinator_id,
+        description,
+        is_active,
+        created_at,
+        updated_at,
+        coordinator:staff!coordinator_id(id, name)
+      `)
+      .order('room_prefix'),
+    supabase
+      .from('patients')
+      .select('room_number')
+      .eq('status', 'active'),
+  ]);
 
   if (error) {
     throw new AdminError(
@@ -1108,11 +1112,6 @@ export async function getRoomMappings(
   const patientCounts: Record<string, number> = {};
 
   if (roomPrefixes.length > 0) {
-    const { data: patients } = await supabase
-      .from('patients')
-      .select('room_number')
-      .eq('status', 'active');
-
     (patients || []).forEach((p: any) => {
       if (p.room_number) {
         const prefix = p.room_number.toString().substring(0, 4);

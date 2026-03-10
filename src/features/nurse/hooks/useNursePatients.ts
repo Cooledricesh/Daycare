@@ -16,6 +16,7 @@ type UseNursePatientsResponse = {
 export const useNursePatients = (params: UseNursePatientsParams = {}) => {
   return useQuery({
     queryKey: ['nurse', 'patients', params.date, params.filter],
+    staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) searchParams.append('date', params.date);

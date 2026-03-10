@@ -13,6 +13,7 @@ interface UseDoctorMessagesParams {
 export function useDoctorMessages(params: UseDoctorMessagesParams = {}) {
   return useQuery({
     queryKey: ['shared', 'messages', params],
+    staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.startDate) searchParams.set('start_date', params.startDate);

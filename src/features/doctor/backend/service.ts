@@ -367,12 +367,32 @@ export async function getWaitingPatients(
   // 환자 ID 목록
   const patientIds = patientList.map((p: any) => p.patient_id);
 
-  // 오늘 출석 기록 조회
-  const { data: attendances } = await (supabase
-    .from('attendances') as any)
-    .select('patient_id, checked_at')
-    .eq('date', date)
-    .in('patient_id', patientIds);
+  // 단계 2: 독립적인 5개 쿼리 병렬 실행 (ensureScheduleGenerated 포함)
+  const [
+    { data: attendances },
+    { data: consultations },
+    { data: unreadMessages },
+    { data: vitals },
+  ] = await Promise.all([
+    (supabase.from('attendances') as any)
+      .select('patient_id, checked_at')
+      .eq('date', date)
+      .in('patient_id', patientIds),
+    (supabase.from('consultations') as any)
+      .select('patient_id, has_task, task_completions(is_completed)')
+      .eq('date', date)
+      .in('patient_id', patientIds),
+    (supabase.from('messages') as any)
+      .select('patient_id')
+      .eq('date', date)
+      .eq('is_read', false)
+      .in('patient_id', patientIds),
+    (supabase.from('vitals') as any)
+      .select('patient_id, systolic, diastolic, blood_sugar')
+      .eq('date', date)
+      .in('patient_id', patientIds),
+    ensureScheduleGenerated(supabase, date),
+  ]);
 
   // 출석 Map 생성
   const attendanceMap = new Map<string, string>();
@@ -380,37 +400,15 @@ export async function getWaitingPatients(
     attendanceMap.set(a.patient_id, a.checked_at);
   });
 
-  // 오늘 진찰 기록 조회 (지시사항 포함)
-  const { data: consultations } = await (supabase
-    .from('consultations') as any)
-    .select('patient_id, has_task, task_completions(is_completed)')
-    .eq('date', date)
-    .in('patient_id', patientIds);
-
   // 진찰 기록 Map (지시사항 상태 포함)
   const consultationMap = new Map<string, any>(
     (consultations || []).map((c: any) => [c.patient_id, c])
   );
 
-  // 오늘 미확인 전달사항 조회
-  const { data: unreadMessages } = await (supabase
-    .from('messages') as any)
-    .select('patient_id')
-    .eq('date', date)
-    .eq('is_read', false)
-    .in('patient_id', patientIds);
-
   const unreadMap = new Map<string, number>();
   (unreadMessages || []).forEach((m: any) => {
     unreadMap.set(m.patient_id, (unreadMap.get(m.patient_id) || 0) + 1);
   });
-
-  // 오늘 활력징후 조회
-  const { data: vitals } = await (supabase
-    .from('vitals') as any)
-    .select('patient_id, systolic, diastolic, blood_sugar')
-    .eq('date', date)
-    .in('patient_id', patientIds);
 
   // 활력징후 Map 생성
   const vitalsMap = new Map<string, any>();
@@ -422,30 +420,28 @@ export async function getWaitingPatients(
     });
   });
 
-  // 오늘 스케줄이 없으면 패턴에서 자동 생성
-  await ensureScheduleGenerated(supabase, date);
-
-  // 오늘 출석 예정 환자 조회 (scheduled_attendances)
-  const { data: scheduledAttendances } = await (supabase
-    .from('scheduled_attendances') as any)
-    .select('patient_id')
-    .eq('date', date)
-    .eq('is_cancelled', false)
-    .in('patient_id', patientIds);
+  // 단계 3: ensureScheduleGenerated 완료 후 스케줄/지시사항 쿼리 병렬 실행
+  const [
+    { data: scheduledAttendances },
+    { data: taskConsultations },
+  ] = await Promise.all([
+    (supabase.from('scheduled_attendances') as any)
+      .select('patient_id')
+      .eq('date', date)
+      .eq('is_cancelled', false)
+      .in('patient_id', patientIds),
+    (supabase.from('consultations') as any)
+      .select('id, patient_id, task_target')
+      .eq('date', date)
+      .eq('has_task', true)
+      .in('patient_id', patientIds),
+  ]);
 
   const scheduledSet = new Set<string>(
     (scheduledAttendances || []).map((s: any) => s.patient_id),
   );
 
-  // 오늘 지시사항이 있는 진찰 기록 조회
-  const { data: taskConsultations } = await (supabase
-    .from('consultations') as any)
-    .select('id, patient_id, task_target')
-    .eq('date', date)
-    .eq('has_task', true)
-    .in('patient_id', patientIds);
-
-  // 지시사항 완료 상태 조회
+  // 단계 4: 지시사항 완료 상태 조회 (조건부)
   const taskConsultationIds = (taskConsultations || []).map((c: any) => c.id);
   let taskCompletions: any[] = [];
   if (taskConsultationIds.length > 0) {

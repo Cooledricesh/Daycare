@@ -44,8 +44,59 @@ var BATCH_SIZE = 25;
 var DATE_SHEET_PATTERN = /^(\d{2})\.(\d{2})\.(\d{2})$/;
 
 // =============================================================================
+// 요일별 진찰 의사 매핑
+// =============================================================================
+// 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+// Mon/Tue/Wed: 박승현 (DOCTOR_ID from config)
+// Thu: 박명현, Fri: 신정욱
+var DAY_DOCTOR_NAME_MAP = {
+  4: '박명현',
+  5: '신정욱',
+};
+
+var DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+// =============================================================================
 // Supabase REST API 헬퍼
 // =============================================================================
+
+/**
+ * 해당 날짜의 기존 메시지를 조회하여 중복 메시지를 필터링
+ * (patient_id, content) 조합이 이미 존재하면 제외
+ * @param {string} date - YYYY-MM-DD 형식
+ * @param {Array<Object>} messageRecords - 삽입할 메시지 배열
+ * @returns {Array<Object>} - 중복 제거된 메시지 배열
+ */
+function filterDuplicateMessages(date, messageRecords) {
+  if (!messageRecords || messageRecords.length === 0) return [];
+
+  var existing = migrationSupabaseRequest('messages', 'get', {
+    query: 'select=patient_id,content&date=eq.' + date,
+  });
+
+  if (!existing || existing.length === 0) return messageRecords;
+
+  var existingSet = {};
+  for (var i = 0; i < existing.length; i++) {
+    var key = existing[i].patient_id + '|' + existing[i].content;
+    existingSet[key] = true;
+  }
+
+  var filtered = [];
+  for (var j = 0; j < messageRecords.length; j++) {
+    var msgKey = messageRecords[j].patient_id + '|' + messageRecords[j].content;
+    if (!existingSet[msgKey]) {
+      filtered.push(messageRecords[j]);
+    }
+  }
+
+  var skipped = messageRecords.length - filtered.length;
+  if (skipped > 0) {
+    Logger.log('  메시지 중복 ' + skipped + '건 스킵 (날짜: ' + date + ')');
+  }
+
+  return filtered;
+}
 
 function migrationSupabaseRequest(table, method, options) {
   var config = getMigrationConfig();
@@ -85,19 +136,61 @@ function migrationSupabaseRequest(table, method, options) {
 }
 
 // =============================================================================
+// 요일별 의사 매핑 헬퍼
+// =============================================================================
+
+/**
+ * staff 테이블에서 의사 이름 → UUID 매핑 로드
+ * @returns {Object} - { '박명현': 'uuid', '신정욱': 'uuid', ... }
+ */
+function loadDoctorNameMap() {
+  var data = migrationSupabaseRequest('staff', 'get', {
+    query: 'role=eq.doctor&is_active=eq.true&select=id,name',
+  });
+  var map = {};
+  if (data) {
+    for (var i = 0; i < data.length; i++) {
+      map[data[i].name] = data[i].id;
+    }
+  }
+  Logger.log('의사 매핑 로드: ' + Object.keys(map).length + '명');
+  return map;
+}
+
+/**
+ * 요일(dayOfWeek)로부터 진찰 담당 의사 UUID를 반환
+ * - 월/화/수: defaultDoctorId (박승현)
+ * - 목: 박명현, 금: 신정욱
+ * @param {number} dayOfWeek - 0=Sun ~ 6=Sat
+ * @param {string} defaultDoctorId - 기본 의사 UUID (박승현)
+ * @param {Object} doctorNameMap - 의사 이름 → UUID 매핑
+ * @returns {string} - 의사 UUID
+ */
+function getDoctorIdForDay(dayOfWeek, defaultDoctorId, doctorNameMap) {
+  var doctorName = DAY_DOCTOR_NAME_MAP[dayOfWeek];
+  if (doctorName && doctorNameMap[doctorName]) {
+    return doctorNameMap[doctorName];
+  }
+  return defaultDoctorId;
+}
+
+// =============================================================================
 // 환자 IDNO → UUID 매핑 로드
 // =============================================================================
 
 function loadPatientIdMap() {
   var data = migrationSupabaseRequest('patients', 'get', {
-    query: 'select=id,patient_id_no&patient_id_no=not.is.null',
+    query: 'select=id,patient_id_no,coordinator_id&patient_id_no=not.is.null',
   });
 
   var map = {};
   if (data) {
     for (var i = 0; i < data.length; i++) {
       if (data[i].patient_id_no) {
-        map[String(data[i].patient_id_no).trim()] = data[i].id;
+        map[String(data[i].patient_id_no).trim()] = {
+          id: data[i].id,
+          coordinatorId: data[i].coordinator_id,
+        };
       }
     }
   }
@@ -223,22 +316,155 @@ function parseCommentSheet(sheet) {
 // =============================================================================
 
 /**
- * 시트 배치 처리
- * @param {number} startIndex - 시작 시트 인덱스
- * @param {Array<Object>} datedSheets - { name, date } 배열
- * @param {Object} patientMap - IDNO → UUID 매핑
- * @param {string} doctorId - 의사 UUID
- * @returns {Object} - 처리 결과
+ * 환자 데이터로부터 출석/진찰/메시지 레코드 빌드
+ * @param {Array<Object>} patients - parseCommentSheet() 결과
+ * @param {string} sheetDate - YYYY-MM-DD
+ * @param {Object} patientMap - IDNO → { id, coordinatorId }
+ * @param {string} sheetDoctorId - 해당 요일 의사 UUID
+ * @param {boolean} isThuFri - 목/금 여부
+ * @returns {Object} - { attendanceRecords, consultationRecords, messageRecords, patientsNotFound }
  */
-function processBatch(startIndex, datedSheets, patientMap, doctorId) {
+function buildRecordsForSheet(patients, sheetDate, patientMap, sheetDoctorId, isThuFri) {
+  var result = {
+    attendanceRecords: [],
+    consultationRecords: [],
+    messageRecords: [],
+    patientsNotFound: 0,
+  };
+
+  for (var p = 0; p < patients.length; p++) {
+    var patient = patients[p];
+    var patientInfo = patientMap[patient.idno];
+
+    if (!patientInfo) {
+      result.patientsNotFound++;
+      continue;
+    }
+
+    var patientId = patientInfo.id;
+    var coordinatorId = patientInfo.coordinatorId;
+    if (!patient.consulted && !patient.note && !patient.medChange) continue;
+
+    // J열 → messages (담당 코디)
+    if (patient.note && coordinatorId) {
+      result.messageRecords.push({
+        patient_id: patientId,
+        date: sheetDate,
+        author_id: coordinatorId,
+        author_role: 'coordinator',
+        content: patient.note,
+      });
+    }
+
+    // I열 → consultations (목/금 의사만)
+    if (isThuFri && patient.medChange) {
+      result.consultationRecords.push({
+        patient_id: patientId,
+        date: sheetDate,
+        doctor_id: sheetDoctorId,
+        note: null,
+        has_task: true,
+        task_content: patient.medChange,
+        task_target: 'nurse',
+      });
+    }
+
+    // 출석: 진찰 체크(F열)된 경우에만 출석 생성 (메시지만 있는 경우 미출석 유지)
+    var shouldAttend = patient.consulted;
+    if (shouldAttend) {
+      result.attendanceRecords.push({
+        patient_id: patientId,
+        date: sheetDate,
+      });
+    }
+
+    // 목/금 진찰 체크 + 약변경 없음 → 빈 진찰 기록
+    if (isThuFri && patient.consulted && !patient.medChange) {
+      result.consultationRecords.push({
+        patient_id: patientId,
+        date: sheetDate,
+        doctor_id: sheetDoctorId,
+        note: null,
+        has_task: false,
+        task_content: null,
+        task_target: null,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 빌드된 레코드를 DB에 삽입하고 stats 업데이트
+ * @param {string} sheetName - 시트명 (로깅용)
+ * @param {string} sheetDate - YYYY-MM-DD
+ * @param {Object} records - buildRecordsForSheet() 결과
+ * @param {Object} stats - 누적 통계 (mutated)
+ */
+function insertSheetRecords(sheetName, sheetDate, records, stats) {
+  if (records.attendanceRecords.length > 0) {
+    try {
+      migrationSupabaseRequest('attendances', 'post', {
+        body: records.attendanceRecords,
+        prefer: 'resolution=ignore-duplicates,return=minimal',
+      });
+      stats.attendancesInserted += records.attendanceRecords.length;
+    } catch (e) {
+      Logger.log('시트 ' + sheetName + ' 출석 오류: ' + e.message);
+      stats.errors++;
+    }
+  }
+
+  if (records.consultationRecords.length > 0) {
+    try {
+      migrationSupabaseRequest('consultations', 'post', {
+        body: records.consultationRecords,
+        query: 'on_conflict=patient_id,date',
+        prefer: 'resolution=ignore-duplicates,return=minimal',
+      });
+      stats.consultationsInserted += records.consultationRecords.length;
+    } catch (e) {
+      Logger.log('시트 ' + sheetName + ' 진찰 오류: ' + e.message);
+      stats.errors++;
+    }
+  }
+
+  var filteredMessages = filterDuplicateMessages(sheetDate, records.messageRecords);
+  if (filteredMessages.length > 0) {
+    try {
+      migrationSupabaseRequest('messages', 'post', {
+        body: filteredMessages,
+        prefer: 'return=minimal',
+      });
+      stats.messagesInserted += filteredMessages.length;
+    } catch (e) {
+      Logger.log('시트 ' + sheetName + ' 메시지 오류: ' + e.message);
+      stats.errors++;
+    }
+  }
+
+  stats.patientsNotFound += records.patientsNotFound;
+}
+
+/**
+ * 시트 배치 처리 (startMigration/continueMigration용)
+ * daily_stats 재계산 없이 레코드만 삽입
+ */
+function processBatch(startIndex, datedSheets, patientMap, doctorId, doctorNameMap) {
   var endIndex = Math.min(startIndex + BATCH_SIZE, datedSheets.length);
   var config = getMigrationConfig();
   var spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
 
+  if (!doctorNameMap) {
+    doctorNameMap = loadDoctorNameMap();
+  }
+
   var stats = {
     sheetsProcessed: 0,
-    recordsInserted: 0,
-    recordsSkipped: 0,
+    consultationsInserted: 0,
+    messagesInserted: 0,
+    attendancesInserted: 0,
     patientsNotFound: 0,
     errors: 0,
   };
@@ -253,79 +479,18 @@ function processBatch(startIndex, datedSheets, patientMap, doctorId) {
     }
 
     var patients = parseCommentSheet(sheet);
-
     if (patients.length === 0) {
       stats.sheetsProcessed++;
       continue;
     }
 
-    // 배치 INSERT 준비
-    var records = [];
-    var attendanceRecords = [];
-    for (var p = 0; p < patients.length; p++) {
-      var patient = patients[p];
-      var patientId = patientMap[patient.idno];
+    var sheetDay = new Date(sheetInfo.date + 'T00:00:00+09:00').getDay();
+    var isThuFri = (sheetDay === 4 || sheetDay === 5);
+    var sheetDoctorId = getDoctorIdForDay(sheetDay, doctorId, doctorNameMap);
 
-      if (!patientId) {
-        stats.patientsNotFound++;
-        continue;
-      }
+    var records = buildRecordsForSheet(patients, sheetInfo.date, patientMap, sheetDoctorId, isThuFri);
+    insertSheetRecords(sheetInfo.name, sheetInfo.date, records, stats);
 
-      var record = {
-        patient_id: patientId,
-        date: sheetInfo.date,
-        doctor_id: doctorId,
-        note: patient.note,
-        has_task: false,
-        task_content: null,
-        task_target: null,
-      };
-
-      // 2026년이고 약변경이 있으면 task 데이터 추가
-      if (is2026(sheetInfo.date) && patient.medChange) {
-        record.has_task = true;
-        record.task_content = patient.medChange;
-        record.task_target = 'nurse';
-      }
-
-      records.push(record);
-
-      // 진찰 기록이 있으면 출석도 함께 생성 (진찰 = 출석)
-      attendanceRecords.push({
-        patient_id: patientId,
-        date: sheetInfo.date,
-      });
-    }
-
-    // 출석 기록 upsert
-    if (attendanceRecords.length > 0) {
-      try {
-        migrationSupabaseRequest('attendances', 'post', {
-          body: attendanceRecords,
-          prefer: 'resolution=ignore-duplicates,return=minimal',
-        });
-      } catch (e) {
-        Logger.log('시트 ' + sheetInfo.name + ' 출석 처리 오류: ' + e.message);
-        stats.errors++;
-      }
-    }
-
-    // Supabase 배치 upsert (중복은 병합하여 업데이트)
-    if (records.length > 0) {
-      try {
-        migrationSupabaseRequest('consultations', 'post', {
-          body: records,
-          query: 'on_conflict=patient_id,date',
-          prefer: 'resolution=merge-duplicates,return=minimal',
-        });
-        stats.recordsInserted += records.length;
-      } catch (e) {
-        Logger.log('시트 ' + sheetInfo.name + ' 진찰 처리 오류: ' + e.message);
-        stats.errors++;
-      }
-    }
-
-    stats.recordsSkipped += (patients.length - records.length + stats.patientsNotFound);
     stats.sheetsProcessed++;
   }
 
@@ -379,8 +544,9 @@ function startMigration() {
   Logger.log('날짜별 시트: ' + datedSheets.length + '개');
   Logger.log('기간: ' + datedSheets[0].date + ' ~ ' + datedSheets[datedSheets.length - 1].date);
 
-  // 환자 매핑 로드
+  // 환자 매핑 & 의사 매핑 로드
   var patientMap = loadPatientIdMap();
+  var doctorNameMap = loadDoctorNameMap();
 
   // 진행 상태 초기화
   var props = PropertiesService.getScriptProperties();
@@ -388,28 +554,30 @@ function startMigration() {
   props.setProperty('MIGRATION_TOTAL_SHEETS', String(datedSheets.length));
   props.setProperty('MIGRATION_STATS', JSON.stringify({
     totalSheetsProcessed: 0,
-    totalRecordsInserted: 0,
-    totalRecordsSkipped: 0,
+    totalConsultationsInserted: 0,
+    totalMessagesInserted: 0,
+    totalAttendancesInserted: 0,
     totalPatientsNotFound: 0,
     totalErrors: 0,
   }));
 
   // 첫 배치 처리
-  var stats = processBatch(0, datedSheets, patientMap, config.doctorId);
+  var stats = processBatch(0, datedSheets, patientMap, config.doctorId, doctorNameMap);
 
   // 진행 상태 업데이트
   var newProgress = Math.min(BATCH_SIZE, datedSheets.length);
   props.setProperty('MIGRATION_PROGRESS', String(newProgress));
   props.setProperty('MIGRATION_STATS', JSON.stringify({
     totalSheetsProcessed: stats.sheetsProcessed,
-    totalRecordsInserted: stats.recordsInserted,
-    totalRecordsSkipped: stats.recordsSkipped,
+    totalConsultationsInserted: stats.consultationsInserted,
+    totalMessagesInserted: stats.messagesInserted,
+    totalAttendancesInserted: stats.attendancesInserted,
     totalPatientsNotFound: stats.patientsNotFound,
     totalErrors: stats.errors,
   }));
 
   Logger.log('배치 1 완료: ' + stats.sheetsProcessed + '개 시트 처리');
-  Logger.log('삽입: ' + stats.recordsInserted + ', 스킵: ' + stats.recordsSkipped);
+  Logger.log('진찰: ' + stats.consultationsInserted + ', 메시지: ' + stats.messagesInserted + ', 출석: ' + stats.attendancesInserted);
 
   if (newProgress >= datedSheets.length) {
     Logger.log('=== 마이그레이션 완료! ===');
@@ -445,14 +613,16 @@ function continueMigration() {
 
   var datedSheets = getDatedSheets();
   var patientMap = loadPatientIdMap();
+  var doctorNameMap = loadDoctorNameMap();
 
-  var stats = processBatch(progress, datedSheets, patientMap, config.doctorId);
+  var stats = processBatch(progress, datedSheets, patientMap, config.doctorId, doctorNameMap);
 
   // 누적 통계 업데이트
   var newProgress = Math.min(progress + BATCH_SIZE, datedSheets.length);
   totalStats.totalSheetsProcessed = (totalStats.totalSheetsProcessed || 0) + stats.sheetsProcessed;
-  totalStats.totalRecordsInserted = (totalStats.totalRecordsInserted || 0) + stats.recordsInserted;
-  totalStats.totalRecordsSkipped = (totalStats.totalRecordsSkipped || 0) + stats.recordsSkipped;
+  totalStats.totalConsultationsInserted = (totalStats.totalConsultationsInserted || 0) + stats.consultationsInserted;
+  totalStats.totalMessagesInserted = (totalStats.totalMessagesInserted || 0) + stats.messagesInserted;
+  totalStats.totalAttendancesInserted = (totalStats.totalAttendancesInserted || 0) + stats.attendancesInserted;
   totalStats.totalPatientsNotFound = (totalStats.totalPatientsNotFound || 0) + stats.patientsNotFound;
   totalStats.totalErrors = (totalStats.totalErrors || 0) + stats.errors;
 
@@ -460,7 +630,7 @@ function continueMigration() {
   props.setProperty('MIGRATION_STATS', JSON.stringify(totalStats));
 
   Logger.log('배치 완료: 시트 ' + progress + '~' + (newProgress - 1));
-  Logger.log('이번 배치: 삽입 ' + stats.recordsInserted + ', 스킵 ' + stats.recordsSkipped);
+  Logger.log('이번 배치: 진찰 ' + stats.consultationsInserted + ', 메시지 ' + stats.messagesInserted + ', 출석 ' + stats.attendancesInserted);
 
   if (newProgress >= datedSheets.length) {
     Logger.log('=== 마이그레이션 전체 완료! ===');
@@ -482,8 +652,9 @@ function getMigrationStatus() {
   Logger.log('=== 마이그레이션 상태 ===');
   Logger.log('진행: ' + progress + '/' + totalSheets + ' 시트 (' + (totalSheets > 0 ? Math.round(progress / totalSheets * 100) : 0) + '%)');
   Logger.log('처리된 시트: ' + (stats.totalSheetsProcessed || 0));
-  Logger.log('삽입된 레코드: ' + (stats.totalRecordsInserted || 0));
-  Logger.log('스킵된 레코드: ' + (stats.totalRecordsSkipped || 0));
+  Logger.log('진찰: ' + (stats.totalConsultationsInserted || 0));
+  Logger.log('메시지: ' + (stats.totalMessagesInserted || 0));
+  Logger.log('출석: ' + (stats.totalAttendancesInserted || 0));
   Logger.log('환자 미매칭: ' + (stats.totalPatientsNotFound || 0));
   Logger.log('오류: ' + (stats.totalErrors || 0));
   Logger.log('완료 여부: ' + (progress >= totalSheets ? '완료' : '진행중'));
@@ -622,20 +793,30 @@ function getExistingDatesFromDB() {
 
 /**
  * 특정 시트 목록을 처리하여 DB에 삽입
+ *
+ * 규칙:
+ *   - J열 (progress) 모든 요일 → messages 테이블 (author=담당코디)
+ *   - I열 (약변경) 목/금만 → consultations 테이블 (목=박명현, 금=신정욱)
+ *   - I열 (약변경) 월~수 → 무시 (입력 없음)
+ *   - F열 (진찰) 목/금 체크 → 출석 + 진찰
+ *   - 월~수 → 데이터 있으면 출석
+ *
  * @param {Array<Object>} sheets - { name, date } 배열
- * @param {Object} patientMap - IDNO → UUID 매핑
- * @param {string} doctorId - 의사 UUID
+ * @param {Object} patientMap - IDNO → { id, coordinatorId } 매핑
+ * @param {string} doctorId - 기본 의사 UUID (박승현)
+ * @param {Object} [optDoctorNameMap] - 의사 이름 → UUID (미전달 시 자동 로드)
  * @returns {Object} - 처리 통계
  */
-function processSheetList(sheets, patientMap, doctorId) {
+function processSheetList(sheets, patientMap, doctorId, optDoctorNameMap) {
   var config = getMigrationConfig();
   var spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+  var doctorNameMap = optDoctorNameMap || loadDoctorNameMap();
 
   var stats = {
     sheetsProcessed: 0,
-    recordsInserted: 0,
+    consultationsInserted: 0,
+    messagesInserted: 0,
     attendancesInserted: 0,
-    recordsSkipped: 0,
     patientsNotFound: 0,
     errors: 0,
   };
@@ -652,86 +833,23 @@ function processSheetList(sheets, patientMap, doctorId) {
     }
 
     var patients = parseCommentSheet(sheet);
-
     if (patients.length === 0) {
       stats.sheetsProcessed++;
       continue;
     }
 
-    var consultationRecords = [];
-    var attendanceRecords = [];
+    var sheetDay = new Date(sheetInfo.date + 'T00:00:00+09:00').getDay();
+    var isThuFri = (sheetDay === 4 || sheetDay === 5);
+    var sheetDoctorId = getDoctorIdForDay(sheetDay, doctorId, doctorNameMap);
+    Logger.log('시트 ' + sheetInfo.name + ' (' + DAY_NAMES[sheetDay] + ') ' + (isThuFri ? '의사=' + (DAY_DOCTOR_NAME_MAP[sheetDay]) : '코디 기록만'));
 
-    for (var p = 0; p < patients.length; p++) {
-      var patient = patients[p];
-      var patientId = patientMap[patient.idno];
-
-      if (!patientId) {
-        stats.patientsNotFound++;
-        continue;
-      }
-
-      // consulted=True이거나 기록이 있으면 진찰 + 출석 기록
-      // (진찰을 했다면 출석한 것이므로 출석도 함께 생성)
-      if (patient.consulted || patient.note || patient.medChange) {
-        attendanceRecords.push({
-          patient_id: patientId,
-          date: sheetInfo.date,
-        });
-
-        var record = {
-          patient_id: patientId,
-          date: sheetInfo.date,
-          doctor_id: doctorId,
-          note: patient.note,
-          has_task: false,
-          task_content: null,
-          task_target: null,
-        };
-
-        if (is2026(sheetInfo.date) && patient.medChange) {
-          record.has_task = true;
-          record.task_content = patient.medChange;
-          record.task_target = 'nurse';
-        }
-
-        consultationRecords.push(record);
-      }
-    }
-
-    // 출석 기록 upsert
-    if (attendanceRecords.length > 0) {
-      try {
-        migrationSupabaseRequest('attendances', 'post', {
-          body: attendanceRecords,
-          prefer: 'resolution=ignore-duplicates,return=minimal',
-        });
-        stats.attendancesInserted += attendanceRecords.length;
-      } catch (e) {
-        Logger.log('시트 ' + sheetInfo.name + ' 출석 처리 오류: ' + e.message);
-        stats.errors++;
-      }
-    }
-
-    // 진찰 기록 upsert (merge: 시트 데이터가 기존 레코드를 업데이트)
-    if (consultationRecords.length > 0) {
-      try {
-        migrationSupabaseRequest('consultations', 'post', {
-          body: consultationRecords,
-          query: 'on_conflict=patient_id,date',
-          prefer: 'resolution=merge-duplicates,return=minimal',
-        });
-        stats.recordsInserted += consultationRecords.length;
-      } catch (e) {
-        Logger.log('시트 ' + sheetInfo.name + ' 진찰 처리 오류: ' + e.message);
-        stats.errors++;
-      }
-    }
+    var records = buildRecordsForSheet(patients, sheetInfo.date, patientMap, sheetDoctorId, isThuFri);
+    insertSheetRecords(sheetInfo.name, sheetInfo.date, records, stats);
 
     processedDates.push(sheetInfo.date);
     stats.sheetsProcessed++;
   }
 
-  // 처리된 날짜의 daily_stats 재계산
   if (processedDates.length > 0) {
     recalculateDailyStats(processedDates);
   }
@@ -799,9 +917,8 @@ function recalculateDailyStats(dates) {
 }
 
 /**
- * 기존 날짜에 대해 출석 데이터만 보충 마이그레이션
- * (진찰 기록은 이미 있지만 출석 기록이 없는 날짜 대상)
- * 전체 시트를 스캔하여 진찰=True인 환자의 출석 기록을 upsert
+ * 기존 날짜에 대해 데이터 보충 마이그레이션
+ * J열→messages(코디), I열→consultations(목금 의사), 출석 보충
  */
 function syncAttendancesOnly() {
   var config = getMigrationConfig();
@@ -811,93 +928,20 @@ function syncAttendancesOnly() {
     return;
   }
 
-  Logger.log('=== 출석 + 진찰 데이터 보충 시작 ===');
+  Logger.log('=== 데이터 보충 시작 ===');
 
   var datedSheets = getDatedSheets();
   Logger.log('스프레드시트 날짜 시트: ' + datedSheets.length + '개');
 
   var patientMap = loadPatientIdMap();
-  var spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+  var stats = processSheetList(datedSheets, patientMap, config.doctorId);
 
-  var totalAttendances = 0;
-  var totalConsultations = 0;
-  var processedDates = [];
-  var errors = 0;
+  Logger.log('\n출석: ' + stats.attendancesInserted + '건');
+  Logger.log('진찰(목금): ' + stats.consultationsInserted + '건');
+  Logger.log('메시지(코디): ' + stats.messagesInserted + '건');
+  Logger.log('오류: ' + stats.errors + '건');
 
-  for (var i = 0; i < datedSheets.length; i++) {
-    var sheetInfo = datedSheets[i];
-    var sheet = spreadsheet.getSheetByName(sheetInfo.name);
-    if (!sheet) continue;
-
-    var patients = parseCommentSheet(sheet);
-    var attendanceRecords = [];
-    var consultationRecords = [];
-
-    for (var p = 0; p < patients.length; p++) {
-      var patient = patients[p];
-      // consulted=True이거나 기록이 있으면 출석 + 진찰
-      if (!patient.consulted && !patient.note && !patient.medChange) continue;
-
-      var patientId = patientMap[patient.idno];
-      if (!patientId) continue;
-
-      // 출석 기록
-      attendanceRecords.push({
-        patient_id: patientId,
-        date: sheetInfo.date,
-      });
-
-      // 진찰 기록
-      consultationRecords.push({
-        patient_id: patientId,
-        date: sheetInfo.date,
-        doctor_id: config.doctorId,
-        note: patient.note || null,
-        has_task: false,
-        task_content: null,
-        task_target: null,
-      });
-    }
-
-    if (attendanceRecords.length > 0) {
-      try {
-        migrationSupabaseRequest('attendances', 'post', {
-          body: attendanceRecords,
-          prefer: 'resolution=ignore-duplicates,return=minimal',
-        });
-        totalAttendances += attendanceRecords.length;
-        processedDates.push(sheetInfo.date);
-      } catch (e) {
-        Logger.log('출석 처리 오류 (' + sheetInfo.name + '): ' + e.message);
-        errors++;
-      }
-    }
-
-    if (consultationRecords.length > 0) {
-      try {
-        migrationSupabaseRequest('consultations', 'post', {
-          body: consultationRecords,
-          query: 'on_conflict=patient_id,date',
-          prefer: 'resolution=merge-duplicates,return=minimal',
-        });
-        totalConsultations += consultationRecords.length;
-      } catch (e) {
-        Logger.log('진찰 처리 오류 (' + sheetInfo.name + '): ' + e.message);
-        errors++;
-      }
-    }
-  }
-
-  Logger.log('\n출석 기록 upsert: ' + totalAttendances + '건');
-  Logger.log('진찰 기록 upsert: ' + totalConsultations + '건');
-  Logger.log('오류: ' + errors + '건');
-
-  // daily_stats 재계산
-  if (processedDates.length > 0) {
-    recalculateDailyStats(processedDates);
-  }
-
-  Logger.log('=== 출석 + 진찰 데이터 보충 완료 ===');
+  Logger.log('=== 데이터 보충 완료 ===');
 }
 
 /**
@@ -936,7 +980,10 @@ var RECENT_SYNC_DAYS = 7;
  * 스프레드시트 → DB 증분 동기화
  * - DB에 없는 새 날짜: 항상 동기화
  * - 최근 N일 이내 날짜: DB에 데이터가 있어도 항상 재동기화
- *   (upsert ignore-duplicates이므로 기존 레코드는 유지, 새 레코드만 추가)
+ *   (ignore-duplicates로 기존 레코드 보존, 새 레코드만 추가)
+ * - J열(progress) → messages (담당코디)
+ * - I열(약변경) 목/금 → consultations (목=박명현, 금=신정욱)
+ * - F열(진찰) 목/금 체크 → 출석+진찰, 월~수 데이터있으면 출석
  */
 function syncNewSheets() {
   var config = getMigrationConfig();
@@ -960,11 +1007,10 @@ function syncNewSheets() {
   // 3. 최근 N일 기준일 계산
   var today = new Date();
   var recentCutoff = new Date(today.getTime() - RECENT_SYNC_DAYS * 24 * 60 * 60 * 1000);
-  var recentCutoffStr = recentCutoff.getFullYear() + '-' +
-    String(recentCutoff.getMonth() + 1).padStart(2, '0') + '-' +
-    String(recentCutoff.getDate()).padStart(2, '0');
+  var recentCutoffStr = formatDateKST(recentCutoff);
 
-  // 4. 동기화 대상 필터: DB에 없는 날짜 + 최근 N일 이내 날짜
+  // 4. 동기화 대상 필터: DB에 없는 날짜 + 최근 N일 이내
+  // (ignore-duplicates + 메시지 중복 필터링으로 오늘 날짜도 안전하게 처리)
   var sheetsToSync = [];
   var newCount = 0;
   var recentCount = 0;
@@ -989,7 +1035,11 @@ function syncNewSheets() {
 
   for (var j = 0; j < sheetsToSync.length; j++) {
     var tag = existingDates[sheetsToSync[j].date] ? '(재동기화)' : '(신규)';
-    Logger.log('  ' + sheetsToSync[j].date + ' ' + tag);
+    var d = new Date(sheetsToSync[j].date + 'T00:00:00+09:00');
+    var dayName = DAY_NAMES[d.getDay()];
+    var isThuFriLabel = (d.getDay() === 4 || d.getDay() === 5);
+    var label = isThuFriLabel ? ('약변경→' + DAY_DOCTOR_NAME_MAP[d.getDay()]) : 'progress→코디 메시지';
+    Logger.log('  ' + sheetsToSync[j].date + ' (' + dayName + ') ' + tag + ' [' + label + ']');
   }
 
   // 5. 환자 매핑 로드
@@ -1000,10 +1050,145 @@ function syncNewSheets() {
 
   Logger.log('\n=== 증분 동기화 완료 ===');
   Logger.log('처리 시트: ' + stats.sheetsProcessed + '개');
-  Logger.log('진찰 기록 삽입: ' + stats.recordsInserted + '건');
-  Logger.log('출석 기록 삽입: ' + stats.attendancesInserted + '건');
+  Logger.log('진찰(목금): ' + stats.consultationsInserted + '건');
+  Logger.log('메시지(코디): ' + stats.messagesInserted + '건');
+  Logger.log('출석: ' + stats.attendancesInserted + '건');
   Logger.log('환자 미매칭: ' + stats.patientsNotFound + '건');
   Logger.log('오류: ' + stats.errors + '건');
+}
+
+// =============================================================================
+// 일일 정기 동기화 (평일 오전 9시 크론잡)
+// =============================================================================
+
+/**
+ * 일일 정기 동기화: 전날 + 당일 시트만 처리
+ *
+ * - 주말(토/일) 실행 시 자동 스킵
+ * - 전날 시트: 추가된 기록 반영 (기존 consultation 보존, 새 메시지만 추가)
+ * - 당일 시트: 아침 시점까지 입력된 데이터 동기화
+ * - 스케줄: createDailySyncTrigger()로 평일 오전 9시 설정
+ */
+function dailySync() {
+  var config = getMigrationConfig();
+
+  if (!config.supabaseUrl || !config.serviceRoleKey || !config.spreadsheetId || !config.doctorId) {
+    Logger.log('오류: 필수 설정값 누락');
+    return;
+  }
+
+  // 주말 체크 (KST 기준)
+  var now = new Date();
+  var kstOffset = 9 * 60 * 60 * 1000;
+  var kstNow = new Date(now.getTime() + kstOffset);
+  var dayOfWeek = kstNow.getDay(); // 0=일, 6=토
+
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    Logger.log('주말이므로 동기화 스킵 (' + DAY_NAMES[dayOfWeek] + '요일)');
+    return;
+  }
+
+  // 오늘/어제 날짜 계산 (KST)
+  var todayStr = formatDateKST(kstNow);
+  var yesterdayKST = new Date(kstNow.getTime() - 24 * 60 * 60 * 1000);
+  var yesterdayStr = formatDateKST(yesterdayKST);
+
+  // 어제가 일요일이면 금요일까지 확인 (월요일 실행 시)
+  var targetDates = [yesterdayStr, todayStr];
+  if (yesterdayKST.getDay() === 0) {
+    // 어제=일요일 → 금요일, 토요일도 포함
+    var fridayKST = new Date(kstNow.getTime() - 3 * 24 * 60 * 60 * 1000);
+    var saturdayKST = new Date(kstNow.getTime() - 2 * 24 * 60 * 60 * 1000);
+    targetDates = [formatDateKST(fridayKST), formatDateKST(saturdayKST), yesterdayStr, todayStr];
+  }
+
+  Logger.log('=== 일일 동기화 시작 ===');
+  Logger.log('대상 날짜: ' + targetDates.join(', '));
+
+  // 스프레드시트에서 대상 날짜 시트 찾기
+  var datedSheets = getDatedSheets();
+  var sheetsToSync = [];
+
+  for (var i = 0; i < datedSheets.length; i++) {
+    for (var j = 0; j < targetDates.length; j++) {
+      if (datedSheets[i].date === targetDates[j]) {
+        sheetsToSync.push(datedSheets[i]);
+        break;
+      }
+    }
+  }
+
+  if (sheetsToSync.length === 0) {
+    Logger.log('동기화할 시트가 없습니다.');
+    return;
+  }
+
+  for (var k = 0; k < sheetsToSync.length; k++) {
+    var d = new Date(sheetsToSync[k].date + 'T00:00:00+09:00');
+    Logger.log('  ' + sheetsToSync[k].date + ' (' + DAY_NAMES[d.getDay()] + ') - ' + sheetsToSync[k].name);
+  }
+
+  // 환자 매핑 로드 & 처리
+  var patientMap = loadPatientIdMap();
+  var stats = processSheetList(sheetsToSync, patientMap, config.doctorId);
+
+  Logger.log('\n=== 일일 동기화 완료 ===');
+  Logger.log('처리 시트: ' + stats.sheetsProcessed + '개');
+  Logger.log('출석: ' + stats.attendancesInserted + '건');
+  Logger.log('진찰(목금): ' + stats.consultationsInserted + '건');
+  Logger.log('메시지(코디): ' + stats.messagesInserted + '건');
+  Logger.log('환자 미매칭: ' + stats.patientsNotFound + '건');
+  Logger.log('오류: ' + stats.errors + '건');
+}
+
+/**
+ * KST Date → YYYY-MM-DD 문자열
+ */
+function formatDateKST(kstDate) {
+  return kstDate.getFullYear() + '-' +
+    String(kstDate.getMonth() + 1).padStart(2, '0') + '-' +
+    String(kstDate.getDate()).padStart(2, '0');
+}
+
+/**
+ * 일일 동기화 트리거 생성: 평일 매일 오전 9시 KST
+ * 이 함수를 한 번만 수동 실행하면 됩니다.
+ */
+function createDailySyncTrigger() {
+  // 기존 dailySync 트리거 삭제
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'dailySync') {
+      ScriptApp.deleteTrigger(triggers[i]);
+      Logger.log('기존 dailySync 트리거 삭제됨');
+    }
+  }
+
+  // 매일 오전 9시 KST (주말 스킵은 함수 내에서 처리)
+  ScriptApp.newTrigger('dailySync')
+    .timeBased()
+    .atHour(9)
+    .nearMinute(0)
+    .everyDays(1)
+    .inTimezone('Asia/Seoul')
+    .create();
+
+  Logger.log('트리거 생성 완료: 매일 오전 9:00 KST (주말 자동 스킵)');
+}
+
+/**
+ * 일일 동기화 트리거 삭제
+ */
+function deleteDailySyncTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var count = 0;
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'dailySync') {
+      ScriptApp.deleteTrigger(triggers[i]);
+      count++;
+    }
+  }
+  Logger.log(count + '개 dailySync 트리거 삭제됨');
 }
 
 // =============================================================================
