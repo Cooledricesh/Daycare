@@ -30,7 +30,7 @@ function formatMonthLabel(dateStr: string): string {
 // 기록을 텍스트로 변환 (복사용)
 function recordToText(c: ConsultationRecord): string {
   let text = formatDate(c.date);
-  if (isAppEntered(c.date, c.created_at)) {
+  if (hasDoctorName(c.doctor_name)) {
     text += ` (${c.doctor_name})`;
   }
   if (c.note) text += ` ${c.note}`;
@@ -53,13 +53,9 @@ function hasContent(c: ConsultationRecord): boolean {
   return !!(c.note || (c.has_task && c.task_content));
 }
 
-// 앱에서 직접 입력한 데이터인지 판별 (created_at이 date와 2일 이내)
-function isAppEntered(date: string, createdAt: string | null): boolean {
-  if (!createdAt) return false;
-  const d = new Date(date + 'T00:00:00');
-  const c = new Date(createdAt);
-  const diffMs = Math.abs(c.getTime() - d.getTime());
-  return diffMs < 2 * 24 * 60 * 60 * 1000; // 2일 이내
+// 의사 이름 표시 여부: doctor_name이 유효하면 항상 표시
+function hasDoctorName(doctorName: string | undefined): boolean {
+  return !!doctorName && doctorName !== '알 수 없음';
 }
 
 // 진찰 기록 아이템
@@ -102,7 +98,7 @@ function MessageItem({ message, onDelete }: { message: MessageRecord; onDelete?:
 // 날짜별 통합 아이템
 function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
   if (!hasContent(consultation)) return null;
-  const showName = isAppEntered(consultation.date, consultation.created_at);
+  const showName = hasDoctorName(consultation.doctor_name);
   return (
     <div className="py-2.5 border-b last:border-b-0">
       <div className="text-sm">
@@ -136,7 +132,7 @@ function buildTimeline(consultations: ConsultationRecord[], messages: MessageRec
 function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessage }: { date: string; items: TimelineItem[]; currentUserId?: string; isAdmin?: boolean; onDeleteMessage?: (id: string) => void }) {
   const firstConsultation = items.find(i => i.type === 'consultation');
   const consultation = firstConsultation ? (firstConsultation.data as ConsultationRecord) : null;
-  const showName = consultation && isAppEntered(consultation.date, consultation.created_at);
+  const showName = consultation && hasDoctorName(consultation.doctor_name);
 
   return (
     <div className="py-2.5 border-b last:border-b-0">

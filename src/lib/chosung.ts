@@ -9,11 +9,22 @@ const SINGLE_CONSONANTS = [
   'ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ',
 ];
 
-// 쌍자음 → 단일 자음 매핑
-const DOUBLE_TO_SINGLE: Record<string, string> = {
+// 복합 자음 → 단일 자음 분리 매핑 (쌍자음 + 겹받침)
+const COMPOUND_TO_SINGLE: Record<string, string> = {
   'ㄲ': 'ㄱㄱ',
+  'ㄳ': 'ㄱㅅ',
+  'ㄵ': 'ㄴㅈ',
+  'ㄶ': 'ㄴㅎ',
   'ㄸ': 'ㄷㄷ',
+  'ㄺ': 'ㄹㄱ',
+  'ㄻ': 'ㄹㅁ',
+  'ㄼ': 'ㄹㅂ',
+  'ㄽ': 'ㄹㅅ',
+  'ㄾ': 'ㄹㅌ',
+  'ㄿ': 'ㄹㅍ',
+  'ㅀ': 'ㄹㅎ',
   'ㅃ': 'ㅂㅂ',
+  'ㅄ': 'ㅂㅅ',
   'ㅆ': 'ㅅㅅ',
   'ㅉ': 'ㅈㅈ',
 };
@@ -23,15 +34,18 @@ const DOUBLE_TO_SINGLE: Record<string, string> = {
  * 예: "ㄲㅅ" → "ㄱㄱㅅ", "ㅎㅁㅅ" → "ㅎㅁㅅ" (변화 없음)
  */
 export function expandDoubleConsonants(query: string): string {
-  return [...query].map(c => DOUBLE_TO_SINGLE[c] ?? c).join('');
+  return [...query].map(c => COMPOUND_TO_SINGLE[c] ?? c).join('');
 }
 
 /**
- * 문자열이 모두 한글 자음(초성)인지 확인한다.
- * 쌍자음도 자음으로 인정한다.
+ * 문자열이 모두 한글 자음인지 확인한다.
+ * 쌍자음, 겹받침(ㄳ, ㅄ, ㄶ 등)도 자음으로 인정한다.
  */
 function isAllChosung(str: string): boolean {
-  return [...str].every(c => CHOSUNG.includes(c));
+  return [...str].every(c => {
+    const code = c.charCodeAt(0);
+    return code >= 0x3131 && code <= 0x314E;
+  });
 }
 
 /**
