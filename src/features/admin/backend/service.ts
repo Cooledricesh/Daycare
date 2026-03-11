@@ -51,6 +51,7 @@ export async function getPatients(
     .select(`
       id,
       name,
+      display_name,
       gender,
       room_number,
       patient_id_no,
@@ -64,9 +65,9 @@ export async function getPatients(
       doctor:staff!doctor_id(name)
     `, { count: 'exact' });
 
-  // 필터 적용
+  // 필터 적용 (display_name도 검색 대상)
   if (query.search) {
-    queryBuilder = queryBuilder.ilike('name', `%${query.search}%`);
+    queryBuilder = queryBuilder.or(`name.ilike.%${query.search}%,display_name.ilike.%${query.search}%`);
   }
   if (query.status !== 'all') {
     queryBuilder = queryBuilder.eq('status', query.status);
@@ -105,6 +106,7 @@ export async function getPatients(
   const result: PatientWithCoordinator[] = (data || []).map((p: any) => ({
     id: p.id,
     name: p.name,
+    display_name: p.display_name ?? null,
     gender: p.gender,
     room_number: p.room_number,
     patient_id_no: p.patient_id_no,
@@ -136,6 +138,7 @@ export async function getPatientDetail(
     .select(`
       id,
       name,
+      display_name,
       gender,
       room_number,
       patient_id_no,
@@ -168,6 +171,7 @@ export async function getPatientDetail(
   return {
     id: patientData.id,
     name: patientData.name,
+    display_name: patientData.display_name ?? null,
     gender: patientData.gender,
     room_number: patientData.room_number,
     patient_id_no: patientData.patient_id_no,
@@ -254,6 +258,7 @@ export async function createPatient(
   return {
     id: patient.id,
     name: patient.name,
+    display_name: patient.display_name ?? null,
     gender: patient.gender,
     room_number: patient.room_number,
     patient_id_no: patient.patient_id_no,

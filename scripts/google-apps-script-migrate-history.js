@@ -1233,3 +1233,108 @@ function previewMigrationData() {
     }
   }
 }
+
+// =============================================================================
+// 진단: 특정 환자의 동기화 문제 확인
+// =============================================================================
+
+/**
+ * 특정 환자명으로 동기화 문제를 진단한다.
+ * 사용법: debugPatientSync('정성훈') 또는 함수 내 이름을 수정 후 실행
+ */
+function debugPatientSync(targetName) {
+  targetName = targetName || '정성훈';
+  var config = getMigrationConfig();
+  var spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+
+  Logger.log('=== 환자 동기화 진단: ' + targetName + ' ===\n');
+
+  // 1. DB에서 환자 검색 (이름으로)
+  Logger.log('--- 1. DB 환자 조회 ---');
+  var dbPatients = migrationSupabaseRequest('patients', 'get', {
+    query: 'select=id,name,patient_id_no,coordinator_id,room_number,status&name=eq.' + encodeURIComponent(targetName),
+  });
+
+  if (!dbPatients || dbPatients.length === 0) {
+    Logger.log('DB에 "' + targetName + '" 환자가 없습니다!');
+    return;
+  }
+
+  for (var i = 0; i < dbPatients.length; i++) {
+    var p = dbPatients[i];
+    Logger.log('  ID: ' + p.id);
+    Logger.log('  IDNO: ' + (p.patient_id_no || '(없음)'));
+    Logger.log('  호실: ' + (p.room_number || '(없음)'));
+    Logger.log('  coordinator_id: ' + (p.coordinator_id || '(없음 ← 원인일 수 있음!)'));
+    Logger.log('  status: ' + p.status);
+
+    // coordinator 이름 조회
+    if (p.coordinator_id) {
+      var staff = migrationSupabaseRequest('staff', 'get', {
+        query: 'select=name&id=eq.' + p.coordinator_id,
+      });
+      Logger.log('  담당코디: ' + (staff && staff[0] ? staff[0].name : '(조회 실패)'));
+    }
+  }
+
+  var patientIdNo = dbPatients[0].patient_id_no;
+  var coordinatorId = dbPatients[0].coordinator_id;
+
+  // 2. 최근 시트에서 해당 IDNO 찾기
+  Logger.log('\n--- 2. 스프레드시트에서 IDNO "' + patientIdNo + '" 검색 ---');
+  var datedSheets = getDatedSheets();
+  var recentSheets = datedSheets.slice(-5); // 최근 5개 시트
+
+  for (var s = 0; s < recentSheets.length; s++) {
+    var sheetInfo = recentSheets[s];
+    var sheet = spreadsheet.getSheetByName(sheetInfo.name);
+    if (!sheet) continue;
+
+    var patients = parseCommentSheet(sheet);
+    for (var j = 0; j < patients.length; j++) {
+      if (patients[j].idno === String(patientIdNo)) {
+        Logger.log('  시트 ' + sheetInfo.name + ' (' + sheetInfo.date + '):');
+        Logger.log('    note(Progress): ' + (patients[j].note || '(비어있음)'));
+        Logger.log('    medChange(약변경): ' + (patients[j].medChange || '(비어있음)'));
+        Logger.log('    consulted(진찰): ' + patients[j].consulted);
+
+        // 메시지 생성 조건 체크
+        if (patients[j].note && !coordinatorId) {
+          Logger.log('    ⚠ Progress 있지만 coordinator_id 없음 → 메시지 미생성!');
+        } else if (patients[j].note && coordinatorId) {
+          Logger.log('    ✓ 메시지 생성 조건 충족');
+
+          // 이미 DB에 있는지 확인
+          var existingMsgs = migrationSupabaseRequest('messages', 'get', {
+            query: 'select=id,content,author_id&patient_id=eq.' + dbPatients[0].id + '&date=eq.' + sheetInfo.date,
+          });
+          if (existingMsgs && existingMsgs.length > 0) {
+            Logger.log('    → DB에 이미 ' + existingMsgs.length + '건의 메시지 존재 (중복 필터링됨)');
+            for (var m = 0; m < existingMsgs.length; m++) {
+              Logger.log('      content: ' + existingMsgs[m].content.substring(0, 50));
+            }
+          } else {
+            Logger.log('    → DB에 메시지 없음 (동기화 실패 또는 미실행)');
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // 3. room_coordinator_mapping 확인
+  Logger.log('\n--- 3. 호실 매핑 확인 ---');
+  var roomNumber = dbPatients[0].room_number;
+  if (roomNumber) {
+    var mapping = migrationSupabaseRequest('room_coordinator_mapping', 'get', {
+      query: 'select=room_prefix,coordinator_id&room_prefix=eq.' + roomNumber + '&is_active=eq.true',
+    });
+    if (mapping && mapping.length > 0) {
+      Logger.log('  호실 ' + roomNumber + ' → coordinator_id: ' + mapping[0].coordinator_id);
+    } else {
+      Logger.log('  ⚠ 호실 ' + roomNumber + '에 대한 매핑이 없습니다!');
+    }
+  }
+
+  Logger.log('\n=== 진단 완료 ===');
+}

@@ -169,6 +169,7 @@ export type GetSyncLogsQuery = z.infer<typeof getSyncLogsQuerySchema>;
 export interface PatientWithCoordinator {
   id: string;
   name: string;
+  display_name: string | null;
   gender: 'M' | 'F' | null;
   room_number: string | null;
   patient_id_no: string | null;

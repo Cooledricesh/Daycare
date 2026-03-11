@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useSearchPatients } from '../hooks/useSearchPatients';
 import { debounce } from 'es-toolkit';
 import type { Patient } from '../backend/schema';
+import { getPatientDisplayName } from '@/lib/patient';
 
 interface PatientSearchSectionProps {
   onPatientSelect: (patient: Patient) => void;
@@ -77,7 +78,7 @@ export function PatientSearchSection({ onPatientSelect }: PatientSearchSectionPr
                     }}
                     className="w-full px-6 py-5 text-left text-2xl hover:bg-gray-50 transition-colors border-b last:border-b-0"
                   >
-                    {patient.name}
+                    {getPatientDisplayName(patient)}
                   </button>
                 </li>
               ))}

@@ -37,6 +37,7 @@ export type CreateMessageRequest = z.infer<typeof createMessageSchema>;
 export type PatientSummary = {
   id: string;
   name: string;
+  display_name: string | null;
   gender: string | null;
   is_attended: boolean;
   attendance_time: string | null;
@@ -51,6 +52,7 @@ export type PatientSummary = {
 export type PatientDetail = {
   id: string;
   name: string;
+  display_name: string | null;
   gender: string | null;
   attendance: {
     is_attended: boolean;

@@ -9,6 +9,7 @@ import { Search, RefreshCw, User, Check, Clock, AlertCircle, Bell, UserCheck } f
 import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
+import { getPatientDisplayName } from '@/lib/patient';
 import type { PatientSummary } from '../backend/schema';
 
 type FilterTab = 'all' | 'scheduled' | 'completed';
@@ -69,7 +70,10 @@ export function StaffPatientListPanel({
     }
 
     if (searchQuery.trim()) {
-      result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
+      const query = searchQuery.trim();
+      result = result.filter(p => {
+        return matchesChosung(p.name, query) || (p.display_name && matchesChosung(p.display_name, query));
+      });
     }
 
     // 정렬 그룹: 0=지시/전달, 1=출석(미진찰), 2=예정(미출석), 3=진찰완료, 4=미예정
@@ -308,7 +312,7 @@ export function StaffPatientListPanel({
                       </div>
                     )}
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-medium text-sm truncate">{patient.name}</span>
+                      <span className="font-medium text-sm truncate">{getPatientDisplayName(patient)}</span>
                       <span className="text-xs text-gray-400">
                         {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
                       </span>

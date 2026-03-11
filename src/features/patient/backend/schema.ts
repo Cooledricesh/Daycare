@@ -47,6 +47,7 @@ export type CreateVitalsRequest = z.infer<typeof createVitalsSchema>;
 export interface Patient {
   id: string;
   name: string;
+  display_name: string | null;
 }
 
 export interface Attendance {

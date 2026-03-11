@@ -16,7 +16,9 @@ import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { MessageForm } from './MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
+import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getTodayString } from '@/lib/date';
+import { getPatientDisplayName } from '@/lib/patient';
 import type { PatientSummary } from '../backend/schema';
 
 interface StaffDetailPanelProps {
@@ -27,7 +29,6 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
   const today = getTodayString();
   const { toast } = useToast();
   const { user } = useAuth();
-
   const { data: detailData, isLoading: detailLoading } = usePatientDetail({
     patientId: patient?.id || '',
     date: today,
@@ -94,7 +95,12 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold">{patient.name}</h2>
+            <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>
+            <DisplayNameEditButton
+              patientId={patient.id}
+              patientName={patient.name}
+              currentDisplayName={patient.display_name}
+            />
             {patient.is_consulted && (
               <Badge className="bg-green-100 text-green-700 text-xs">진찰 완료</Badge>
             )}

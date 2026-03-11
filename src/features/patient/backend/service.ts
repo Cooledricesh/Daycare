@@ -21,7 +21,7 @@ export async function searchPatients(
 ): Promise<Patient[]> {
   const { data, error } = await supabase
     .from('patients')
-    .select('id, name')
+    .select('id, name, display_name')
     .eq('status', 'active')
     .ilike('name', `${params.q}%`)
     .order('name')
@@ -38,9 +38,10 @@ export async function searchPatients(
     return [];
   }
 
-  return data.map((patient: { id: string; name: string }) => ({
+  return data.map((patient: { id: string; name: string; display_name: string | null }) => ({
     id: patient.id,
     name: patient.name,
+    display_name: patient.display_name ?? null,
   }));
 }
 

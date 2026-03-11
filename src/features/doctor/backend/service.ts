@@ -341,6 +341,7 @@ export async function getWaitingPatients(
     .select(`
       id,
       name,
+      display_name,
       gender,
       room_number,
       coordinator:coordinator_id(name)
@@ -471,6 +472,7 @@ export async function getWaitingPatients(
   return patientList.map((p: any) => ({
     id: p.patients.id,
     name: p.patients.name,
+    display_name: p.patients.display_name ?? null,
     gender: p.patients.gender,
     room_number: p.patients.room_number,
     coordinator_name: p.patients.coordinator?.name || null,

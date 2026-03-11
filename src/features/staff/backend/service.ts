@@ -85,6 +85,7 @@ export async function getMyPatients(
       .select(`
         id,
         name,
+        display_name,
         gender
       `)
       .eq('status', 'active');
@@ -166,6 +167,7 @@ export async function getMyPatients(
       return {
         id: p.id,
         name: p.name,
+        display_name: p.display_name ?? null,
         gender: p.gender || null,
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
@@ -206,7 +208,7 @@ export async function getPatientDetail(
     { data: recentConsultations },
   ] = await Promise.all([
     (supabase.from('patients') as any)
-      .select('id, name, gender, coordinator_id')
+      .select('id, name, display_name, gender, coordinator_id')
       .eq('id', params.patient_id)
       .single(),
     (supabase.from('attendances') as any)
@@ -259,6 +261,7 @@ export async function getPatientDetail(
   return {
     id: (patient as any).id,
     name: (patient as any).name,
+    display_name: (patient as any).display_name ?? null,
     gender: (patient as any).gender,
     attendance: {
       is_attended: !!attendance,

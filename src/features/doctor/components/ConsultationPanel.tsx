@@ -22,7 +22,9 @@ import { usePatientHistory } from '../hooks/usePatientHistory';
 import { useToast } from '@/hooks/use-toast';
 import { ConsultationHistory } from './ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
+import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getTodayString } from '@/lib/date';
+import { getPatientDisplayName } from '@/lib/patient';
 import type { WaitingPatient } from '../backend/schema';
 
 interface ConsultationPanelProps {
@@ -159,7 +161,12 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold">{patient.name}</h2>
+              <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>
+              <DisplayNameEditButton
+                patientId={patient.id}
+                patientName={patient.name}
+                currentDisplayName={patient.display_name}
+              />
               {patient.gender && (
                 <Badge variant="outline" className="text-xs">
                   {patient.gender === 'M' ? '남' : '여'}

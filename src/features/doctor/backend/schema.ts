@@ -126,6 +126,7 @@ export type GetWaitingPatientsParams = z.infer<typeof GetWaitingPatientsParamsSc
 export interface WaitingPatient {
   id: string;
   name: string;
+  display_name: string | null;
   gender: 'M' | 'F' | null;
   room_number: string | null;
   coordinator_name: string | null;

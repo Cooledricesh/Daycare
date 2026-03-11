@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit } from 'lucide-react';
 import type { PatientWithCoordinator } from '../backend/schema';
+import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
+import { getPatientDisplayName } from '@/lib/patient';
 
 interface PatientsTableProps {
   patients: PatientWithCoordinator[];
@@ -55,7 +57,19 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
           ) : (
             patients.map((patient) => (
               <TableRow key={patient.id}>
-                <TableCell className="font-medium">{patient.name}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-1">
+                    <span>{getPatientDisplayName(patient)}</span>
+                    {patient.display_name && (
+                      <span className="text-xs text-gray-400">({patient.name})</span>
+                    )}
+                    <DisplayNameEditButton
+                      patientId={patient.id}
+                      patientName={patient.name}
+                      currentDisplayName={patient.display_name}
+                    />
+                  </div>
+                </TableCell>
                 <TableCell>{patient.patient_id_no || '-'}</TableCell>
                 <TableCell>{patient.room_number || '-'}</TableCell>
                 <TableCell>

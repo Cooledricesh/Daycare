@@ -8,6 +8,7 @@ import type { PatientSummary } from '../backend/schema';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { getPatientDisplayName } from '@/lib/patient';
 
 type PatientCardProps = {
   patient: PatientSummary;
@@ -31,7 +32,7 @@ export function PatientCard({ patient }: PatientCardProps) {
               <User className="w-4 h-4 text-emerald-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">{patient.name}</h3>
+              <h3 className="font-semibold text-gray-900">{getPatientDisplayName(patient)}</h3>
               {patient.attendance_time && (
                 <p className="text-xs text-gray-500">
                   {format(new Date(patient.attendance_time), 'HH:mm', { locale: ko })} 출석

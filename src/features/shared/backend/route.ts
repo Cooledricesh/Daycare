@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { AppEnv } from '@/server/hono/context';
 import { success, failure, respond } from '@/server/http/response';
 import {
@@ -23,7 +24,52 @@ import {
 import { DoctorError, DoctorErrorCode } from '@/features/doctor/backend/error';
 import { comparePassword, hashPassword } from '@/lib/auth';
 
+const updateDisplayNameSchema = z.object({
+  display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),
+});
+
 const sharedRoutes = new Hono<AppEnv>();
+
+// ========== Patient Display Name ==========
+
+/**
+ * PATCH /api/shared/patients/:id/display-name
+ * 환자 표시명 변경 (동명이인 구별용)
+ */
+sharedRoutes.patch('/patients/:id/display-name', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const patientId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const body = await c.req.json();
+  const parseResult = updateDisplayNameSchema.safeParse(body);
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, 'INVALID_REQUEST', parseResult.error.issues[0]?.message || '잘못된 요청입니다'));
+  }
+
+  const displayName = parseResult.data.display_name?.trim() || null;
+
+  const { data, error } = await (supabase
+    .from('patients') as any)
+    .update({ display_name: displayName })
+    .eq('id', patientId)
+    .select('id, name, display_name')
+    .single();
+
+  if (error || !data) {
+    const msg = error?.message?.includes('display_name')
+      ? '표시명 컬럼이 아직 생성되지 않았습니다. 마이그레이션을 먼저 적용해주세요.'
+      : '환자를 찾을 수 없습니다';
+    return respond(c, failure(error?.message?.includes('display_name') ? 500 : 404, 'PATIENT_NOT_FOUND', msg));
+  }
+
+  return respond(c, success({ patient: data }, 200));
+});
 
 // ========== Tasks & Messages Routes (전 역할 접근, 코디는 담당 환자만) ==========
 

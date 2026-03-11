@@ -69,6 +69,7 @@ export type GetNursePatientsParams = z.infer<typeof getNursePatientsSchema>;
 export type NursePatientSummary = {
   id: string;
   name: string;
+  display_name: string | null;
   gender: string | null;
   coordinator_name: string | null;
   is_attended: boolean;
