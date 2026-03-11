@@ -6,6 +6,7 @@ import {
   UserCog,
   Calendar,
   ClipboardList,
+  HeartPulse,
   BarChart3,
   Settings,
   RefreshCw,
@@ -57,6 +58,11 @@ const navItems: NavItem[] = [
     href: '/admin/settings/room-mapping',
     label: '호실 매핑',
     icon: Settings,
+  },
+  {
+    href: '/shared/vitals',
+    label: '활력징후',
+    icon: HeartPulse,
   },
   {
     href: '/shared/change-password',

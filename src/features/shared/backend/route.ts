@@ -23,6 +23,8 @@ import {
 } from '@/features/doctor/backend/service';
 import { DoctorError, DoctorErrorCode } from '@/features/doctor/backend/error';
 import { comparePassword, hashPassword } from '@/lib/auth';
+import { getPatientVitalsQuerySchema } from '@/features/vitals-monitoring/backend/schema';
+import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-monitoring/backend/service';
 
 const updateDisplayNameSchema = z.object({
   display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),
@@ -327,6 +329,59 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
       .filter((s: any) => !s.is_cancelled)
       .map((s: any) => s.date),
   }, 200));
+});
+
+// ========== Vitals Monitoring ==========
+
+/**
+ * GET /api/shared/vitals/overview
+ * 전체 환자 활력징후 요약 (최근 30일 기준)
+ */
+sharedRoutes.get('/vitals/overview', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const overview = await getVitalsOverview(supabase);
+    return respond(c, success(overview, 200));
+  } catch (error) {
+    throw error;
+  }
+});
+
+/**
+ * GET /api/shared/vitals/:patientId
+ * 개별 환자 시계열 데이터 + 통계
+ */
+sharedRoutes.get('/vitals/:patientId', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const patientId = c.req.param('patientId');
+  const query = c.req.query();
+  const parseResult = getPatientVitalsQuerySchema.safeParse({ period: query.period });
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, 'INVALID_REQUEST', parseResult.error.issues[0]?.message || '잘못된 요청입니다'));
+  }
+
+  try {
+    const detail = await getPatientVitalsDetail(supabase, patientId, parseResult.data.period);
+    return respond(c, success(detail, 200));
+  } catch (error) {
+    if (error instanceof Error && error.message === '환자를 찾을 수 없습니다') {
+      return respond(c, failure(404, 'PATIENT_NOT_FOUND', error.message));
+    }
+    throw error;
+  }
 });
 
 export default sharedRoutes;
