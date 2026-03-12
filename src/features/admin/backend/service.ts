@@ -664,12 +664,14 @@ export async function generateScheduledAttendances(
 export async function calculateDailyStats(
   supabase: SupabaseClient<Database>,
   date: string,
+  options?: { preserveRegisteredCount?: boolean },
 ): Promise<DailyStatsItem> {
   const [
     { count: scheduledCount },
     { count: attendanceCount },
     { count: consultationCount },
     { count: registeredCount },
+    { data: existingStats },
   ] = await Promise.all([
     (supabase.from('scheduled_attendances') as any)
       .select('*', { count: 'exact', head: true })
@@ -684,11 +686,21 @@ export async function calculateDailyStats(
     (supabase.from('patients') as any)
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active'),
+    options?.preserveRegisteredCount
+      ? (supabase.from('daily_stats') as any)
+          .select('registered_count')
+          .eq('date', date)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const ac = attendanceCount ?? 0;
   const cc = consultationCount ?? 0;
-  const rc = registeredCount ?? 0;
+  // 배치 재계산: 기존 스냅샷이 있으면 보존, 없으면 현재 값 사용
+  const existingRc = existingStats?.registered_count;
+  const rc = (options?.preserveRegisteredCount && existingRc != null && existingRc > 0)
+    ? existingRc
+    : (registeredCount ?? 0);
   let sc = scheduledCount ?? 0;
 
   // 예정 기록 없지만 활동 있는 경우 → 출석 수를 예정으로 사용
@@ -895,7 +907,7 @@ export async function batchCalculateStats(
     const dateStr = d.toISOString().split('T')[0];
     if (dateStr >= todayKST) continue; // 오늘 이후는 스킵 (실시간 집계)
     try {
-      await calculateDailyStats(supabase, dateStr);
+      await calculateDailyStats(supabase, dateStr, { preserveRegisteredCount: true });
       results.push({ date: dateStr });
     } catch (err: any) {
       errors.push({ date: dateStr, error: err.message });
