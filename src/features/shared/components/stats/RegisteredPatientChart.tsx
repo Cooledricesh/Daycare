@@ -42,6 +42,13 @@ export function RegisteredPatientChart({ dailyStats }: RegisteredPatientChartPro
     );
   }
 
+  const values = chartData.map((d) => d.registered);
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  const padding = Math.max(Math.ceil((dataMax - dataMin) * 0.3), 5);
+  const yMin = Math.max(0, Math.floor((dataMin - padding) / 5) * 5);
+  const yMax = Math.ceil((dataMax + padding) / 5) * 5;
+
   return (
     <Card>
       <CardHeader>
@@ -52,7 +59,7 @@ export function RegisteredPatientChart({ dailyStats }: RegisteredPatientChartPro
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" fontSize={12} />
-            <YAxis fontSize={12} />
+            <YAxis domain={[yMin, yMax]} fontSize={12} tickFormatter={(v) => `${v}명`} />
             <Tooltip
               content={({ active, payload }) => {
                 if (!active || !payload || !payload.length) return null;

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS holidays (
 
 CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date);
 
+DROP TRIGGER IF EXISTS set_holidays_updated_at ON holidays;
 CREATE TRIGGER set_holidays_updated_at
   BEFORE UPDATE ON holidays FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
