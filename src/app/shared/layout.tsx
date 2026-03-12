@@ -30,17 +30,19 @@ const roleNavItems: Record<string, NavItem[]> = {
   ],
   nurse: [
     { href: '/nurse/prescriptions', label: '환자 관리', icon: Users },
+    { href: '/nurse/tasks', label: '처리 필요 항목', icon: ClipboardList },
   ],
   coordinator: [
     { href: '/staff/dashboard', label: '담당 환자', icon: Users },
     { href: '/staff/schedule', label: '출석 일정', icon: Calendar },
+    { href: '/staff/tasks', label: '처리 필요 항목', icon: ClipboardList },
   ],
   admin: [
     { href: '/admin/dashboard', label: '대시보드', icon: LayoutDashboard },
     { href: '/admin/patients', label: '환자 관리', icon: Users },
     { href: '/admin/staff', label: '직원 관리', icon: UserCog },
     { href: '/admin/schedule', label: '스케줄 관리', icon: Calendar },
-    { href: '/admin/stats', label: '통계', icon: BarChart3 },
+    { href: '/admin/tasks', label: '처리 필요 항목', icon: ClipboardList },
     { href: '/admin/sync', label: '데이터 동기화', icon: RefreshCw },
     { href: '/admin/settings/room-mapping', label: '호실 매핑', icon: Settings },
   ],
