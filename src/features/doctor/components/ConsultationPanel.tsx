@@ -30,9 +30,10 @@ import type { WaitingPatient } from '../backend/schema';
 interface ConsultationPanelProps {
   patient: WaitingPatient | null;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  saveRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-export function ConsultationPanel({ patient, searchInputRef }: ConsultationPanelProps) {
+export function ConsultationPanel({ patient, searchInputRef, saveRef }: ConsultationPanelProps) {
   const [consultationNote, setConsultationNote] = useState('');
   const [taskContent, setTaskContent] = useState('');
 
@@ -101,15 +102,22 @@ export function ConsultationPanel({ patient, searchInputRef }: ConsultationPanel
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
     handleQuickCheckRef.current = handleQuickCheck;
+    if (saveRef) {
+      saveRef.current = handleSubmit;
+    }
   });
 
-  // Ctrl+S: 진찰 저장, Ctrl+D: 진찰 체크
+  useEffect(() => {
+    return () => {
+      if (saveRef) {
+        saveRef.current = null;
+      }
+    };
+  }, [saveRef]);
+
+  // Ctrl+D: 진찰 체크 (Ctrl+S는 전역 useKeyboardShortcuts에서 처리)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        handleSubmitRef.current();
-      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault();
         handleQuickCheckRef.current();

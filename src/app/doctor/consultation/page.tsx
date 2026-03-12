@@ -47,6 +47,7 @@ export default function DoctorConsultationPage() {
           <ConsultationPanel
             patient={nav.selectedItem}
             searchInputRef={nav.searchInputRef}
+            saveRef={nav.saveRef}
           />
         }
       />

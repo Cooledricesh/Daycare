@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon } from 'lucide-react';
 import { format, subDays } from 'date-fns';
-import { STATS_DATA_START_DATE } from '@/features/shared/constants/stats';
+import { STATS_DATA_START_DATE_OBJ } from '@/features/shared/constants/stats';
 
 interface StatsDateRangePickerProps {
   startDate: Date;
@@ -26,17 +26,15 @@ export function StatsDateRangePicker({
   onStartDateChange,
   onEndDateChange,
 }: StatsDateRangePickerProps) {
-  const minDate = new Date(STATS_DATA_START_DATE + 'T00:00:00');
-
   const handlePreset = (days: number) => {
     const newStart = subDays(new Date(), days);
-    const clampedStart = newStart < minDate ? minDate : newStart;
+    const clampedStart = newStart < STATS_DATA_START_DATE_OBJ ? STATS_DATA_START_DATE_OBJ : newStart;
     onStartDateChange(clampedStart);
     onEndDateChange(new Date());
   };
 
   const handleAllData = () => {
-    onStartDateChange(minDate);
+    onStartDateChange(STATS_DATA_START_DATE_OBJ);
     onEndDateChange(new Date());
   };
 
@@ -55,7 +53,7 @@ export function StatsDateRangePicker({
               mode="single"
               selected={startDate}
               onSelect={(date) => date && onStartDateChange(date)}
-              fromDate={minDate}
+              fromDate={STATS_DATA_START_DATE_OBJ}
               toDate={endDate}
               initialFocus
             />

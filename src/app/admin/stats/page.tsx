@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStatsSummary, useDailyStats, useBatchRecalculateStats } from '@/features/admin/hooks/useStats';
 import { useBatchGenerateSchedules } from '@/features/admin/hooks/useSchedule';
 import { HolidayManageDialog } from '@/features/admin/components/HolidayManageDialog';
-import { STATS_DATA_START_DATE } from '@/features/shared/constants/stats';
+import { STATS_DATA_START_DATE_OBJ } from '@/features/shared/constants/stats';
 import { useToast } from '@/hooks/use-toast';
 import { StatsDateRangePicker } from '@/features/shared/components/stats/StatsDateRangePicker';
 import { StatsKpiCards } from '@/features/shared/components/stats/StatsKpiCards';
@@ -17,11 +17,9 @@ import { AttendanceRateChart } from '@/features/shared/components/stats/Attendan
 import { ConsultationRateChart } from '@/features/shared/components/stats/ConsultationRateChart';
 import { DayOfWeekChart } from '@/features/shared/components/stats/DayOfWeekChart';
 import { StatsDetailTable } from '@/features/shared/components/stats/StatsDetailTable';
-import { useSharedDayOfWeekStats } from '@/features/shared/hooks/useSharedStats';
 
 export default function StatsPage() {
-  const minDate = new Date(STATS_DATA_START_DATE + 'T00:00:00');
-  const [startDate, setStartDate] = useState<Date>(max([subDays(new Date(), 30), minDate]));
+  const [startDate, setStartDate] = useState<Date>(max([subDays(new Date(), 30), STATS_DATA_START_DATE_OBJ]));
   const [endDate, setEndDate] = useState<Date>(new Date());
 
   const startDateStr = format(startDate, 'yyyy-MM-dd');
@@ -33,11 +31,6 @@ export default function StatsPage() {
   });
 
   const { data: dailyStats, isLoading: dailyLoading } = useDailyStats({
-    start_date: startDateStr,
-    end_date: endDateStr,
-  });
-
-  const { data: dayOfWeekStats, isLoading: dowLoading } = useSharedDayOfWeekStats({
     start_date: startDateStr,
     end_date: endDateStr,
   });
@@ -127,8 +120,8 @@ export default function StatsPage() {
 
             <TabsContent value="day-of-week">
               <DayOfWeekChart
-                data={dayOfWeekStats || []}
-                isLoading={dowLoading}
+                dailyStats={dailyStats || []}
+                isLoading={dailyLoading}
               />
             </TabsContent>
           </Tabs>

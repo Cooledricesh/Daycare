@@ -2,7 +2,12 @@ import { DAY_NAMES_KO } from '@/lib/date';
 
 export { DAY_NAMES_KO };
 
+export function parseDateStr(dateStr: string): Date {
+  return new Date(dateStr + 'T00:00:00');
+}
+
 export const STATS_DATA_START_DATE = '2026-03-03';
+export const STATS_DATA_START_DATE_OBJ = parseDateStr(STATS_DATA_START_DATE);
 
 export const ATTENDANCE_RATE_THRESHOLDS = { GOOD: 90, WARNING: 70 } as const;
 export const CONSULTATION_RATE_THRESHOLDS = { GOOD: 85, WARNING: 60 } as const;
@@ -13,10 +18,6 @@ export const CHART_COLORS = {
   ATTENDANCE: '#2563eb',
   CONSULTATION: '#16a34a',
 } as const;
-
-export function parseDateStr(dateStr: string): Date {
-  return new Date(dateStr + 'T00:00:00');
-}
 
 export function getDayName(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);

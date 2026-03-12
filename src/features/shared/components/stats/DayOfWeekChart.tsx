@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   BarChart,
@@ -11,15 +12,18 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import type { DayOfWeekStatsItem } from '@/features/admin/backend/schema';
+import type { DailyStatsItem } from '@/features/admin/backend/schema';
 import { CHART_COLORS } from '@/features/shared/constants/stats';
+import { calculateDayOfWeekStats } from '@/features/shared/lib/stats';
 
 interface DayOfWeekChartProps {
-  data: DayOfWeekStatsItem[];
+  dailyStats: DailyStatsItem[];
   isLoading: boolean;
 }
 
-export function DayOfWeekChart({ data, isLoading }: DayOfWeekChartProps) {
+export function DayOfWeekChart({ dailyStats, isLoading }: DayOfWeekChartProps) {
+  const data = useMemo(() => calculateDayOfWeekStats(dailyStats), [dailyStats]);
+
   if (isLoading) {
     return (
       <Card>

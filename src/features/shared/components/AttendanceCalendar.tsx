@@ -16,14 +16,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DAY_NAMES_KO } from '@/lib/date';
 import { usePatientAttendanceCalendar } from '../hooks/usePatientAttendanceCalendar';
 
 interface AttendanceCalendarProps {
   patientId: string;
   className?: string;
 }
-
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 export function AttendanceCalendar({ patientId, className }: AttendanceCalendarProps) {
   const [viewDate, setViewDate] = useState(new Date());
@@ -76,7 +75,7 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
           <>
             {/* 요일 헤더 */}
             <div className="grid grid-cols-7 mb-1">
-              {WEEKDAYS.map((day, i) => (
+              {DAY_NAMES_KO.map((day, i) => (
                 <div
                   key={day}
                   className={cn(

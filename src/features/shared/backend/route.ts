@@ -5,7 +5,6 @@ import { success, failure, respond } from '@/server/http/response';
 import {
   getStatsSummary,
   getDailyStats,
-  getDayOfWeekStats,
   getHolidays,
 } from '@/features/admin/backend/service';
 import { AdminError } from '@/features/admin/backend/error';
@@ -226,29 +225,6 @@ sharedRoutes.get('/stats/daily', async (c) => {
   try {
     const params = getDailyStatsQuerySchema.parse(query);
     const result = await getDailyStats(supabase, params);
-    return respond(c, success({ data: result }, 200));
-  } catch (error) {
-    if (error instanceof AdminError) {
-      return respond(c, failure(400, error.code, error.message));
-    }
-    throw error;
-  }
-});
-
-/**
- * GET /api/shared/stats/day-of-week
- * 요일별 평균 통계
- */
-sharedRoutes.get('/stats/day-of-week', async (c) => {
-  const supabase = c.get('supabase');
-  const query = {
-    start_date: c.req.query('start_date'),
-    end_date: c.req.query('end_date'),
-  };
-
-  try {
-    const params = getDailyStatsQuerySchema.parse(query);
-    const result = await getDayOfWeekStats(supabase, params);
     return respond(c, success({ data: result }, 200));
   } catch (error) {
     if (error instanceof AdminError) {

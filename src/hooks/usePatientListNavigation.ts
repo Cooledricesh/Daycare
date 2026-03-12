@@ -5,12 +5,14 @@ interface UsePatientListNavigationOptions<T extends { id: string }, F extends st
   patients: T[];
   filterTabKeys: readonly F[];
   onConfirmSelection?: () => void;
+  onSave?: () => void;
 }
 
 export function usePatientListNavigation<T extends { id: string }, F extends string>({
   patients,
   filterTabKeys,
   onConfirmSelection,
+  onSave,
 }: UsePatientListNavigationOptions<T, F>) {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -76,8 +78,11 @@ export function usePatientListNavigation<T extends { id: string }, F extends str
     }
   }, [filterTabKeys]);
 
+  const saveRef = useRef<(() => void) | null>(null);
+
   useKeyboardShortcuts({
     searchInputRef,
+    onSave: onSave ?? (() => saveRef.current?.()),
     onNavigatePrev: handleNavigatePrev,
     onNavigateNext: handleNavigateNext,
     onEnterInSearch: handleEnterInSearch,
@@ -97,5 +102,6 @@ export function usePatientListNavigation<T extends { id: string }, F extends str
     setShowShortcutHelp,
     handleSelectItem,
     handleFilteredItemsChange,
+    saveRef,
   };
 }
