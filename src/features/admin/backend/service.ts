@@ -27,6 +27,7 @@ import type {
   StatsSummary,
   GetDailyStatsQuery,
   DailyStatsItem,
+  DayOfWeekStatsItem,
   BatchGenerateRequest,
   BatchOperationResult,
   UpdateRoomMappingRequest,
@@ -34,6 +35,9 @@ import type {
   RoomMappingItem,
   GetSyncLogsQuery,
   SyncLogItem,
+  CreateHolidayRequest,
+  GetHolidaysQuery,
+  HolidayItem,
 } from './schema';
 
 const SALT_ROUNDS = 10;
@@ -665,6 +669,7 @@ export async function calculateDailyStats(
     { count: scheduledCount },
     { count: attendanceCount },
     { count: consultationCount },
+    { count: registeredCount },
   ] = await Promise.all([
     (supabase.from('scheduled_attendances') as any)
       .select('*', { count: 'exact', head: true })
@@ -676,10 +681,14 @@ export async function calculateDailyStats(
     (supabase.from('consultations') as any)
       .select('*', { count: 'exact', head: true })
       .eq('date', date),
+    (supabase.from('patients') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active'),
   ]);
 
   const ac = attendanceCount ?? 0;
   const cc = consultationCount ?? 0;
+  const rc = registeredCount ?? 0;
   let sc = scheduledCount ?? 0;
 
   // 예정 기록 없지만 활동 있는 경우 → 출석 수를 예정으로 사용
@@ -694,6 +703,9 @@ export async function calculateDailyStats(
   const consultationRate = hasActivity && sc > 0
     ? Math.min(Math.round((cc / sc) * 10000) / 100, 100)
     : null;
+  const consultationRateVsAttendance = hasActivity && ac > 0
+    ? Math.min(Math.round((cc / ac) * 10000) / 100, 100)
+    : null;
 
   const { data, error } = await (supabase
     .from('daily_stats') as any)
@@ -702,8 +714,10 @@ export async function calculateDailyStats(
       scheduled_count: sc,
       attendance_count: ac,
       consultation_count: cc,
+      registered_count: rc,
       attendance_rate: attendanceRate,
       consultation_rate: consultationRate,
+      consultation_rate_vs_attendance: consultationRateVsAttendance,
       calculated_at: new Date().toISOString(),
     }, { onConflict: 'date' })
     .select()
@@ -716,7 +730,108 @@ export async function calculateDailyStats(
     );
   }
 
-  return data as DailyStatsItem;
+  return {
+    ...data,
+    is_holiday: false,
+    is_weekend: false,
+  } as DailyStatsItem;
+}
+
+// ========== Holiday Utility Functions ==========
+
+function isWeekend(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return dow === 0 || dow === 6;
+}
+
+async function getHolidayDatesMap(
+  supabase: SupabaseClient<Database>,
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, string>> {
+  const { data } = await (supabase
+    .from('holidays') as any)
+    .select('date, reason')
+    .gte('date', startDate)
+    .lte('date', endDate);
+
+  const map = new Map<string, string>();
+  (data || []).forEach((h: any) => {
+    map.set(h.date, h.reason);
+  });
+  return map;
+}
+
+// ========== Holiday CRUD ==========
+
+export async function getHolidays(
+  supabase: SupabaseClient<Database>,
+  query: GetHolidaysQuery,
+): Promise<HolidayItem[]> {
+  const { data, error } = await (supabase
+    .from('holidays') as any)
+    .select('*')
+    .gte('date', query.start_date)
+    .lte('date', query.end_date)
+    .order('date');
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.STATS_FETCH_FAILED,
+      `공휴일 조회 실패: ${error.message}`,
+    );
+  }
+
+  return (data || []) as HolidayItem[];
+}
+
+export async function createHoliday(
+  supabase: SupabaseClient<Database>,
+  request: CreateHolidayRequest,
+): Promise<HolidayItem> {
+  const { data, error } = await (supabase
+    .from('holidays') as any)
+    .insert({
+      date: request.date,
+      reason: request.reason,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new AdminError(
+        AdminErrorCode.HOLIDAY_ALREADY_EXISTS,
+        '이미 등록된 공휴일입니다',
+      );
+    }
+    throw new AdminError(
+      AdminErrorCode.HOLIDAY_CREATE_FAILED,
+      `공휴일 등록 실패: ${error.message}`,
+    );
+  }
+
+  return data as HolidayItem;
+}
+
+export async function deleteHoliday(
+  supabase: SupabaseClient<Database>,
+  holidayId: string,
+): Promise<{ success: boolean }> {
+  const { error } = await (supabase
+    .from('holidays') as any)
+    .delete()
+    .eq('id', holidayId);
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.HOLIDAY_DELETE_FAILED,
+      `공휴일 삭제 실패: ${error.message}`,
+    );
+  }
+
+  return { success: true };
 }
 
 async function ensureTodayScheduleGenerated(
@@ -990,13 +1105,16 @@ export async function getStatsSummary(
     .toISOString()
     .split('T')[0];
 
-  // 5개 쿼리 병렬 실행
+  // 8개 쿼리 병렬 실행 (공휴일 조회 추가)
   const [
     { data: periodStats },
     { count: scheduledCount },
     { count: attendanceCount },
     { count: consultationCount },
+    { count: registeredCount },
     { data: prevStats },
+    holidays,
+    prevHolidays,
   ] = await Promise.all([
     (supabase.from('daily_stats') as any)
       .select('*')
@@ -1012,31 +1130,64 @@ export async function getStatsSummary(
     (supabase.from('consultations') as any)
       .select('*', { count: 'exact', head: true })
       .eq('date', today),
+    (supabase.from('patients') as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active'),
     (supabase.from('daily_stats') as any)
       .select('*')
       .gte('date', prevStartDate)
       .lte('date', prevEndDate),
+    getHolidayDatesMap(supabase, query.start_date, query.end_date),
+    getHolidayDatesMap(supabase, prevStartDate, prevEndDate),
   ]);
 
   const totalScheduled = (periodStats as any)?.reduce((sum: number, s: any) => sum + s.scheduled_count, 0) || 0;
   const totalAttendance = (periodStats as any)?.reduce((sum: number, s: any) => sum + s.attendance_count, 0) || 0;
   const totalConsultation = (periodStats as any)?.reduce((sum: number, s: any) => sum + s.consultation_count, 0) || 0;
 
-  const validDays = (periodStats as any)?.filter((s: any) => s.attendance_rate !== null) || [];
-  const avgAttendanceRate = validDays.length > 0
-    ? validDays.reduce((sum: number, s: any) => sum + Math.min(s.attendance_rate || 0, 100), 0) / validDays.length
+  // 출석률 평균: 공휴일만 제외 (주말 포함)
+  const validDaysForAttendance = ((periodStats as any) || []).filter(
+    (s: any) => s.attendance_rate !== null && !holidays.has(s.date),
+  );
+  const avgAttendanceRate = validDaysForAttendance.length > 0
+    ? validDaysForAttendance.reduce((sum: number, s: any) => sum + Math.min(s.attendance_rate || 0, 100), 0) / validDaysForAttendance.length
     : 0;
-  const avgConsultationRate = validDays.length > 0
-    ? validDays.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate || 0, 100), 0) / validDays.length
+  const avgConsultationRate = validDaysForAttendance.length > 0
+    ? validDaysForAttendance.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate || 0, 100), 0) / validDaysForAttendance.length
     : 0;
 
-  const prevValidDays = (prevStats as any)?.filter((s: any) => s.attendance_rate !== null) || [];
-  const prevAvgAttendanceRate = prevValidDays.length > 0
-    ? prevValidDays.reduce((sum: number, s: any) => sum + Math.min(s.attendance_rate || 0, 100), 0) / prevValidDays.length
+  // 진찰률 평균: 공휴일 + 주말 제외
+  const validDaysForConsultation = ((periodStats as any) || []).filter(
+    (s: any) => s.attendance_rate !== null && !holidays.has(s.date) && !isWeekend(s.date),
+  );
+  const avgConsultationRateVsAttendance = validDaysForConsultation.length > 0
+    ? validDaysForConsultation.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate_vs_attendance || 0, 100), 0) / validDaysForConsultation.length
     : 0;
-  const prevAvgConsultationRate = prevValidDays.length > 0
-    ? prevValidDays.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate || 0, 100), 0) / prevValidDays.length
+
+  // 이전 기간도 동일 로직
+  const prevValidDaysForAttendance = ((prevStats as any) || []).filter(
+    (s: any) => s.attendance_rate !== null && !prevHolidays.has(s.date),
+  );
+  const prevAvgAttendanceRate = prevValidDaysForAttendance.length > 0
+    ? prevValidDaysForAttendance.reduce((sum: number, s: any) => sum + Math.min(s.attendance_rate || 0, 100), 0) / prevValidDaysForAttendance.length
     : 0;
+  const prevAvgConsultationRate = prevValidDaysForAttendance.length > 0
+    ? prevValidDaysForAttendance.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate || 0, 100), 0) / prevValidDaysForAttendance.length
+    : 0;
+  const prevValidDaysForConsultation = ((prevStats as any) || []).filter(
+    (s: any) => s.attendance_rate !== null && !prevHolidays.has(s.date) && !isWeekend(s.date),
+  );
+  const prevAvgConsultationRateVsAttendance = prevValidDaysForConsultation.length > 0
+    ? prevValidDaysForConsultation.reduce((sum: number, s: any) => sum + Math.min(s.consultation_rate_vs_attendance || 0, 100), 0) / prevValidDaysForConsultation.length
+    : 0;
+
+  // 제외 일수 계산
+  const excludedHolidays = ((periodStats as any) || []).filter(
+    (s: any) => s.attendance_rate !== null && holidays.has(s.date),
+  ).length;
+  const excludedWeekendsForConsultation = ((periodStats as any) || []).filter(
+    (s: any) => s.attendance_rate !== null && !holidays.has(s.date) && isWeekend(s.date),
+  ).length;
 
   return {
     period: {
@@ -1045,6 +1196,7 @@ export async function getStatsSummary(
     },
     average_attendance_rate: avgAttendanceRate,
     average_consultation_rate: avgConsultationRate,
+    average_consultation_rate_vs_attendance: avgConsultationRateVsAttendance,
     total_scheduled: totalScheduled,
     total_attendance: totalAttendance,
     total_consultation: totalConsultation,
@@ -1052,11 +1204,15 @@ export async function getStatsSummary(
       scheduled: scheduledCount || 0,
       attendance: attendanceCount || 0,
       consultation: consultationCount || 0,
+      registered: registeredCount || 0,
     },
     previous_period: {
       average_attendance_rate: prevAvgAttendanceRate,
       average_consultation_rate: prevAvgConsultationRate,
+      average_consultation_rate_vs_attendance: prevAvgConsultationRateVsAttendance,
     },
+    excluded_holidays: excludedHolidays,
+    excluded_weekends_for_consultation: excludedWeekendsForConsultation,
   };
 }
 
@@ -1067,12 +1223,15 @@ export async function getDailyStats(
   // Lazy 마감: 전일 통계 미존재 시 계산
   await ensureYesterdayStatsClosed(supabase);
 
-  const { data, error } = await supabase
-    .from('daily_stats')
-    .select('*')
-    .gte('date', query.start_date)
-    .lte('date', query.end_date)
-    .order('date');
+  const [{ data, error }, holidays] = await Promise.all([
+    supabase
+      .from('daily_stats')
+      .select('*')
+      .gte('date', query.start_date)
+      .lte('date', query.end_date)
+      .order('date'),
+    getHolidayDatesMap(supabase, query.start_date, query.end_date),
+  ]);
 
   if (error) {
     throw new AdminError(
@@ -1081,7 +1240,91 @@ export async function getDailyStats(
     );
   }
 
-  return (data || []) as DailyStatsItem[];
+  return (data || []).map((row: any) => ({
+    ...row,
+    is_holiday: holidays.has(row.date),
+    holiday_reason: holidays.get(row.date) || undefined,
+    is_weekend: isWeekend(row.date),
+  })) as DailyStatsItem[];
+}
+
+const DAY_NAMES_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+export async function getDayOfWeekStats(
+  supabase: SupabaseClient<Database>,
+  query: GetDailyStatsQuery,
+): Promise<DayOfWeekStatsItem[]> {
+  await ensureYesterdayStatsClosed(supabase);
+
+  const [{ data, error }, holidays] = await Promise.all([
+    supabase
+      .from('daily_stats')
+      .select('*')
+      .gte('date', query.start_date)
+      .lte('date', query.end_date)
+      .order('date'),
+    getHolidayDatesMap(supabase, query.start_date, query.end_date),
+  ]);
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.STATS_FETCH_FAILED,
+      `요일별 통계 조회 실패: ${error.message}`,
+    );
+  }
+
+  // 공휴일 제외 후 유효 데이터만
+  const validStats = ((data || []) as any[]).filter(
+    (s) => s.attendance_rate !== null && !holidays.has(s.date),
+  );
+
+  const grouped = new Map<number, any[]>();
+  for (const stat of validStats) {
+    const [y, m, d] = stat.date.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    if (!grouped.has(dow)) grouped.set(dow, []);
+    grouped.get(dow)!.push(stat);
+  }
+
+  // 월(1)~토(6), 일(0) 순서로 정렬
+  const sortOrder = [1, 2, 3, 4, 5, 6, 0];
+  const result: DayOfWeekStatsItem[] = [];
+
+  for (const dow of sortOrder) {
+    const items = grouped.get(dow);
+    if (!items || items.length === 0) continue;
+
+    const count = items.length;
+    const avgScheduled = items.reduce((s, i) => s + i.scheduled_count, 0) / count;
+    const avgAttendance = items.reduce((s, i) => s + i.attendance_count, 0) / count;
+    const avgConsultation = items.reduce((s, i) => s + i.consultation_count, 0) / count;
+    const avgAttendanceRate = items.reduce(
+      (s, i) => s + Math.min(i.attendance_rate || 0, 100), 0,
+    ) / count;
+
+    // 토/일(주말)은 진찰 미운영 → null
+    const isWeekendDay = dow === 0 || dow === 6;
+    const avgConsultationRateVsAttendance = isWeekendDay
+      ? null
+      : Math.round(
+          (items.reduce(
+            (s, i) => s + Math.min(i.consultation_rate_vs_attendance || 0, 100), 0,
+          ) / count) * 10,
+        ) / 10;
+
+    result.push({
+      day_of_week: dow,
+      day_name: DAY_NAMES_KO[dow],
+      avg_scheduled: Math.round(avgScheduled * 10) / 10,
+      avg_attendance: Math.round(avgAttendance * 10) / 10,
+      avg_consultation: Math.round(avgConsultation * 10) / 10,
+      avg_attendance_rate: Math.round(avgAttendanceRate * 10) / 10,
+      avg_consultation_rate_vs_attendance: avgConsultationRateVsAttendance,
+      data_count: count,
+    });
+  }
+
+  return result;
 }
 
 // ========== Room Mapping Service ==========

@@ -22,6 +22,8 @@ import {
   updateRoomMappingSchema,
   createRoomMappingSchema,
   getSyncLogsQuerySchema,
+  createHolidaySchema,
+  getHolidaysQuerySchema,
 } from './schema';
 import { getNursePatients } from '@/features/nurse/backend/service';
 import { getPatientDetail as getStaffPatientDetail } from '@/features/staff/backend/service';
@@ -64,6 +66,9 @@ import {
   deleteRoomMapping,
   getSyncLogs,
   getSyncLogById,
+  getHolidays,
+  createHoliday,
+  deleteHoliday,
 } from './service';
 
 const adminRoutes = new Hono<AppEnv>();
@@ -550,6 +555,73 @@ adminRoutes.get('/stats/daily', async (c) => {
     const params = getDailyStatsQuerySchema.parse(query);
     const result = await getDailyStats(supabase, params);
     return respond(c, success({ data: result }, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+// ========== Holidays Routes ==========
+
+/**
+ * GET /api/admin/holidays
+ * 공휴일 목록 조회
+ */
+adminRoutes.get('/holidays', async (c) => {
+  const supabase = c.get('supabase');
+  const query = {
+    start_date: c.req.query('start_date'),
+    end_date: c.req.query('end_date'),
+  };
+
+  try {
+    const params = getHolidaysQuerySchema.parse(query);
+    const result = await getHolidays(supabase, params);
+    return respond(c, success({ data: result }, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/admin/holidays
+ * 공휴일 등록
+ */
+adminRoutes.post('/holidays', async (c) => {
+  const supabase = c.get('supabase');
+  const body = await c.req.json();
+
+  try {
+    const request = createHolidaySchema.parse(body);
+    const result = await createHoliday(supabase, request);
+    return respond(c, success(result, 201));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      if (error.code === 'HOLIDAY_ALREADY_EXISTS') {
+        return respond(c, failure(409, error.code, error.message));
+      }
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/admin/holidays/:id
+ * 공휴일 삭제
+ */
+adminRoutes.delete('/holidays/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const holidayId = c.req.param('id');
+
+  try {
+    const result = await deleteHoliday(supabase, holidayId);
+    return respond(c, success(result, 200));
   } catch (error) {
     if (error instanceof AdminError) {
       return respond(c, failure(400, error.code, error.message));

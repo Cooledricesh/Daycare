@@ -126,6 +126,18 @@ export const getDailyStatsQuerySchema = z.object({
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+// ========== Holidays API Schemas ==========
+
+export const createHolidaySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '올바른 날짜 형식이 아닙니다'),
+  reason: z.string().min(1, '사유를 입력해주세요').max(100, '사유는 100자 이하이어야 합니다'),
+});
+
+export const getHolidaysQuerySchema = z.object({
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
 // ========== Schedule/Stats Generation Schemas ==========
 
 export const generateScheduleRequestSchema = z.object({
@@ -156,6 +168,9 @@ export type CancelScheduleRequest = z.infer<typeof cancelScheduleSchema>;
 
 export type GetStatsSummaryQuery = z.infer<typeof getStatsSummaryQuerySchema>;
 export type GetDailyStatsQuery = z.infer<typeof getDailyStatsQuerySchema>;
+
+export type CreateHolidayRequest = z.infer<typeof createHolidaySchema>;
+export type GetHolidaysQuery = z.infer<typeof getHolidaysQuerySchema>;
 
 export type GenerateScheduleRequest = z.infer<typeof generateScheduleRequestSchema>;
 export type BatchGenerateRequest = z.infer<typeof batchGenerateSchema>;
@@ -239,6 +254,7 @@ export interface StatsSummary {
   };
   average_attendance_rate: number;
   average_consultation_rate: number;
+  average_consultation_rate_vs_attendance: number;
   total_scheduled: number;
   total_attendance: number;
   total_consultation: number;
@@ -246,11 +262,15 @@ export interface StatsSummary {
     scheduled: number;
     attendance: number;
     consultation: number;
+    registered: number;
   };
   previous_period: {
     average_attendance_rate: number;
     average_consultation_rate: number;
+    average_consultation_rate_vs_attendance: number;
   };
+  excluded_holidays: number;
+  excluded_weekends_for_consultation: number;
 }
 
 export interface DailyStatsItem {
@@ -259,9 +279,33 @@ export interface DailyStatsItem {
   scheduled_count: number;
   attendance_count: number;
   consultation_count: number;
+  registered_count: number;
   attendance_rate: number | null;
   consultation_rate: number | null;
+  consultation_rate_vs_attendance: number | null;
   calculated_at: string;
+  is_holiday: boolean;
+  holiday_reason?: string;
+  is_weekend: boolean;
+}
+
+export interface DayOfWeekStatsItem {
+  day_of_week: number;
+  day_name: string;
+  avg_scheduled: number;
+  avg_attendance: number;
+  avg_consultation: number;
+  avg_attendance_rate: number;
+  avg_consultation_rate_vs_attendance: number | null;
+  data_count: number;
+}
+
+export interface HolidayItem {
+  id: string;
+  date: string;
+  reason: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ========== Batch Operation Types ==========
