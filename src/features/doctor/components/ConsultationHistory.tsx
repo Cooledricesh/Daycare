@@ -12,6 +12,7 @@ interface ConsultationHistoryProps {
   currentUserId?: string;
   currentUserRole?: string;
   onDeleteMessage?: (messageId: string) => void;
+  onDeleteConsultation?: (consultationId: string) => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -59,16 +60,38 @@ function hasDoctorName(doctorName: string | undefined): boolean {
 }
 
 // 진찰 기록 아이템
-function ConsultationItem({ consultation }: { consultation: ConsultationRecord }) {
+function ConsultationItem({ consultation, onDelete }: { consultation: ConsultationRecord; onDelete?: (id: string) => void }) {
   return (
     <>
       {consultation.note && (
-        <p className="text-sm whitespace-pre-wrap text-gray-700 mt-1">{consultation.note}</p>
+        <div className="group/note relative">
+          <p className="text-sm whitespace-pre-wrap text-gray-700 mt-1 pr-5">{consultation.note}</p>
+          {onDelete && (
+            <button
+              type="button"
+              className="absolute top-1 right-0 p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover/note:opacity-100 transition-opacity"
+              onClick={() => onDelete(consultation.id)}
+              title="기록 삭제"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       )}
       {consultation.has_task && consultation.task_content && (
-        <div className="mt-1.5 p-2 bg-yellow-50 rounded text-sm">
+        <div className="mt-1.5 p-2 bg-yellow-50 rounded text-sm group/task relative">
           <span className="text-yellow-700 font-medium">투약/전달: </span>
-          <span>{consultation.task_content}</span>
+          <span className="pr-5">{consultation.task_content}</span>
+          {onDelete && (
+            <button
+              type="button"
+              className="absolute top-1.5 right-1.5 p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover/task:opacity-100 transition-opacity"
+              onClick={() => onDelete(consultation.id)}
+              title="기록 삭제"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       )}
     </>
@@ -96,7 +119,7 @@ function MessageItem({ message, onDelete }: { message: MessageRecord; onDelete?:
 }
 
 // 날짜별 통합 아이템
-function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
+function FlatItem({ consultation, onDelete }: { consultation: ConsultationRecord; onDelete?: (id: string) => void }) {
   if (!hasContent(consultation)) return null;
   const showName = hasDoctorName(consultation.doctor_name);
   return (
@@ -105,7 +128,7 @@ function FlatItem({ consultation }: { consultation: ConsultationRecord }) {
         <span className="font-medium text-gray-900">{formatDate(consultation.date)}</span>
         {showName && <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>}
       </div>
-      <ConsultationItem consultation={consultation} />
+      <ConsultationItem consultation={consultation} onDelete={onDelete} />
     </div>
   );
 }
@@ -129,7 +152,7 @@ function buildTimeline(consultations: ConsultationRecord[], messages: MessageRec
   return new Map([...map.entries()].sort(([a], [b]) => b.localeCompare(a)));
 }
 
-function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessage }: { date: string; items: TimelineItem[]; currentUserId?: string; isAdmin?: boolean; onDeleteMessage?: (id: string) => void }) {
+function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessage, onDeleteConsultation }: { date: string; items: TimelineItem[]; currentUserId?: string; isAdmin?: boolean; onDeleteMessage?: (id: string) => void; onDeleteConsultation?: (id: string) => void }) {
   const firstConsultation = items.find(i => i.type === 'consultation');
   const consultation = firstConsultation ? (firstConsultation.data as ConsultationRecord) : null;
   const showName = consultation && hasDoctorName(consultation.doctor_name);
@@ -142,7 +165,7 @@ function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessag
       </div>
       {items.map((item, i) => {
         if (item.type === 'consultation') {
-          return <ConsultationItem key={`c-${i}`} consultation={item.data as ConsultationRecord} />;
+          return <ConsultationItem key={`c-${i}`} consultation={item.data as ConsultationRecord} onDelete={isAdmin ? onDeleteConsultation : undefined} />;
         }
         const msg = item.data as MessageRecord;
         const canDelete = isAdmin || (currentUserId && msg.author_id === currentUserId);
@@ -152,7 +175,7 @@ function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessag
   );
 }
 
-export function ConsultationHistory({ consultations, messages = [], currentUserId, currentUserRole, onDeleteMessage }: ConsultationHistoryProps) {
+export function ConsultationHistory({ consultations, messages = [], currentUserId, currentUserRole, onDeleteMessage, onDeleteConsultation }: ConsultationHistoryProps) {
   const isAdmin = currentUserRole === 'admin';
   const [showOlder, setShowOlder] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -296,7 +319,7 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
           recentDates.length > 0 ? (
             <div>
               {recentDates.map(([date, items]) => (
-                <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} />
+                <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} onDeleteConsultation={isAdmin ? onDeleteConsultation : undefined} />
               ))}
             </div>
           ) : (
@@ -307,7 +330,7 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
           recentConsultations.length > 0 ? (
             <div>
               {recentConsultations.map((c) => (
-                <FlatItem key={c.id} consultation={c} />
+                <FlatItem key={c.id} consultation={c} onDelete={isAdmin ? onDeleteConsultation : undefined} />
               ))}
             </div>
           ) : (
@@ -352,7 +375,7 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
                       <div key={monthLabel}>
                         <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
                         {entries.map(([date, items]) => (
-                          <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} />
+                          <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} onDeleteConsultation={isAdmin ? onDeleteConsultation : undefined} />
                         ))}
                       </div>
                     ));
@@ -363,7 +386,7 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
                     <div key={monthLabel}>
                       <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
                       {records.map((c) => (
-                        <FlatItem key={c.id} consultation={c} />
+                        <FlatItem key={c.id} consultation={c} onDelete={isAdmin ? onDeleteConsultation : undefined} />
                       ))}
                     </div>
                   ))

@@ -6,6 +6,8 @@ interface UseKeyboardShortcutsOptions {
   onNavigatePrev?: () => void;
   onNavigateNext?: () => void;
   onTabSwitch?: (tabIndex: number) => void;
+  onEnterInSearch?: () => void;
+  onShowHelp?: () => void;
 }
 
 export function useKeyboardShortcuts({
@@ -14,17 +16,24 @@ export function useKeyboardShortcuts({
   onNavigatePrev,
   onNavigateNext,
   onTabSwitch,
+  onEnterInSearch,
+  onShowHelp,
 }: UseKeyboardShortcutsOptions) {
-  // Store callbacks in refs to avoid re-registering listeners
   const onSaveRef = useRef(onSave);
   const onNavigatePrevRef = useRef(onNavigatePrev);
   const onNavigateNextRef = useRef(onNavigateNext);
   const onTabSwitchRef = useRef(onTabSwitch);
+  const onEnterInSearchRef = useRef(onEnterInSearch);
+  const onShowHelpRef = useRef(onShowHelp);
 
-  onSaveRef.current = onSave;
-  onNavigatePrevRef.current = onNavigatePrev;
-  onNavigateNextRef.current = onNavigateNext;
-  onTabSwitchRef.current = onTabSwitch;
+  useEffect(() => {
+    onSaveRef.current = onSave;
+    onNavigatePrevRef.current = onNavigatePrev;
+    onNavigateNextRef.current = onNavigateNext;
+    onTabSwitchRef.current = onTabSwitch;
+    onEnterInSearchRef.current = onEnterInSearch;
+    onShowHelpRef.current = onShowHelp;
+  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -34,10 +43,11 @@ export function useKeyboardShortcuts({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable;
 
-      // Ctrl+K / Cmd+K: focus search (always works)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      // Ctrl+F / Cmd+F: focus search (always works)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         searchInputRef?.current?.focus();
+        searchInputRef?.current?.select();
         return;
       }
 
@@ -55,9 +65,28 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // When typing, skip remaining shortcuts
+      // When typing in search input, handle ArrowUp/Down for patient navigation
       if (isTyping) {
-        // Escape: blur search input
+        const isSearchInput = target === searchInputRef?.current;
+
+        if (isSearchInput) {
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            onNavigatePrevRef.current?.();
+            return;
+          }
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            onNavigateNextRef.current?.();
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onEnterInSearchRef.current?.();
+            return;
+          }
+        }
+
         if (e.key === 'Escape') {
           (target as HTMLElement).blur();
         }
@@ -68,6 +97,7 @@ export function useKeyboardShortcuts({
       if (e.key === '/') {
         e.preventDefault();
         searchInputRef?.current?.focus();
+        searchInputRef?.current?.select();
         return;
       }
 
@@ -77,17 +107,31 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // Arrow Up / j: previous patient
-      if (e.key === 'ArrowUp' || e.key === 'j') {
+      // ? : show help modal
+      if (e.key === '?') {
+        e.preventDefault();
+        onShowHelpRef.current?.();
+        return;
+      }
+
+      // Arrow Up: previous patient
+      if (e.key === 'ArrowUp') {
         e.preventDefault();
         onNavigatePrevRef.current?.();
         return;
       }
 
-      // Arrow Down / k: next patient
-      if (e.key === 'ArrowDown' || e.key === 'k') {
+      // Arrow Down: next patient
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         onNavigateNextRef.current?.();
+        return;
+      }
+
+      // Enter: confirm selection
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onEnterInSearchRef.current?.();
         return;
       }
 

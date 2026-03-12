@@ -1334,3 +1334,32 @@ export async function getSyncLogById(
 
   return data;
 }
+
+/**
+ * 진찰 기록 삭제 (admin 전용)
+ * task_completions는 ON DELETE CASCADE로 자동 삭제
+ */
+export async function deleteConsultation(
+  supabase: SupabaseClient<Database>,
+  consultationId: string,
+): Promise<void> {
+  const { data, error } = await (supabase
+    .from('consultations') as any)
+    .delete()
+    .eq('id', consultationId)
+    .select('id');
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.CONSULTATION_DELETE_FAILED,
+      `진찰 기록 삭제에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  if (!data || data.length === 0) {
+    throw new AdminError(
+      AdminErrorCode.CONSULTATION_NOT_FOUND,
+      '진찰 기록을 찾을 수 없습니다.',
+    );
+  }
+}

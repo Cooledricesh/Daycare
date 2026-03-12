@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,12 @@ import type { WaitingPatient } from '../backend/schema';
 
 type FilterTab = 'all' | 'waiting' | 'completed';
 
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'waiting', label: '예정' },
+  { key: 'completed', label: '완료' },
+];
+
 interface PatientListPanelProps {
   patients: WaitingPatient[];
   isLoading: boolean;
@@ -20,6 +26,9 @@ interface PatientListPanelProps {
   onSelectPatient: (patient: WaitingPatient) => void;
   onRefresh: () => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
+  filterTab: FilterTab;
+  onFilterTabChange: (tab: FilterTab) => void;
+  onFilteredPatientsChange?: (patients: WaitingPatient[]) => void;
 }
 
 export function PatientListPanel({
@@ -29,29 +38,27 @@ export function PatientListPanel({
   onSelectPatient,
   onRefresh,
   searchInputRef,
+  filterTab,
+  onFilterTabChange,
+  onFilteredPatientsChange,
 }: PatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
-  const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
-  // 카운트 계산
   const counts = useMemo(() => {
     const waiting = patients.filter(p => p.is_scheduled).length;
     const completed = patients.filter(p => p.has_consultation).length;
     return { all: patients.length, waiting, completed };
   }, [patients]);
 
-  // 필터링 + 검색 + 정렬
   const filteredPatients = useMemo(() => {
     let result = patients;
 
-    // 필터 탭 적용
     if (filterTab === 'waiting') {
       result = result.filter(p => p.is_scheduled);
     } else if (filterTab === 'completed') {
       result = result.filter(p => p.has_consultation);
     }
 
-    // 검색어 필터링 (display_name도 검색 대상)
     if (searchQuery.trim()) {
       const query = searchQuery.trim();
       result = result.filter(p => {
@@ -59,7 +66,6 @@ export function PatientListPanel({
       });
     }
 
-    // 정렬 그룹: 0=지시/전달, 1=출석(미진찰), 2=예정(미출석), 3=진찰완료, 4=미예정
     result = [...result].sort((a, b) => {
       const group = (p: WaitingPatient) => {
         const hasAction = p.task_status === 'pending' || p.unread_message_count > 0;
@@ -78,11 +84,15 @@ export function PatientListPanel({
     return result;
   }, [patients, filterTab, searchQuery]);
 
-  const filterTabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: 'all', label: '전체', count: counts.all },
-    { key: 'waiting', label: '예정', count: counts.waiting },
-    { key: 'completed', label: '완료', count: counts.completed },
-  ];
+  useEffect(() => {
+    onFilteredPatientsChange?.(filteredPatients);
+  }, [filteredPatients, onFilteredPatientsChange]);
+
+  const countMap: Record<FilterTab, number> = {
+    all: counts.all,
+    waiting: counts.waiting,
+    completed: counts.completed,
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -107,6 +117,7 @@ export function PatientListPanel({
             ref={searchInputRef}
             placeholder="환자 검색 (초성 지원: ㄱㅅㅎ)"
             {...inputProps}
+            onFocus={(e) => e.target.select()}
             className="pl-9 h-9"
           />
           {rawValue && (
@@ -121,7 +132,7 @@ export function PatientListPanel({
 
         {/* 필터 탭 */}
         <div className="flex gap-1">
-          {filterTabs.map(tab => (
+          {FILTER_TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
@@ -130,10 +141,10 @@ export function PatientListPanel({
                   ? 'bg-purple-100 text-purple-700'
                   : 'text-gray-500 hover:bg-gray-100'
               )}
-              onClick={() => setFilterTab(tab.key)}
+              onClick={() => onFilterTabChange(tab.key)}
             >
               {tab.label}
-              <span className="ml-1 text-[10px]">({tab.count})</span>
+              <span className="ml-1 text-[10px]">({countMap[tab.key]})</span>
             </button>
           ))}
         </div>
@@ -141,7 +152,7 @@ export function PatientListPanel({
 
       {/* 키보드 단축키 힌트 */}
       <div className="text-[10px] text-gray-400 px-4 py-1 border-b">
-        <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">/</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장
+        <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+F</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Enter</kbd> 선택 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+D</kbd> 진찰체크 &middot; <kbd className="px-1 bg-gray-100 rounded">?</kbd> 도움말
       </div>
 
       {/* 환자 목록 */}
@@ -191,7 +202,6 @@ export function PatientListPanel({
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* 출석 상태 */}
                     {patient.checked_at ? (
                       <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] px-1.5 py-0">
                         <Check className="w-2.5 h-2.5 mr-0.5" />
@@ -208,14 +218,12 @@ export function PatientListPanel({
                         미예정
                       </Badge>
                     )}
-                    {/* 진찰 완료 */}
                     {patient.has_consultation && (
                       <Badge variant="secondary" className="bg-green-50 text-green-600 text-[10px] px-1.5 py-0">
                         <Check className="w-2.5 h-2.5 mr-0.5" />
                         진찰
                       </Badge>
                     )}
-                    {/* 지시사항 상태 */}
                     {patient.task_status === 'pending' && (
                       <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
                         <Bell className="w-2.5 h-2.5 mr-0.5" />
@@ -228,7 +236,6 @@ export function PatientListPanel({
                         이행
                       </Badge>
                     )}
-                    {/* 미확인 메시지 */}
                     {patient.unread_message_count > 0 && (
                       <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
                         <MessageSquare className="w-2.5 h-2.5 mr-0.5" />

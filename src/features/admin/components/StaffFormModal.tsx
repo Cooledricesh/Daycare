@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -79,6 +79,10 @@ export function StaffFormModal({
   });
 
   const form = mode === 'create' ? createForm : updateForm;
+  const createRole = useWatch({ control: createForm.control, name: 'role' });
+  const updateRole = useWatch({ control: updateForm.control, name: 'role' });
+  const roleValue = mode === 'create' ? createRole : updateRole;
+  const isActiveValue = useWatch({ control: updateForm.control, name: 'is_active' });
 
   useEffect(() => {
     if (mode === 'edit' && staff) {
@@ -188,7 +192,7 @@ export function StaffFormModal({
           <div className="space-y-2">
             <Label>역할 *</Label>
             <Select
-              value={(form as any).watch('role')}
+              value={roleValue}
               onValueChange={(value: any) => (form as any).setValue('role', value)}
               disabled={isLoading}
             >
@@ -209,7 +213,7 @@ export function StaffFormModal({
             <div className="space-y-2">
               <Label>상태</Label>
               <RadioGroup
-                value={updateForm.watch('is_active') ? 'active' : 'inactive'}
+                value={isActiveValue ? 'active' : 'inactive'}
                 onValueChange={(value) =>
                   updateForm.setValue('is_active', value === 'active')
                 }

@@ -145,7 +145,7 @@ export async function getPrescriptions(
   const date = params.date || getTodayString();
 
   // 오늘 모든 진료 기록 조회 (간호사가 투약 변경/진료 메모 확인용)
-  let query = (supabase
+  const query = (supabase
     .from('consultations') as any)
     .select(`
       id,

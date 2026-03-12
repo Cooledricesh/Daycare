@@ -31,6 +31,7 @@ import {
   deleteMessage as deleteMessageShared,
   MessageError,
 } from '@/server/services/message';
+import { deleteConsultation } from './service';
 import {
   completeTask as completeTaskShared,
   TaskError,
@@ -854,6 +855,30 @@ adminRoutes.delete('/dashboard/messages/:id', async (c) => {
     return respond(c, success({ deleted: true }, 200));
   } catch (error) {
     if (error instanceof MessageError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/admin/dashboard/consultations/:id
+ * 진찰 기록 삭제 (admin 전용)
+ */
+adminRoutes.delete('/dashboard/consultations/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const consultationId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    await deleteConsultation(supabase, consultationId);
+    return respond(c, success({ deleted: true }, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
       return respond(c, failure(400, error.code, error.message));
     }
     throw error;

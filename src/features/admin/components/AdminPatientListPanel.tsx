@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,12 @@ import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
 type FilterTab = 'all' | 'scheduled' | 'completed';
 
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'scheduled', label: '예정' },
+  { key: 'completed', label: '완료' },
+];
+
 interface AdminPatientListPanelProps {
   patients: NursePatientSummary[];
   isLoading: boolean;
@@ -19,6 +25,9 @@ interface AdminPatientListPanelProps {
   onSelectPatient: (patient: NursePatientSummary) => void;
   onRefresh: () => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
+  filterTab: FilterTab;
+  onFilterTabChange: (tab: FilterTab) => void;
+  onFilteredPatientsChange?: (patients: NursePatientSummary[]) => void;
 }
 
 export function AdminPatientListPanel({
@@ -28,9 +37,11 @@ export function AdminPatientListPanel({
   onSelectPatient,
   onRefresh,
   searchInputRef,
+  filterTab,
+  onFilterTabChange,
+  onFilteredPatientsChange,
 }: AdminPatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
-  const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
   const counts = useMemo(() => {
     const scheduled = patients.filter(p => p.is_scheduled).length;
@@ -51,7 +62,6 @@ export function AdminPatientListPanel({
       result = result.filter(p => matchesChosung(p.name, searchQuery.trim()));
     }
 
-    // 정렬 그룹: 0=지시/전달, 1=출석(미진찰), 2=예정(미출석), 3=진찰완료, 4=미예정
     result = [...result].sort((a, b) => {
       const group = (p: NursePatientSummary) => {
         if (p.has_nurse_task && !p.task_completed) return 0;
@@ -68,11 +78,15 @@ export function AdminPatientListPanel({
     return result;
   }, [patients, filterTab, searchQuery]);
 
-  const filterTabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: 'all', label: '전체', count: counts.all },
-    { key: 'scheduled', label: '예정', count: counts.scheduled },
-    { key: 'completed', label: '완료', count: counts.completed },
-  ];
+  useEffect(() => {
+    onFilteredPatientsChange?.(filteredPatients);
+  }, [filteredPatients, onFilteredPatientsChange]);
+
+  const countMap: Record<FilterTab, number> = {
+    all: counts.all,
+    scheduled: counts.scheduled,
+    completed: counts.completed,
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -95,6 +109,7 @@ export function AdminPatientListPanel({
             ref={searchInputRef}
             placeholder="환자 검색 (초성 지원: ㄱㅅㅎ)"
             {...inputProps}
+            onFocus={(e) => e.target.select()}
             className="pl-9 h-9"
           />
           {rawValue && (
@@ -108,7 +123,7 @@ export function AdminPatientListPanel({
         </div>
 
         <div className="flex gap-1">
-          {filterTabs.map(tab => (
+          {FILTER_TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
@@ -117,10 +132,10 @@ export function AdminPatientListPanel({
                   ? 'bg-indigo-100 text-indigo-700'
                   : 'text-gray-500 hover:bg-gray-100'
               )}
-              onClick={() => setFilterTab(tab.key)}
+              onClick={() => onFilterTabChange(tab.key)}
             >
               {tab.label}
-              <span className="ml-1 text-[10px]">({tab.count})</span>
+              <span className="ml-1 text-[10px]">({countMap[tab.key]})</span>
             </button>
           ))}
         </div>
@@ -128,7 +143,7 @@ export function AdminPatientListPanel({
 
       {/* 키보드 단축키 힌트 */}
       <div className="text-[10px] text-gray-400 px-4 py-1 border-b">
-        <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">/</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장
+        <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+F</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Enter</kbd> 선택 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장 &middot; <kbd className="px-1 bg-gray-100 rounded">?</kbd> 도움말
       </div>
 
       <div className="flex-1 overflow-y-auto">

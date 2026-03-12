@@ -29,51 +29,44 @@ import type { WaitingPatient } from '../backend/schema';
 
 interface ConsultationPanelProps {
   patient: WaitingPatient | null;
-  onConsultationComplete: () => void;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-export function ConsultationPanel({ patient, onConsultationComplete }: ConsultationPanelProps) {
+export function ConsultationPanel({ patient, searchInputRef }: ConsultationPanelProps) {
   const [consultationNote, setConsultationNote] = useState('');
   const [taskContent, setTaskContent] = useState('');
-  const prevPatientId = useRef<string | null>(null);
 
   const createConsultation = useCreateConsultation();
   const { toast } = useToast();
 
-  // handleSubmit을 ref로 관리하여 Ctrl+S 단축키에서 항상 최신 함수 참조
   const handleSubmitRef = useRef<() => void>(() => {});
+  const handleQuickCheckRef = useRef<() => void>(() => {});
 
-  // 선택된 환자의 오늘 전달사항
   const { data: messages, isLoading: messagesLoading } = usePatientMessages({
     patientId: patient?.id || null,
   });
 
-  // 선택된 환자의 최근 히스토리 (3개월)
   const { data: history, isLoading: historyLoading } = usePatientHistory({
     patientId: patient?.id || '',
     months: 3,
   });
 
-  // 기존 진찰 기록 pre-fill
   const isEditing = !!patient?.has_consultation;
   const today = getTodayString();
 
-  useEffect(() => {
-    // 환자가 바뀌면 폼 리셋 후 기존 기록 pre-fill
-    if (patient?.id !== prevPatientId.current) {
-      prevPatientId.current = patient?.id || null;
+  const [prevFormKey, setPrevFormKey] = useState('');
+  const todayRecord = history?.consultations.find((c) => c.date === today);
+  const formKey = `${patient?.id}-${patient?.has_consultation}-${todayRecord?.note}-${todayRecord?.task_content}`;
+  if (formKey !== prevFormKey) {
+    setPrevFormKey(formKey);
+    if (todayRecord && patient?.has_consultation) {
+      setConsultationNote(todayRecord.note || '');
+      setTaskContent(todayRecord.task_content || '');
+    } else {
       setConsultationNote('');
       setTaskContent('');
     }
-
-    if (!patient?.has_consultation || !history) return;
-
-    const todayRecord = history.consultations.find((c) => c.date === today);
-    if (todayRecord) {
-      setConsultationNote(todayRecord.note || '');
-      setTaskContent(todayRecord.task_content || '');
-    }
-  }, [patient?.id, patient?.has_consultation, history, today]);
+  }
 
   const resetForm = () => {
     setConsultationNote('');
@@ -94,7 +87,8 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
       });
 
       resetForm();
-      onConsultationComplete();
+      searchInputRef?.current?.focus();
+      searchInputRef?.current?.select();
     } catch {
       toast({
         title: '진찰 기록 저장 실패',
@@ -104,15 +98,21 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
     }
   };
 
-  // 항상 최신 handleSubmit을 ref에 반영
-  handleSubmitRef.current = handleSubmit;
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+    handleQuickCheckRef.current = handleQuickCheck;
+  });
 
-  // Ctrl+S / Cmd+S: 진찰 저장
+  // Ctrl+S: 진찰 저장, Ctrl+D: 진찰 체크
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleSubmitRef.current();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        handleQuickCheckRef.current();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -128,17 +128,15 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
       });
 
       resetForm();
-      onConsultationComplete();
     } catch {
       toast({
-        title: '진찰 참석 체크 실패',
+        title: '진찰 체크 실패',
         description: '다시 시도해주세요. 반복되면 관리자에게 문의하세요.',
         variant: 'destructive',
       });
     }
   };
 
-  // 환자 미선택 시 안내
   if (!patient) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
@@ -307,7 +305,7 @@ export function ConsultationPanel({ patient, onConsultationComplete }: Consultat
                     className="border-purple-300 text-purple-600 hover:bg-purple-50"
                   >
                     <Check className="w-4 h-4 mr-1" />
-                    진찰 참석만 체크
+                    진찰 체크
                   </Button>
                 )}
               </div>

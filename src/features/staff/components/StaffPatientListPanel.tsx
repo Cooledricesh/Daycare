@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,12 @@ import { getPatientDisplayName } from '@/lib/patient';
 import type { PatientSummary } from '../backend/schema';
 
 type FilterTab = 'all' | 'scheduled' | 'completed';
+
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'scheduled', label: '예정' },
+  { key: 'completed', label: '완료' },
+];
 
 interface StaffPatientListPanelProps {
   patients: PatientSummary[];
@@ -31,6 +37,9 @@ interface StaffPatientListPanelProps {
   onCancelIdsChange: (ids: Set<string>) => void;
   onBatchAttendance: () => void;
   isBatchLoading: boolean;
+  filterTab: FilterTab;
+  onFilterTabChange: (tab: FilterTab) => void;
+  onFilteredPatientsChange?: (patients: PatientSummary[]) => void;
 }
 
 export function StaffPatientListPanel({
@@ -50,9 +59,11 @@ export function StaffPatientListPanel({
   onCancelIdsChange,
   onBatchAttendance,
   isBatchLoading,
+  filterTab,
+  onFilterTabChange,
+  onFilteredPatientsChange,
 }: StaffPatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
-  const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
   const counts = useMemo(() => {
     const scheduled = patients.filter(p => p.is_scheduled).length;
@@ -76,7 +87,6 @@ export function StaffPatientListPanel({
       });
     }
 
-    // 정렬 그룹: 0=지시/전달, 1=출석(미진찰), 2=예정(미출석), 3=진찰완료, 4=미예정
     result = [...result].sort((a, b) => {
       const group = (p: PatientSummary) => {
         const hasAction = (p.has_task && !p.task_completed) || p.unread_message_count > 0;
@@ -94,7 +104,10 @@ export function StaffPatientListPanel({
     return result;
   }, [patients, filterTab, searchQuery]);
 
-  // 미출석 환자 목록
+  useEffect(() => {
+    onFilteredPatientsChange?.(filteredPatients);
+  }, [filteredPatients, onFilteredPatientsChange]);
+
   const unattendedPatients = useMemo(
     () => filteredPatients.filter(p => !p.is_attended),
     [filteredPatients],
@@ -113,7 +126,6 @@ export function StaffPatientListPanel({
 
   const togglePatient = (patient: PatientSummary) => {
     if (patient.is_attended) {
-      // 출석한 환자: cancelIds 토글
       const next = new Set(cancelIds);
       if (next.has(patient.id)) {
         next.delete(patient.id);
@@ -122,7 +134,6 @@ export function StaffPatientListPanel({
       }
       onCancelIdsChange(next);
     } else {
-      // 미출석 환자: selectedIds 토글
       const next = new Set(selectedIds);
       if (next.has(patient.id)) {
         next.delete(patient.id);
@@ -133,11 +144,11 @@ export function StaffPatientListPanel({
     }
   };
 
-  const filterTabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: 'all', label: '전체', count: counts.all },
-    { key: 'scheduled', label: '예정', count: counts.scheduled },
-    { key: 'completed', label: '완료', count: counts.completed },
-  ];
+  const countMap: Record<FilterTab, number> = {
+    all: counts.all,
+    scheduled: counts.scheduled,
+    completed: counts.completed,
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -199,6 +210,7 @@ export function StaffPatientListPanel({
             ref={searchInputRef}
             placeholder="환자 검색 (초성 지원: ㄱㅅㅎ)"
             {...inputProps}
+            onFocus={(e) => e.target.select()}
             className="pl-9 h-9"
           />
           {rawValue && (
@@ -213,7 +225,7 @@ export function StaffPatientListPanel({
 
         {/* 상태 필터 탭 */}
         <div className="flex gap-1">
-          {filterTabs.map(tab => (
+          {FILTER_TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
@@ -222,10 +234,10 @@ export function StaffPatientListPanel({
                   ? 'bg-emerald-100 text-emerald-700'
                   : 'text-gray-500 hover:bg-gray-100'
               )}
-              onClick={() => setFilterTab(tab.key)}
+              onClick={() => onFilterTabChange(tab.key)}
             >
               {tab.label}
-              <span className="ml-1 text-[10px]">({tab.count})</span>
+              <span className="ml-1 text-[10px]">({countMap[tab.key]})</span>
             </button>
           ))}
         </div>
@@ -248,7 +260,7 @@ export function StaffPatientListPanel({
       {/* 키보드 단축키 힌트 */}
       {!attendanceMode && (
         <div className="text-[10px] text-gray-400 px-4 py-1 border-b">
-          <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">/</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장
+          <kbd className="px-1 bg-gray-100 rounded">↑↓</kbd> 이동 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+F</kbd> 검색 &middot; <kbd className="px-1 bg-gray-100 rounded">Enter</kbd> 선택 &middot; <kbd className="px-1 bg-gray-100 rounded">Ctrl+S</kbd> 저장 &middot; <kbd className="px-1 bg-gray-100 rounded">?</kbd> 도움말
         </div>
       )}
 

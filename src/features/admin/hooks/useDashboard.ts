@@ -125,6 +125,21 @@ export const useAdminDeleteMessage = () => {
   });
 };
 
+export const useAdminDeleteConsultation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (consultationId: string) => {
+      await apiClient.delete(`/api/admin/dashboard/consultations/${consultationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patients'] });
+    },
+  });
+};
+
 type CompleteTaskParams = {
   consultationId: string;
   memo?: string;

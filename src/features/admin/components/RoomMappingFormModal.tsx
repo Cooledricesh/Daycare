@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -68,6 +68,9 @@ export function RoomMappingFormModal({
       is_active: true,
     },
   });
+
+  const coordinatorId = useWatch({ control: form.control, name: 'coordinator_id' });
+  const isActive = useWatch({ control: form.control, name: 'is_active' });
 
   useEffect(() => {
     if (mode === 'edit' && mapping) {
@@ -150,7 +153,7 @@ export function RoomMappingFormModal({
           <div className="space-y-2">
             <Label>담당 코디네이터</Label>
             <Select
-              value={form.watch('coordinator_id') || '__none__'}
+              value={coordinatorId || '__none__'}
               onValueChange={(value) =>
                 form.setValue('coordinator_id', value === '__none__' ? null : value)
               }
@@ -186,7 +189,7 @@ export function RoomMappingFormModal({
             <div className="space-y-2">
               <Label>상태</Label>
               <RadioGroup
-                value={form.watch('is_active') ? 'active' : 'inactive'}
+                value={isActive ? 'active' : 'inactive'}
                 onValueChange={(value) =>
                   form.setValue('is_active', value === 'active')
                 }

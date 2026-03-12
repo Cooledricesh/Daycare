@@ -9,7 +9,7 @@ import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getTodayString } from '@/lib/date';
-import { useAdminPatientDetail, useAdminPatientHistory, useAdminCompleteTask, useAdminDeleteMessage } from '../hooks/useDashboard';
+import { useAdminPatientDetail, useAdminPatientHistory, useAdminCompleteTask, useAdminDeleteMessage, useAdminDeleteConsultation } from '../hooks/useDashboard';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { AdminMessageForm } from './AdminMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
@@ -39,11 +39,24 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
 
   const { mutate: completeTask, isPending: isCompleting } = useAdminCompleteTask();
   const { mutate: deleteMessageMutate } = useAdminDeleteMessage();
+  const { mutate: deleteConsultationMutate } = useAdminDeleteConsultation();
 
   const handleDeleteMessage = (messageId: string) => {
     deleteMessageMutate(messageId, {
       onSuccess: () => {
         toast({ title: '삭제 완료', description: '전달사항이 삭제되었습니다.' });
+      },
+      onError: (error) => {
+        const message = extractApiErrorMessage(error, '삭제에 실패했습니다.');
+        toast({ title: '삭제 실패', description: message, variant: 'destructive' });
+      },
+    });
+  };
+
+  const handleDeleteConsultation = (consultationId: string) => {
+    deleteConsultationMutate(consultationId, {
+      onSuccess: () => {
+        toast({ title: '삭제 완료', description: '진찰 기록이 삭제되었습니다.' });
       },
       onError: (error) => {
         const message = extractApiErrorMessage(error, '삭제에 실패했습니다.');
@@ -202,6 +215,7 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
               currentUserId={user?.id}
               currentUserRole={user?.role}
               onDeleteMessage={handleDeleteMessage}
+              onDeleteConsultation={handleDeleteConsultation}
             />
           ) : (
             <Card>

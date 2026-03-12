@@ -1,85 +1,55 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useMemo } from 'react';
 import { useNursePatients } from '@/features/nurse/hooks/useNursePatients';
 import { NursePatientListPanel } from '@/features/nurse/components/NursePatientListPanel';
 import { NurseDetailPanel } from '@/features/nurse/components/NurseDetailPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
+import { KeyboardShortcutHelpModal } from '@/components/KeyboardShortcutHelpModal';
 import { getTodayString } from '@/lib/date';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { usePatientListNavigation } from '@/hooks/usePatientListNavigation';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
+
+type FilterTab = 'all' | 'scheduled' | 'completed';
+
+const FILTER_TAB_KEYS: FilterTab[] = ['all', 'scheduled', 'completed'];
 
 export default function NursePrescriptionsPage() {
   const today = getTodayString();
   const { data, isLoading, refetch } = useNursePatients({ date: today });
-  const patients = data?.patients || [];
+  const patients = useMemo(() => data?.patients || [], [data?.patients]);
 
-  const [selectedPatient, setSelectedPatient] = useState<NursePatientSummary | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleSelectPatient = useCallback((patient: NursePatientSummary) => {
-    setSelectedPatient(patient);
-  }, []);
-
-  // 환자 목록이 갱신되면 선택된 환자도 갱신
-  useEffect(() => {
-    if (selectedPatient && patients.length > 0) {
-      const updated = patients.find(p => p.id === selectedPatient.id);
-      if (updated) {
-        setSelectedPatient(updated);
-      }
-    }
-  }, [patients, selectedPatient]);
-
-  // 환자 목록 탐색: 이전/다음
-  const handleNavigatePrev = useCallback(() => {
-    if (patients.length === 0) return;
-    if (!selectedPatient) {
-      setSelectedPatient(patients[patients.length - 1]);
-      return;
-    }
-    const idx = patients.findIndex(p => p.id === selectedPatient.id);
-    if (idx > 0) {
-      setSelectedPatient(patients[idx - 1]);
-    }
-  }, [patients, selectedPatient]);
-
-  const handleNavigateNext = useCallback(() => {
-    if (patients.length === 0) return;
-    if (!selectedPatient) {
-      setSelectedPatient(patients[0]);
-      return;
-    }
-    const idx = patients.findIndex(p => p.id === selectedPatient.id);
-    if (idx < patients.length - 1) {
-      setSelectedPatient(patients[idx + 1]);
-    }
-  }, [patients, selectedPatient]);
-
-  // 키보드 단축키
-  useKeyboardShortcuts({
-    searchInputRef,
-    onNavigatePrev: handleNavigatePrev,
-    onNavigateNext: handleNavigateNext,
+  const nav = usePatientListNavigation<NursePatientSummary, FilterTab>({
+    patients,
+    filterTabKeys: FILTER_TAB_KEYS,
   });
 
   return (
-    <MasterDetailLayout
-      hasSelection={selectedPatient !== null}
-      onBack={() => setSelectedPatient(null)}
-      master={
-        <NursePatientListPanel
-          patients={patients}
-          isLoading={isLoading}
-          selectedPatientId={selectedPatient?.id || null}
-          onSelectPatient={handleSelectPatient}
-          onRefresh={() => refetch()}
-          searchInputRef={searchInputRef}
-        />
-      }
-      detail={
-        <NurseDetailPanel patient={selectedPatient} />
-      }
-    />
+    <>
+      <MasterDetailLayout
+        hasSelection={nav.selectedItem !== null}
+        onBack={() => nav.setSelectedPatientId(null)}
+        master={
+          <NursePatientListPanel
+            patients={patients}
+            isLoading={isLoading}
+            selectedPatientId={nav.selectedItem?.id || null}
+            onSelectPatient={nav.handleSelectItem}
+            onRefresh={() => refetch()}
+            searchInputRef={nav.searchInputRef}
+            filterTab={nav.filterTab}
+            onFilterTabChange={nav.setFilterTab}
+            onFilteredPatientsChange={nav.handleFilteredItemsChange}
+          />
+        }
+        detail={
+          <NurseDetailPanel patient={nav.selectedItem} />
+        }
+      />
+      <KeyboardShortcutHelpModal
+        open={nav.showShortcutHelp}
+        onOpenChange={nav.setShowShortcutHelp}
+      />
+    </>
   );
 }

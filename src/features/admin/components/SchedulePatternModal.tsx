@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -36,13 +36,16 @@ export function SchedulePatternModal() {
     (p) => p.patient_id === selectedPatientId
   );
 
-  useEffect(() => {
+  const [prevSyncKey, setPrevSyncKey] = useState('');
+  const syncKey = `${isPatternModalOpen}-${selectedPatientId}-${currentPattern?.schedule_days?.join(',')}`;
+  if (syncKey !== prevSyncKey) {
+    setPrevSyncKey(syncKey);
     if (currentPattern) {
       setSelectedDays(currentPattern.schedule_days || []);
     } else {
       setSelectedDays([]);
     }
-  }, [currentPattern, isPatternModalOpen]);
+  }
 
   const handleDayToggle = (day: number) => {
     setSelectedDays((prev) =>

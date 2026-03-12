@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -66,7 +66,7 @@ export function PatientFormModal({
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
     formState: { errors },
   } = useForm<PatientFormData>({
@@ -84,7 +84,8 @@ export function PatientFormModal({
     },
   });
 
-  const scheduleDays = watch('schedule_days') || [];
+  const watchedValues = useWatch({ control });
+  const scheduleDays = watchedValues.schedule_days || [];
 
   useEffect(() => {
     if (mode === 'edit' && patient) {
@@ -209,7 +210,7 @@ export function PatientFormModal({
           <div className="space-y-2">
             <Label>성별</Label>
             <RadioGroup
-              value={watch('gender') || ''}
+              value={watchedValues.gender || ''}
               onValueChange={(value) => setValue('gender', value as 'M' | 'F' | '')}
               disabled={isLoading}
             >
@@ -234,7 +235,7 @@ export function PatientFormModal({
           <div className="space-y-2">
             <Label htmlFor="doctor_id">주치의</Label>
             <Select
-              value={watch('doctor_id') || '__none__'}
+              value={watchedValues.doctor_id || '__none__'}
               onValueChange={(value) => setValue('doctor_id', value === '__none__' ? '' : value)}
               disabled={isLoading}
             >
@@ -256,7 +257,7 @@ export function PatientFormModal({
           <div className="space-y-2">
             <Label htmlFor="coordinator_id">담당 코디</Label>
             <Select
-              value={watch('coordinator_id') || '__none__'}
+              value={watchedValues.coordinator_id || '__none__'}
               onValueChange={(value) => setValue('coordinator_id', value === '__none__' ? '' : value)}
               disabled={isLoading}
             >
@@ -305,7 +306,7 @@ export function PatientFormModal({
             <div className="space-y-2">
               <Label htmlFor="status">상태</Label>
               <Select
-                value={watch('status')}
+                value={watchedValues.status}
                 onValueChange={(value) => setValue('status', value as any)}
                 disabled={isLoading}
               >

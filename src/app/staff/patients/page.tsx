@@ -15,7 +15,7 @@ export default function StaffPatientsPage() {
   const { data, isLoading, error } = useMyPatients({ date: today });
   const [searchTerm, setSearchTerm] = useState('');
 
-  const patients = data?.patients || [];
+  const patients = useMemo(() => data?.patients || [], [data?.patients]);
 
   const filteredPatients = useMemo(() => {
     if (!searchTerm.trim()) return patients;
