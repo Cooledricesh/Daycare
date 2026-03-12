@@ -15,28 +15,18 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import type { DailyStatsItem } from '@/features/admin/backend/schema';
-import { CHART_COLORS, ATTENDANCE_RATE_THRESHOLDS } from '@/features/shared/constants/stats';
+import { CHART_COLORS, ATTENDANCE_RATE_THRESHOLDS, parseDateStr, calculateMovingAverage } from '@/features/shared/constants/stats';
 
 interface AttendanceRateChartProps {
   dailyStats: DailyStatsItem[];
 }
 
-function calculateMovingAverage(data: (number | null)[], window: number): (number | null)[] {
-  return data.map((_, idx) => {
-    const start = Math.max(0, idx - window + 1);
-    const slice = data.slice(start, idx + 1).filter((v): v is number => v !== null);
-    if (slice.length === 0) return null;
-    return Math.round((slice.reduce((a, b) => a + b, 0) / slice.length) * 10) / 10;
-  });
-}
-
 export function AttendanceRateChart({ dailyStats }: AttendanceRateChartProps) {
-  // 공휴일 제외한 rates로 이동평균 계산
   const rates = dailyStats.map((s) => s.is_holiday ? null : s.attendance_rate);
   const movingAvg = calculateMovingAverage(rates, 7);
 
   const chartData = dailyStats.map((stat, idx) => ({
-    date: format(new Date(stat.date + 'T00:00:00'), 'MM/dd'),
+    date: format(parseDateStr(stat.date), 'MM/dd'),
     fullDate: stat.date,
     attendanceRate: stat.is_holiday ? null : stat.attendance_rate,
     movingAvg: movingAvg[idx],

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import bcrypt from 'bcryptjs';
-import { formatScheduleDays, getTodayString, getYesterdayString } from '@/lib/date';
+import { formatScheduleDays, getTodayString, getYesterdayString, DAY_NAMES_KO } from '@/lib/date';
 import { AdminError, AdminErrorCode } from './error';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 import type {
@@ -664,8 +664,9 @@ export async function generateScheduledAttendances(
 export async function calculateDailyStats(
   supabase: SupabaseClient<Database>,
   date: string,
-  options?: { preserveRegisteredCount?: boolean },
+  options?: { preserveRegisteredCount?: boolean; existingRegisteredCount?: number },
 ): Promise<DailyStatsItem> {
+  const needsFetch = options?.preserveRegisteredCount && options.existingRegisteredCount == null;
   const [
     { count: scheduledCount },
     { count: attendanceCount },
@@ -686,7 +687,7 @@ export async function calculateDailyStats(
     (supabase.from('patients') as any)
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active'),
-    options?.preserveRegisteredCount
+    needsFetch
       ? (supabase.from('daily_stats') as any)
           .select('registered_count')
           .eq('date', date)
@@ -696,8 +697,7 @@ export async function calculateDailyStats(
 
   const ac = attendanceCount ?? 0;
   const cc = consultationCount ?? 0;
-  // 배치 재계산: 기존 스냅샷이 있으면 보존, 없으면 현재 값 사용
-  const existingRc = existingStats?.registered_count;
+  const existingRc = options?.existingRegisteredCount ?? existingStats?.registered_count;
   const rc = (options?.preserveRegisteredCount && existingRc != null && existingRc > 0)
     ? existingRc
     : (registeredCount ?? 0);
@@ -790,7 +790,7 @@ export async function getHolidays(
 
   if (error) {
     throw new AdminError(
-      AdminErrorCode.STATS_FETCH_FAILED,
+      AdminErrorCode.HOLIDAY_FETCH_FAILED,
       `공휴일 조회 실패: ${error.message}`,
     );
   }
@@ -903,11 +903,27 @@ export async function batchCalculateStats(
   const end = new Date(request.end_date + 'T00:00:00');
   const todayKST = getTodayString();
 
+  const { data: existingCounts } = await (supabase as any)
+    .from('daily_stats')
+    .select('date, registered_count')
+    .gte('date', request.start_date)
+    .lte('date', request.end_date);
+
+  const countMap = new Map<string, number>();
+  for (const row of existingCounts || []) {
+    if (row.registered_count > 0) {
+      countMap.set(row.date, row.registered_count);
+    }
+  }
+
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().split('T')[0];
-    if (dateStr >= todayKST) continue; // 오늘 이후는 스킵 (실시간 집계)
+    if (dateStr >= todayKST) continue;
     try {
-      await calculateDailyStats(supabase, dateStr, { preserveRegisteredCount: true });
+      await calculateDailyStats(supabase, dateStr, {
+        preserveRegisteredCount: true,
+        existingRegisteredCount: countMap.get(dateStr),
+      });
       results.push({ date: dateStr });
     } catch (err: any) {
       errors.push({ date: dateStr, error: err.message });
@@ -1259,8 +1275,6 @@ export async function getDailyStats(
     is_weekend: isWeekend(row.date),
   })) as DailyStatsItem[];
 }
-
-const DAY_NAMES_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export async function getDayOfWeekStats(
   supabase: SupabaseClient<Database>,

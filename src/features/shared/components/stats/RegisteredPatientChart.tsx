@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import type { DailyStatsItem } from '@/features/admin/backend/schema';
-import { CHART_COLORS } from '@/features/shared/constants/stats';
+import { CHART_COLORS, parseDateStr } from '@/features/shared/constants/stats';
 
 interface RegisteredPatientChartProps {
   dailyStats: DailyStatsItem[];
@@ -22,7 +22,7 @@ export function RegisteredPatientChart({ dailyStats }: RegisteredPatientChartPro
   const chartData = dailyStats
     .filter((s) => s.registered_count > 0)
     .map((stat) => ({
-      date: format(new Date(stat.date + 'T00:00:00'), 'MM/dd'),
+      date: format(parseDateStr(stat.date), 'MM/dd'),
       fullDate: stat.date,
       registered: stat.registered_count,
     }));

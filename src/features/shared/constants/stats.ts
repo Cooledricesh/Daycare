@@ -1,3 +1,7 @@
+import { DAY_NAMES_KO } from '@/lib/date';
+
+export { DAY_NAMES_KO };
+
 export const STATS_DATA_START_DATE = '2026-03-03';
 
 export const ATTENDANCE_RATE_THRESHOLDS = { GOOD: 90, WARNING: 70 } as const;
@@ -10,4 +14,21 @@ export const CHART_COLORS = {
   CONSULTATION: '#16a34a',
 } as const;
 
-export const DAY_NAMES_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+export function parseDateStr(dateStr: string): Date {
+  return new Date(dateStr + 'T00:00:00');
+}
+
+export function getDayName(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return DAY_NAMES_KO[dow];
+}
+
+export function calculateMovingAverage(data: (number | null)[], window: number): (number | null)[] {
+  return data.map((_, idx) => {
+    const start = Math.max(0, idx - window + 1);
+    const slice = data.slice(start, idx + 1).filter((v): v is number => v !== null);
+    if (slice.length === 0) return null;
+    return Math.round((slice.reduce((a, b) => a + b, 0) / slice.length) * 10) / 10;
+  });
+}

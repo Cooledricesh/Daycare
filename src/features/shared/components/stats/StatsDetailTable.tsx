@@ -14,7 +14,7 @@ import {
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { DailyStatsItem } from '@/features/admin/backend/schema';
-import { ATTENDANCE_RATE_THRESHOLDS, CONSULTATION_RATE_THRESHOLDS, DAY_NAMES_KO } from '@/features/shared/constants/stats';
+import { ATTENDANCE_RATE_THRESHOLDS, CONSULTATION_RATE_THRESHOLDS, getDayName } from '@/features/shared/constants/stats';
 
 interface StatsDetailTableProps {
   dailyStats: DailyStatsItem[];
@@ -25,12 +25,6 @@ function getRateCellClass(rate: number | null, thresholds: { GOOD: number; WARNI
   if (rate >= thresholds.GOOD) return 'text-green-700 bg-green-50';
   if (rate >= thresholds.WARNING) return 'text-yellow-700 bg-yellow-50';
   return 'text-red-700 bg-red-50';
-}
-
-function getDayName(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dow = new Date(y, m - 1, d).getDay();
-  return DAY_NAMES_KO[dow];
 }
 
 export function StatsDetailTable({ dailyStats }: StatsDetailTableProps) {

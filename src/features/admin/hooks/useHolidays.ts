@@ -1,12 +1,21 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type {
   GetHolidaysQuery,
   HolidayItem,
   CreateHolidayRequest,
 } from '../backend/schema';
+
+function invalidateHolidayRelatedQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['admin', 'holidays'] });
+  queryClient.invalidateQueries({ queryKey: ['admin', 'stats-summary'] });
+  queryClient.invalidateQueries({ queryKey: ['admin', 'daily-stats'] });
+  queryClient.invalidateQueries({ queryKey: ['shared', 'stats-summary'] });
+  queryClient.invalidateQueries({ queryKey: ['shared', 'daily-stats'] });
+  queryClient.invalidateQueries({ queryKey: ['shared', 'day-of-week-stats'] });
+}
 
 export function useHolidays(query: GetHolidaysQuery) {
   return useQuery({
@@ -36,14 +45,7 @@ export function useCreateHoliday() {
       );
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'holidays'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'stats-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'daily-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'day-of-week-stats'] });
-    },
+    onSuccess: () => invalidateHolidayRelatedQueries(queryClient),
   });
 }
 
@@ -57,13 +59,6 @@ export function useDeleteHoliday() {
       );
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'holidays'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'stats-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'daily-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'day-of-week-stats'] });
-    },
+    onSuccess: () => invalidateHolidayRelatedQueries(queryClient),
   });
 }

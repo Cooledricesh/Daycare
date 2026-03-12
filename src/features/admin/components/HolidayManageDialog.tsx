@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   format,
   startOfMonth,
@@ -42,10 +42,10 @@ import {
 } from '@/components/ui/select';
 import { useHolidays, useCreateHoliday, useDeleteHoliday } from '@/features/admin/hooks/useHolidays';
 import { useToast } from '@/hooks/use-toast';
+import { DAY_NAMES_KO, getDayName } from '@/features/shared/constants/stats';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 3 }, (_, i) => CURRENT_YEAR - 1 + i);
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 function MiniCalendar({
   selectedDate,
@@ -82,7 +82,7 @@ function MiniCalendar({
       </div>
 
       <div className="grid grid-cols-7 mb-1">
-        {WEEKDAYS.map((day, i) => (
+        {DAY_NAMES_KO.map((day, i) => (
           <div
             key={day}
             className={cn(
@@ -160,7 +160,7 @@ export function HolidayManageDialog() {
   const deleteHoliday = useDeleteHoliday();
   const { toast } = useToast();
 
-  const holidayDateSet = new Set((holidays || []).map((h) => h.date));
+  const holidayDateSet = useMemo(() => new Set((holidays || []).map((h) => h.date)), [holidays]);
 
   const handleAdd = async () => {
     if (!selectedDate || !reason.trim()) return;
@@ -185,13 +185,6 @@ export function HolidayManageDialog() {
       const message = error.response?.data?.message || '삭제에 실패했습니다.';
       toast({ title: '공휴일 삭제 실패', description: message, variant: 'destructive' });
     }
-  };
-
-  const getDayName = (dateStr: string): string => {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const dow = new Date(y, m - 1, d).getDay();
-    const names = ['일', '월', '화', '수', '목', '금', '토'];
-    return names[dow];
   };
 
   return (
