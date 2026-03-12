@@ -11,14 +11,10 @@
 - TypeScript type 오류, ESLint 오류, 빌드 오류가 없음을 보장한다.
 - 절대 하드코딩된 값을 사용하지 않는다. 모든 값은 상수, 환경변수, 또는 설정 파일에서 관리한다.
 - **작업의 성격에 따라 적절한 커스텀 에이전트를 활용한다**:
-  - `usecase-writer`: 특정 기능에 대한 usecase 문서를 새로 작성해야 할 때
-  - `plan-writer`: usecase에 대한 구체적인 계획 문서를 새로 작성해야 할 때
   - `implementer`: 작성된 plan.md를 구현해야 할 때
   - `implement_checker`: spec, plan 문서에 명시된 모든 기능이 제대로 구현되었는지 확인할 때
-  - `usecase-checker`: spec, plan 문서에 명시된 모든 기능이 제대로 구현되었는지 확인할 때
-  - `database_writer`: userflow를 기반으로 해당하는 기능에 대한 database를 설계할 때
-  - `refator_planner`: 현재 작성된 코드에 대해 점검을 하고 싶을 때
-  - `refator_reviewer`: 리팩토링 계획을 리뷰하고 싶을 때
+  - `usecase_checker`: spec, plan 문서에 명시된 모든 usecase가 제대로 구현되었는지 확인할 때
+  - `refactor_reviewer`: 리팩토링 계획을 리뷰하고 싶을 때
 
 ## Library
 
