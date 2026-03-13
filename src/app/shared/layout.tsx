@@ -13,11 +13,13 @@ import {
   RefreshCw,
   KeyRound,
   HeartPulse,
+  UserX,
 } from 'lucide-react';
 import { AppLayout, type NavItem } from '@/components/layout/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 
 const sharedNavItems: NavItem[] = [
+  { href: '/shared/absence-risk', label: '결석 관리', icon: UserX },
   { href: '/shared/vitals', label: '활력징후', icon: HeartPulse },
   { href: '/shared/stats', label: '통계', icon: BarChart3 },
   { href: '/shared/change-password', label: '비밀번호 변경', icon: KeyRound },

@@ -7,6 +7,7 @@ import {
   Calendar,
   ClipboardList,
   HeartPulse,
+  UserX,
   BarChart3,
   Settings,
   RefreshCw,
@@ -58,6 +59,11 @@ const navItems: NavItem[] = [
     href: '/admin/settings/room-mapping',
     label: '호실 매핑',
     icon: Settings,
+  },
+  {
+    href: '/shared/absence-risk',
+    label: '결석 관리',
+    icon: UserX,
   },
   {
     href: '/shared/vitals',

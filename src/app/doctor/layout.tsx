@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { Stethoscope, ClipboardList, HeartPulse, BarChart3, KeyRound } from 'lucide-react';
+import { Stethoscope, ClipboardList, HeartPulse, UserX, BarChart3, KeyRound } from 'lucide-react';
 import { AppLayout, type NavItem } from '@/components/layout/AppLayout';
 
 type DoctorLayoutProps = {
@@ -18,6 +18,11 @@ const navItems: NavItem[] = [
     href: '/doctor/tasks',
     label: '처리 필요 항목',
     icon: ClipboardList,
+  },
+  {
+    href: '/shared/absence-risk',
+    label: '결석 관리',
+    icon: UserX,
   },
   {
     href: '/shared/vitals',

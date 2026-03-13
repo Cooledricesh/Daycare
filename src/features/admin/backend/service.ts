@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { formatScheduleDays, getTodayString, getYesterdayString, DAY_NAMES_KO } from '@/lib/date';
 import { AdminError, AdminErrorCode } from './error';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
+import { isWeekend as isWeekendUtil, getHolidayDatesMap as getHolidayDatesMapUtil } from '@/lib/business-days';
 import type {
   GetPatientsQuery,
   CreatePatientRequest,
@@ -750,11 +751,7 @@ export async function calculateDailyStats(
 
 // ========== Holiday Utility Functions ==========
 
-function isWeekend(dateStr: string): boolean {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dow = new Date(y, m - 1, d).getDay();
-  return dow === 0 || dow === 6;
-}
+const isWeekend = isWeekendUtil;
 
 interface StatsAggregate {
   totalScheduled: number;
@@ -818,23 +815,11 @@ function aggregateStats(
   return acc;
 }
 
-async function getHolidayDatesMap(
+const getHolidayDatesMap = (
   supabase: SupabaseClient<Database>,
   startDate: string,
   endDate: string,
-): Promise<Map<string, string>> {
-  const { data } = await (supabase
-    .from('holidays') as any)
-    .select('date, reason')
-    .gte('date', startDate)
-    .lte('date', endDate);
-
-  const map = new Map<string, string>();
-  (data || []).forEach((h: any) => {
-    map.set(h.date, h.reason);
-  });
-  return map;
-}
+): Promise<Map<string, string>> => getHolidayDatesMapUtil(supabase as SupabaseClient, startDate, endDate);
 
 // ========== Holiday CRUD ==========
 

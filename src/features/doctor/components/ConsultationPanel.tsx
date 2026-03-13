@@ -99,6 +99,24 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
     }
   };
 
+  const handleQuickCheck = async () => {
+    if (!patient) return;
+
+    try {
+      await createConsultation.mutateAsync({
+        patient_id: patient.id,
+      });
+
+      resetForm();
+    } catch {
+      toast({
+        title: '진찰 체크 실패',
+        description: '다시 시도해주세요. 반복되면 관리자에게 문의하세요.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
     handleQuickCheckRef.current = handleQuickCheck;
@@ -126,24 +144,6 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const handleQuickCheck = async () => {
-    if (!patient) return;
-
-    try {
-      await createConsultation.mutateAsync({
-        patient_id: patient.id,
-      });
-
-      resetForm();
-    } catch {
-      toast({
-        title: '진찰 체크 실패',
-        description: '다시 시도해주세요. 반복되면 관리자에게 문의하세요.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   if (!patient) {
     return (

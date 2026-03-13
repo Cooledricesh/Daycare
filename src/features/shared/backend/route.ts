@@ -27,6 +27,7 @@ import { DoctorError, DoctorErrorCode } from '@/features/doctor/backend/error';
 import { comparePassword, hashPassword } from '@/lib/auth';
 import { getPatientVitalsQuerySchema } from '@/features/vitals-monitoring/backend/schema';
 import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-monitoring/backend/service';
+import absenceRiskRoutes from '@/features/absence-risk/backend/route';
 
 const updateDisplayNameSchema = z.object({
   display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),
@@ -355,6 +356,10 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
       .map((s: any) => s.date),
   }, 200));
 });
+
+// ========== Absence Risk ==========
+
+sharedRoutes.route('/absence-risk', absenceRiskRoutes);
 
 // ========== Vitals Monitoring ==========
 
