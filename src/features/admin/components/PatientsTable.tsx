@@ -23,7 +23,6 @@ interface PatientsTableProps {
 const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' }> = {
   active: { label: '활성', variant: 'default' },
   discharged: { label: '퇴원', variant: 'secondary' },
-  suspended: { label: '중단', variant: 'destructive' },
 };
 
 const genderLabels: Record<string, string> = {

@@ -4,7 +4,7 @@ import { create } from 'zustand';
 
 interface PatientsFilters {
   search: string;
-  status: 'all' | 'active' | 'discharged' | 'suspended';
+  status: 'all' | 'active' | 'discharged';
   coordinator_id: string;
 }
 

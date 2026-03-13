@@ -98,7 +98,6 @@ export default function PatientsPage() {
               <SelectItem value="all">전체 상태</SelectItem>
               <SelectItem value="active">활성</SelectItem>
               <SelectItem value="discharged">퇴원</SelectItem>
-              <SelectItem value="suspended">중단</SelectItem>
             </SelectContent>
           </Select>
 

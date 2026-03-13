@@ -330,6 +330,12 @@ export class PatientSyncService {
                 updated_at: new Date().toISOString(),
               })
               .eq('id', existing.id);
+
+            // 재입원 시 기존 출석 패턴 초기화 (관리자가 새로 설정)
+            await (this.supabase
+              .from('scheduled_patterns') as any)
+              .delete()
+              .eq('patient_id', existing.id);
           }
         } else {
           // 기존 환자 - 변경사항 확인

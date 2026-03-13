@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { LogOut, User, type LucideIcon } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 import { useAuth } from '@/hooks/useAuth';
+import { SyncNotificationBanner } from '@/features/notification/components/SyncNotificationBanner';
 
 export interface NavItem {
   href: string;
@@ -137,6 +138,7 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pt-12 pb-16 md:pt-0 md:pb-0">
+        <SyncNotificationBanner />
         {children}
       </main>
 

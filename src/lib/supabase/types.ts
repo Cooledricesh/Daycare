@@ -8,7 +8,7 @@ export type Json =
 
 // Enum Types
 export type StaffRole = 'doctor' | 'coordinator' | 'nurse' | 'admin';
-export type PatientStatus = 'active' | 'discharged' | 'suspended';
+export type PatientStatus = 'active' | 'discharged';
 export type Gender = 'M' | 'F';
 export type TaskTarget = 'coordinator' | 'nurse' | 'both';
 export type ScheduleSource = 'auto' | 'manual';

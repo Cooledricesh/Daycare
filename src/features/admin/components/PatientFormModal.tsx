@@ -37,7 +37,7 @@ const patientFormSchema = z.object({
   doctor_id: z.string().optional(),
   memo: z.string().max(500).optional(),
   schedule_days: z.array(z.number()),
-  status: z.enum(['active', 'discharged', 'suspended']).optional(),
+  status: z.enum(['active', 'discharged']).optional(),
 });
 
 type PatientFormData = z.infer<typeof patientFormSchema>;
@@ -316,7 +316,6 @@ export function PatientFormModal({
                 <SelectContent>
                   <SelectItem value="active">활성</SelectItem>
                   <SelectItem value="discharged">퇴원</SelectItem>
-                  <SelectItem value="suspended">중단</SelectItem>
                 </SelectContent>
               </Select>
             </div>

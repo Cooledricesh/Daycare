@@ -6,7 +6,7 @@ export const getPatientsQuerySchema = z.object({
   page: z.string().transform(Number).pipe(z.number().int().min(1)).default('1'),
   limit: z.string().transform(Number).pipe(z.number().int().min(1).max(100)).default('20'),
   search: z.string().optional(),
-  status: z.enum(['active', 'discharged', 'suspended', 'all']).default('all'),
+  status: z.enum(['active', 'discharged', 'all']).default('all'),
   coordinator_id: z.string().uuid().optional(),
 });
 
@@ -28,7 +28,7 @@ export const updatePatientSchema = z.object({
   patient_id_no: z.string().max(20).optional().or(z.literal('')),
   coordinator_id: z.string().uuid().optional().or(z.literal('')),
   doctor_id: z.string().uuid().optional().or(z.literal('')),
-  status: z.enum(['active', 'discharged', 'suspended']).optional(),
+  status: z.enum(['active', 'discharged']).optional(),
   memo: z.string().max(500).optional(),
   schedule_days: z.array(z.number().min(0).max(6)).optional(),
 });
@@ -192,7 +192,7 @@ export interface PatientWithCoordinator {
   coordinator_name: string | null;
   doctor_id: string | null;
   doctor_name: string | null;
-  status: 'active' | 'discharged' | 'suspended';
+  status: 'active' | 'discharged';
   memo: string | null;
   created_at: string;
   updated_at: string;

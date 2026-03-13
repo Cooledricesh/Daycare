@@ -422,6 +422,11 @@ function syncPatientDepartments() {
           },
         });
 
+        // 재입원 시 기존 출석 패턴 초기화 (관리자가 새로 설정)
+        supabaseRequest('scheduled_patterns', 'delete', {
+          query: 'patient_id=eq.' + existing.id,
+        });
+
       } else {
         // 기존 환자 - 변경사항 확인
         var changes = {};
