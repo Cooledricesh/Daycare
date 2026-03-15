@@ -3,16 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LogOut, User, type LucideIcon } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 import { useAuth } from '@/hooks/useAuth';
 import { SyncNotificationBanner } from '@/features/notification/components/SyncNotificationBanner';
 
-export interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-}
+import { type NavItem } from '@/constants/navigation';
+export type { NavItem };
 
 interface AppLayoutProps {
   children: React.ReactNode;

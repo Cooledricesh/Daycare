@@ -1,5 +1,9 @@
-import { AdminLayout } from '@/features/admin/components/AdminLayout';
+'use client';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return <AdminLayout>{children}</AdminLayout>;
+import { AppLayout } from '@/components/layout/AppLayout';
+import { useRoleNavigation } from '@/hooks/useRoleNavigation';
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { navItems, title } = useRoleNavigation();
+  return <AppLayout navItems={navItems} title={title}>{children}</AppLayout>;
 }
