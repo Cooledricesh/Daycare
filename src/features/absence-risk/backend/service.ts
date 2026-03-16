@@ -22,7 +22,7 @@ function getPeriodDates(period: GetAbsenceOverviewQuery['period']): {
 } {
   const today = new Date();
   const days = PERIOD_DAYS[period];
-  const endDate = format(subDays(today, 1), 'yyyy-MM-dd');
+  const endDate = format(today, 'yyyy-MM-dd');
 
   const rawStart = format(subDays(today, days), 'yyyy-MM-dd');
   const startDate = rawStart < STATS_DATA_START_DATE ? STATS_DATA_START_DATE : rawStart;

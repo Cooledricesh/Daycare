@@ -24,6 +24,8 @@ export function useCreateConsultation() {
       queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-history'] });
       // 출석 캘린더 갱신 (진찰 시 자동 출석 생성 반영)
       queryClient.invalidateQueries({ queryKey: ['shared', 'attendance-calendar'] });
+      // 결석 위험도 갱신 (진찰 시 자동 출석 생성 반영)
+      queryClient.invalidateQueries({ queryKey: ['shared', 'absence-risk-overview'] });
     },
   });
 }

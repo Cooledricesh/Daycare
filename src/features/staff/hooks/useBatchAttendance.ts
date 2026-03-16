@@ -33,6 +33,7 @@ export function useBatchAttendance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'my-patients'] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'absence-risk-overview'] });
     },
   });
 }
@@ -53,6 +54,7 @@ export function useCancelAttendance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'my-patients'] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'absence-risk-overview'] });
     },
   });
 }
