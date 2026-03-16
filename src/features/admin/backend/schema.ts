@@ -179,6 +179,8 @@ export type UpdateRoomMappingRequest = z.infer<typeof updateRoomMappingSchema>;
 export type CreateRoomMappingRequest = z.infer<typeof createRoomMappingSchema>;
 export type GetSyncLogsQuery = z.infer<typeof getSyncLogsQuerySchema>;
 
+export type GetCoordinatorWorkloadQueryType = z.infer<typeof getCoordinatorWorkloadQuerySchema>;
+
 // ========== Response Types ==========
 
 export interface PatientWithCoordinator {
@@ -329,6 +331,37 @@ export interface RoomMappingItem {
   patient_count: number;
   created_at: string;
   updated_at: string;
+}
+
+// ========== Coordinator Workload Schemas ==========
+
+export const getCoordinatorWorkloadQuerySchema = z.object({
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type GetCoordinatorWorkloadQuery = z.infer<typeof getCoordinatorWorkloadQuerySchema>;
+
+export interface CoordinatorWorkloadItem {
+  coordinator_id: string;
+  coordinator_name: string;
+  patient_count: number;
+  total_scheduled: number;
+  total_attended: number;
+  total_consulted: number;
+  avg_daily_attendance: number;
+  attendance_rate: number;
+  avg_daily_consultation: number;
+  consultation_conversion_rate: number;
+  workload_level: 'heavy' | 'normal' | 'light';
+}
+
+export interface CoordinatorWorkloadSummary {
+  period: { start: string; end: string };
+  working_days: number;
+  team_total_avg_attendance: number;
+  per_coordinator_avg: number;
+  imbalance_index: number;
+  coordinators: CoordinatorWorkloadItem[];
 }
 
 // ========== Sync Types ==========

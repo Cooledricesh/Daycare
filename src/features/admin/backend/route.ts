@@ -24,6 +24,7 @@ import {
   getSyncLogsQuerySchema,
   createHolidaySchema,
   getHolidaysQuerySchema,
+  getCoordinatorWorkloadQuerySchema,
 } from './schema';
 import { getNursePatients } from '@/features/nurse/backend/service';
 import { getPatientDetail as getStaffPatientDetail } from '@/features/staff/backend/service';
@@ -69,6 +70,7 @@ import {
   getHolidays,
   createHoliday,
   deleteHoliday,
+  getCoordinatorWorkload,
 } from './service';
 
 const adminRoutes = new Hono<AppEnv>();
@@ -555,6 +557,29 @@ adminRoutes.get('/stats/daily', async (c) => {
     const params = getDailyStatsQuerySchema.parse(query);
     const result = await getDailyStats(supabase, params);
     return respond(c, success({ data: result }, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * GET /api/admin/coordinator-workload
+ * 코디네이터별 워크로드 조회
+ */
+adminRoutes.get('/coordinator-workload', async (c) => {
+  const supabase = c.get('supabase');
+  const query = {
+    start_date: c.req.query('start_date'),
+    end_date: c.req.query('end_date'),
+  };
+
+  try {
+    const params = getCoordinatorWorkloadQuerySchema.parse(query);
+    const result = await getCoordinatorWorkload(supabase, params);
+    return respond(c, success(result, 200));
   } catch (error) {
     if (error instanceof AdminError) {
       return respond(c, failure(400, error.code, error.message));

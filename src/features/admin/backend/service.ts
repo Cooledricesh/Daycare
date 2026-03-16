@@ -5,6 +5,7 @@ import { formatScheduleDays, getTodayString, getYesterdayString, DAY_NAMES_KO } 
 import { AdminError, AdminErrorCode } from './error';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 import { isWeekend as isWeekendUtil, getHolidayDatesMap as getHolidayDatesMapUtil } from '@/lib/business-days';
+import { eachDayOfInterval, parseISO } from 'date-fns';
 import type {
   GetPatientsQuery,
   CreatePatientRequest,
@@ -38,6 +39,9 @@ import type {
   CreateHolidayRequest,
   GetHolidaysQuery,
   HolidayItem,
+  GetCoordinatorWorkloadQuery,
+  CoordinatorWorkloadItem,
+  CoordinatorWorkloadSummary,
 } from './schema';
 
 const SALT_ROUNDS = 10;
@@ -1537,6 +1541,184 @@ export async function getSyncLogById(
   }
 
   return data;
+}
+
+// ========== Coordinator Workload Service ==========
+
+export async function getCoordinatorWorkload(
+  supabase: SupabaseClient<Database>,
+  query: GetCoordinatorWorkloadQuery,
+): Promise<CoordinatorWorkloadSummary> {
+  const [
+    { data: coordinators },
+    { data: patients },
+    { data: scheduledRows },
+    { data: attendanceRows },
+    { data: consultationRows },
+    holidayMap,
+  ] = await Promise.all([
+    (supabase.from('staff') as any)
+      .select('id, name')
+      .eq('role', 'coordinator')
+      .eq('is_active', true),
+    (supabase.from('patients') as any)
+      .select('id, coordinator_id')
+      .eq('status', 'active'),
+    (supabase.from('scheduled_attendances') as any)
+      .select('patient_id, date')
+      .gte('date', query.start_date)
+      .lte('date', query.end_date)
+      .eq('is_cancelled', false),
+    (supabase.from('attendances') as any)
+      .select('patient_id, date')
+      .gte('date', query.start_date)
+      .lte('date', query.end_date),
+    (supabase.from('consultations') as any)
+      .select('patient_id, date')
+      .gte('date', query.start_date)
+      .lte('date', query.end_date),
+    getHolidayDatesMap(supabase, query.start_date, query.end_date),
+  ]);
+
+  // 영업일 계산: 기간 내 날짜에서 주말 + 공휴일 제외
+  const allDays = eachDayOfInterval({
+    start: parseISO(query.start_date),
+    end: parseISO(query.end_date),
+  });
+  const workingDays = allDays.filter((day) => {
+    const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    return !isWeekend(dateStr) && !holidayMap.has(dateStr);
+  }).length;
+
+  // 환자 → 코디 매핑
+  const patientToCoordinator = new Map<string, string>();
+  for (const p of patients || []) {
+    if (p.coordinator_id) {
+      patientToCoordinator.set(p.id, p.coordinator_id);
+    }
+  }
+
+  // 코디별 환자 수
+  const coordinatorPatientCount = new Map<string, number>();
+  for (const p of patients || []) {
+    if (p.coordinator_id) {
+      coordinatorPatientCount.set(
+        p.coordinator_id,
+        (coordinatorPatientCount.get(p.coordinator_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  // 스케줄된 (patient_id, date) 쌍 집합 — 출석률 산정 시 스케줄 기반 출석만 카운트
+  const scheduledKeySet = new Set<string>();
+  for (const row of scheduledRows || []) {
+    scheduledKeySet.add(`${row.patient_id}_${row.date}`);
+  }
+
+  // 출석한 (patient_id, date) 쌍 집합 — 진찰 전환율 산정 시 출석 기반 진찰만 카운트
+  const attendedKeySet = new Set<string>();
+  for (const row of attendanceRows || []) {
+    attendedKeySet.add(`${row.patient_id}_${row.date}`);
+  }
+
+  // 코디별 scheduled/attended/consulted 집계
+  const coordinatorScheduled = new Map<string, number>();
+  const coordinatorAttended = new Map<string, number>();
+  const coordinatorConsulted = new Map<string, number>();
+
+  for (const row of scheduledRows || []) {
+    const coordId = patientToCoordinator.get(row.patient_id);
+    if (!coordId) continue;
+    coordinatorScheduled.set(coordId, (coordinatorScheduled.get(coordId) ?? 0) + 1);
+  }
+
+  // 출석: 모든 출석 카운트 (비예정 출석 포함 → 실질 업무량 반영)
+  for (const row of attendanceRows || []) {
+    const coordId = patientToCoordinator.get(row.patient_id);
+    if (!coordId) continue;
+    coordinatorAttended.set(coordId, (coordinatorAttended.get(coordId) ?? 0) + 1);
+  }
+
+  // 진찰: (patient_id, date) 중복 제거 + 출석 기반만 카운트 (전환율 100% 이하 보장)
+  const consultedKeySet = new Set<string>();
+  for (const row of consultationRows || []) {
+    const key = `${row.patient_id}_${row.date}`;
+    if (consultedKeySet.has(key)) continue;
+    if (!attendedKeySet.has(key)) continue;
+    consultedKeySet.add(key);
+    const coordId = patientToCoordinator.get(row.patient_id);
+    if (!coordId) continue;
+    coordinatorConsulted.set(coordId, (coordinatorConsulted.get(coordId) ?? 0) + 1);
+  }
+
+  // 코디네이터별 워크로드 계산 (팀 평균 산정을 위해 먼저 raw 데이터 생성)
+  const rawItems = (coordinators || []).map((coord: { id: string; name: string }) => {
+    const totalScheduled = coordinatorScheduled.get(coord.id) ?? 0;
+    const totalAttended = coordinatorAttended.get(coord.id) ?? 0;
+    const totalConsulted = coordinatorConsulted.get(coord.id) ?? 0;
+    const patientCount = coordinatorPatientCount.get(coord.id) ?? 0;
+
+    const safeDays = workingDays > 0 ? workingDays : 1;
+    const avgDailyAttendance = Math.round((totalAttended / safeDays) * 100) / 100;
+    const avgDailyConsultation = Math.round((totalConsulted / safeDays) * 100) / 100;
+    const attendanceRate = totalScheduled > 0
+      ? Math.min(100, Math.round((totalAttended / totalScheduled) * 10000) / 100)
+      : 0;
+    const consultationConversionRate = totalAttended > 0
+      ? Math.round((totalConsulted / totalAttended) * 10000) / 100
+      : 0;
+
+    return {
+      coordinator_id: coord.id,
+      coordinator_name: coord.name,
+      patient_count: patientCount,
+      total_scheduled: totalScheduled,
+      total_attended: totalAttended,
+      total_consulted: totalConsulted,
+      avg_daily_attendance: avgDailyAttendance,
+      attendance_rate: attendanceRate,
+      avg_daily_consultation: avgDailyConsultation,
+      consultation_conversion_rate: consultationConversionRate,
+    };
+  });
+
+  // 팀 전체 지표 계산
+  const teamTotalAvgAttendance = rawItems.reduce((sum, c) => sum + c.avg_daily_attendance, 0);
+  const coordinatorCount = rawItems.length;
+  const perCoordinatorAvg = coordinatorCount > 0
+    ? Math.round((teamTotalAvgAttendance / coordinatorCount) * 100) / 100
+    : 0;
+
+  const attendanceValues = rawItems.map((c) => c.avg_daily_attendance);
+  const maxAttendance = attendanceValues.length > 0 ? Math.max(...attendanceValues) : 0;
+  const minAttendance = attendanceValues.length > 0 ? Math.min(...attendanceValues) : 0;
+  const imbalanceIndex = perCoordinatorAvg > 0
+    ? Math.round(((maxAttendance - minAttendance) / perCoordinatorAvg) * 10000) / 100
+    : 0;
+
+  // 워크로드 등급 산정
+  const coordinatorItems: CoordinatorWorkloadItem[] = rawItems
+    .map((item) => {
+      let workloadLevel: 'heavy' | 'normal' | 'light';
+      if (item.avg_daily_attendance > perCoordinatorAvg * 1.3) {
+        workloadLevel = 'heavy';
+      } else if (item.avg_daily_attendance < perCoordinatorAvg * 0.7) {
+        workloadLevel = 'light';
+      } else {
+        workloadLevel = 'normal';
+      }
+      return { ...item, workload_level: workloadLevel };
+    })
+    .sort((a, b) => b.avg_daily_attendance - a.avg_daily_attendance);
+
+  return {
+    period: { start: query.start_date, end: query.end_date },
+    working_days: workingDays,
+    team_total_avg_attendance: Math.round(teamTotalAvgAttendance * 100) / 100,
+    per_coordinator_avg: perCoordinatorAvg,
+    imbalance_index: imbalanceIndex,
+    coordinators: coordinatorItems,
+  };
 }
 
 /**
