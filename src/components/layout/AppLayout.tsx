@@ -71,7 +71,7 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
         <nav className="p-4 space-y-1 flex-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname.startsWith(item.href);
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 
             return (
               <Link
@@ -144,7 +144,7 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
         <div className="flex items-center justify-around h-14 px-2">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname.startsWith(item.href);
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 
             return (
               <Link
