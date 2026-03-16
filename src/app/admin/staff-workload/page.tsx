@@ -8,14 +8,30 @@ import { useCoordinatorWorkload } from '@/features/admin/hooks/useCoordinatorWor
 import { WorkloadSummaryCards } from '@/features/admin/components/WorkloadSummaryCards';
 import { CoordinatorWorkloadTable } from '@/features/admin/components/CoordinatorWorkloadTable';
 import { WorkloadComparisonChart } from '@/features/admin/components/WorkloadComparisonChart';
+import { useHydrated } from '@/hooks/useHydrated';
 
 const DEFAULT_PERIOD_DAYS = 30;
 
+function getInitialDates() {
+  const now = new Date();
+  return {
+    start: max([subDays(now, DEFAULT_PERIOD_DAYS), STATS_DATA_START_DATE_OBJ]),
+    end: now,
+  };
+}
+
+const PAGE_HEADER = (
+  <div>
+    <h1 className="text-2xl font-bold text-gray-900">직원 워크로드</h1>
+    <p className="text-sm text-gray-600 mt-1">
+      코디네이터별 실질 업무량(출석 기반) 비교
+    </p>
+  </div>
+);
+
 export default function StaffWorkloadPage() {
-  const [startDate, setStartDate] = useState<Date>(
-    max([subDays(new Date(), DEFAULT_PERIOD_DAYS), STATS_DATA_START_DATE_OBJ]),
-  );
-  const [endDate, setEndDate] = useState<Date>(new Date());
+  const hydrated = useHydrated();
+  const [{ start: startDate, end: endDate }, setDates] = useState(getInitialDates);
 
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
@@ -23,22 +39,27 @@ export default function StaffWorkloadPage() {
   const { data: workload, isLoading, isError } = useCoordinatorWorkload({
     start_date: startDateStr,
     end_date: endDateStr,
+    enabled: hydrated,
   });
+
+  if (!hydrated) {
+    return (
+      <div className="p-8 space-y-6">
+        {PAGE_HEADER}
+        <div className="text-center py-12 text-gray-500">불러오는 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">직원 워크로드</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            코디네이터별 실질 업무량(출석 기반) 비교
-          </p>
-        </div>
+        {PAGE_HEADER}
         <StatsDateRangePicker
           startDate={startDate}
           endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
+          onStartDateChange={(date) => setDates((prev) => ({ ...prev, start: date }))}
+          onEndDateChange={(date) => setDates((prev) => ({ ...prev, end: date }))}
         />
       </div>
 

@@ -7,11 +7,13 @@ import type { CoordinatorWorkloadSummary } from '../backend/schema';
 interface UseCoordinatorWorkloadParams {
   start_date: string;
   end_date: string;
+  enabled?: boolean;
 }
 
-export function useCoordinatorWorkload(params: UseCoordinatorWorkloadParams) {
+export function useCoordinatorWorkload({ enabled = true, ...params }: UseCoordinatorWorkloadParams) {
   return useQuery({
     queryKey: ['admin', 'coordinator-workload', params],
+    enabled,
     queryFn: async () => {
       const searchParams = new URLSearchParams({
         start_date: params.start_date,
