@@ -20,7 +20,7 @@ export interface MessageResult {
 
 export class MessageError extends Error {
   constructor(
-    public code: 'MESSAGE_SAVE_FAILED' | 'MESSAGE_DELETE_FAILED' | 'MESSAGE_NOT_OWNED',
+    public code: 'MESSAGE_SAVE_FAILED' | 'MESSAGE_DELETE_FAILED' | 'MESSAGE_UPDATE_FAILED' | 'MESSAGE_NOT_OWNED',
     message: string,
   ) {
     super(message);
@@ -58,6 +58,41 @@ export async function deleteMessage(
     throw new MessageError(
       isAdmin ? 'MESSAGE_DELETE_FAILED' : 'MESSAGE_NOT_OWNED',
       isAdmin ? '전달사항을 찾을 수 없습니다.' : '본인이 작성한 전달사항만 삭제할 수 있습니다.',
+    );
+  }
+}
+
+/**
+ * 전달사항 수정 (작성자 본인 또는 admin만 수정 가능)
+ */
+export async function updateMessage(
+  supabase: SupabaseClient<Database>,
+  messageId: string,
+  authorId: string,
+  isAdmin = false,
+  params: { content: string },
+): Promise<void> {
+  let query = (supabase.from('messages') as any)
+    .update({ content: params.content })
+    .eq('id', messageId);
+
+  if (!isAdmin) {
+    query = query.eq('author_id', authorId);
+  }
+
+  const { data, error } = await query.select('id');
+
+  if (error) {
+    throw new MessageError(
+      'MESSAGE_UPDATE_FAILED',
+      `전달사항 수정에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  if (!data || data.length === 0) {
+    throw new MessageError(
+      isAdmin ? 'MESSAGE_UPDATE_FAILED' : 'MESSAGE_NOT_OWNED',
+      isAdmin ? '전달사항을 찾을 수 없습니다.' : '본인이 작성한 전달사항만 수정할 수 있습니다.',
     );
   }
 }

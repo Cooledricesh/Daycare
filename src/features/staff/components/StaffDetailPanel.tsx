@@ -12,6 +12,7 @@ import { usePatientDetail } from '../hooks/usePatientDetail';
 import { useStaffPatientHistory } from '../hooks/usePatientHistory';
 import { useCompleteTask } from '../hooks/useCompleteTask';
 import { useDeleteMessage } from '../hooks/useDeleteMessage';
+import { useUpdateMessage } from '../hooks/useUpdateMessage';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { MessageForm } from './MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
@@ -43,6 +44,7 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
 
   const { mutate: completeTask, isPending: isCompleting } = useCompleteTask();
   const { mutate: deleteMessageMutate } = useDeleteMessage();
+  const { mutate: updateMessageMutate } = useUpdateMessage();
 
   const handleDeleteMessage = (messageId: string) => {
     deleteMessageMutate(messageId, {
@@ -52,6 +54,18 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
       onError: (error) => {
         const message = extractApiErrorMessage(error, '삭제에 실패했습니다.');
         toast({ title: '삭제 실패', description: message, variant: 'destructive' });
+      },
+    });
+  };
+
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    updateMessageMutate({ messageId, content: newContent }, {
+      onSuccess: () => {
+        toast({ title: '수정 완료', description: '전달사항이 수정되었습니다.' });
+      },
+      onError: (error) => {
+        const message = extractApiErrorMessage(error, '수정에 실패했습니다.');
+        toast({ title: '수정 실패', description: message, variant: 'destructive' });
       },
     });
   };
@@ -211,6 +225,8 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
               currentUserId={user?.id}
               currentUserRole={user?.role}
               onDeleteMessage={handleDeleteMessage}
+              onEditMessage={handleEditMessage}
+              todayDate={today}
             />
           ) : (
             <Card>

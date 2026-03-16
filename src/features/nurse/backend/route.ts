@@ -8,7 +8,7 @@ import {
   completeTaskSchema,
   createMessageSchema,
 } from './schema';
-import { getNursePatients, getPrescriptions, completeTask, createMessage, deleteMessage } from './service';
+import { getNursePatients, getPrescriptions, completeTask, createMessage, deleteMessage, updateMessage } from './service';
 import { getPatientDetail } from '@/features/staff/backend/service';
 import { StaffError } from '@/features/staff/backend/error';
 import { getPatientHistory } from '@/features/doctor/backend/service';
@@ -161,6 +161,37 @@ nurseRoutes.post('/messages', async (c) => {
     const message = await createMessage(supabase, staffId, params);
 
     return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof NurseError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * PATCH /api/nurse/messages/:id
+ * 전달사항 수정
+ */
+nurseRoutes.patch('/messages/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const body = await c.req.json<{ content: string }>();
+  if (!body.content || typeof body.content !== 'string') {
+    return respond(c, failure(400, 'INVALID_REQUEST', '내용을 입력해주세요.'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    await updateMessage(supabase, staffId, messageId, body.content, user.role === 'admin');
+    return respond(c, success({ updated: true }, 200));
   } catch (error) {
     if (error instanceof NurseError) {
       return respond(c, failure(400, error.code, error.message));

@@ -125,6 +125,20 @@ export const useAdminDeleteMessage = () => {
   });
 };
 
+export const useAdminUpdateMessage = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
+      await apiClient.patch(`/api/admin/dashboard/messages/${messageId}`, { content });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient-history'] });
+    },
+  });
+};
+
 export const useAdminDeleteConsultation = () => {
   const queryClient = useQueryClient();
 

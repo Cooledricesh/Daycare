@@ -18,6 +18,7 @@ import {
   completeTask,
   createMessage,
   deleteMessage,
+  updateMessage,
   getMyPatientsSchedulePatterns,
   updateMyPatientSchedulePattern,
   getMyMessages,
@@ -163,6 +164,37 @@ staffRoutes.post('/messages', async (c) => {
     const message = await createMessage(supabase, staffId, params);
 
     return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * PATCH /api/staff/messages/:id
+ * 전달사항 수정
+ */
+staffRoutes.patch('/messages/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const body = await c.req.json<{ content: string }>();
+  if (!body.content || typeof body.content !== 'string') {
+    return respond(c, failure(400, 'INVALID_REQUEST', '내용을 입력해주세요.'));
+  }
+
+  const staffId = user.sub;
+
+  try {
+    await updateMessage(supabase, staffId, messageId, body.content, user.role === 'admin');
+    return respond(c, success({ updated: true }, 200));
   } catch (error) {
     if (error instanceof StaffError) {
       return respond(c, failure(400, error.code, error.message));

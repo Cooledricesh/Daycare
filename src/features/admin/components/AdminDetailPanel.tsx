@@ -9,7 +9,7 @@ import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getTodayString } from '@/lib/date';
-import { useAdminPatientDetail, useAdminPatientHistory, useAdminCompleteTask, useAdminDeleteMessage, useAdminDeleteConsultation } from '../hooks/useDashboard';
+import { useAdminPatientDetail, useAdminPatientHistory, useAdminCompleteTask, useAdminDeleteMessage, useAdminUpdateMessage, useAdminDeleteConsultation } from '../hooks/useDashboard';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { AdminMessageForm } from './AdminMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
@@ -39,6 +39,7 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
 
   const { mutate: completeTask, isPending: isCompleting } = useAdminCompleteTask();
   const { mutate: deleteMessageMutate } = useAdminDeleteMessage();
+  const { mutate: updateMessageMutate } = useAdminUpdateMessage();
   const { mutate: deleteConsultationMutate } = useAdminDeleteConsultation();
 
   const handleDeleteMessage = (messageId: string) => {
@@ -49,6 +50,18 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
       onError: (error) => {
         const message = extractApiErrorMessage(error, '삭제에 실패했습니다.');
         toast({ title: '삭제 실패', description: message, variant: 'destructive' });
+      },
+    });
+  };
+
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    updateMessageMutate({ messageId, content: newContent }, {
+      onSuccess: () => {
+        toast({ title: '수정 완료', description: '전달사항이 수정되었습니다.' });
+      },
+      onError: (error) => {
+        const message = extractApiErrorMessage(error, '수정에 실패했습니다.');
+        toast({ title: '수정 실패', description: message, variant: 'destructive' });
       },
     });
   };
@@ -216,6 +229,8 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
               currentUserRole={user?.role}
               onDeleteMessage={handleDeleteMessage}
               onDeleteConsultation={handleDeleteConsultation}
+              onEditMessage={handleEditMessage}
+              todayDate={today}
             />
           ) : (
             <Card>

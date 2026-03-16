@@ -24,6 +24,7 @@ import {
 import {
   createMessage as createMessageShared,
   deleteMessage as deleteMessageShared,
+  updateMessage as updateMessageShared,
   MessageError,
 } from '@/server/services/message';
 import { getMonthsAgoString, getTodayString } from '@/lib/date';
@@ -353,6 +354,26 @@ export async function deleteMessage(
   } catch (error) {
     if (error instanceof MessageError) {
       throw new StaffError(StaffErrorCode.MESSAGE_DELETE_FAILED, error.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 전달사항 수정
+ */
+export async function updateMessage(
+  supabase: SupabaseClient<Database>,
+  staffId: string,
+  messageId: string,
+  content: string,
+  isAdmin = false,
+): Promise<void> {
+  try {
+    await updateMessageShared(supabase, messageId, staffId, isAdmin, { content });
+  } catch (error) {
+    if (error instanceof MessageError) {
+      throw new StaffError(StaffErrorCode.MESSAGE_UPDATE_FAILED, error.message);
     }
     throw error;
   }

@@ -32,6 +32,7 @@ import { getPatientHistory } from '@/features/doctor/backend/service';
 import {
   createMessage as createMessageShared,
   deleteMessage as deleteMessageShared,
+  updateMessage as updateMessageShared,
   MessageError,
 } from '@/server/services/message';
 import { deleteConsultation } from './service';
@@ -926,6 +927,35 @@ adminRoutes.post('/dashboard/messages', async (c) => {
       content: body.content,
     });
     return respond(c, success({ message }, 201));
+  } catch (error) {
+    if (error instanceof MessageError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * PATCH /api/admin/dashboard/messages/:id
+ * 대시보드 전달사항 수정 (admin은 모든 메시지 수정 가능)
+ */
+adminRoutes.patch('/dashboard/messages/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const body = await c.req.json<{ content: string }>();
+  if (!body.content || typeof body.content !== 'string') {
+    return respond(c, failure(400, 'INVALID_REQUEST', '내용을 입력해주세요.'));
+  }
+
+  try {
+    await updateMessageShared(supabase, messageId, user.sub, true, { content: body.content });
+    return respond(c, success({ updated: true }, 200));
   } catch (error) {
     if (error instanceof MessageError) {
       return respond(c, failure(400, error.code, error.message));

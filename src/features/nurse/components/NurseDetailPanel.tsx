@@ -12,6 +12,7 @@ import { useNursePatientDetail } from '../hooks/useNursePatientDetail';
 import { useNursePatientHistory } from '../hooks/useNursePatientHistory';
 import { useCompleteTask } from '../hooks/useCompleteTask';
 import { useNurseDeleteMessage } from '../hooks/useNurseDeleteMessage';
+import { useNurseUpdateMessage } from '../hooks/useNurseUpdateMessage';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { NurseMessageForm } from './NurseMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
@@ -42,6 +43,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
 
   const { mutate: completeTask, isPending: isCompleting } = useCompleteTask();
   const { mutate: deleteMessageMutate } = useNurseDeleteMessage();
+  const { mutate: updateMessageMutate } = useNurseUpdateMessage();
 
   const handleDeleteMessage = (messageId: string) => {
     deleteMessageMutate(messageId, {
@@ -51,6 +53,18 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
       onError: (error) => {
         const message = extractApiErrorMessage(error, '삭제에 실패했습니다.');
         toast({ title: '삭제 실패', description: message, variant: 'destructive' });
+      },
+    });
+  };
+
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    updateMessageMutate({ messageId, content: newContent }, {
+      onSuccess: () => {
+        toast({ title: '수정 완료', description: '전달사항이 수정되었습니다.' });
+      },
+      onError: (error) => {
+        const message = extractApiErrorMessage(error, '수정에 실패했습니다.');
+        toast({ title: '수정 실패', description: message, variant: 'destructive' });
       },
     });
   };
@@ -208,6 +222,8 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
               currentUserId={user?.id}
               currentUserRole={user?.role}
               onDeleteMessage={handleDeleteMessage}
+              onEditMessage={handleEditMessage}
+              todayDate={today}
             />
           ) : (
             <Card>

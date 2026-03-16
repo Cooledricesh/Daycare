@@ -3,8 +3,10 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Copy, Check, X } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { ChevronDown, ChevronUp, Copy, Check, X, Pencil } from 'lucide-react';
 import type { ConsultationRecord, MessageRecord } from '../backend/schema';
+import { getTodayString } from '@/lib/date';
 
 interface ConsultationHistoryProps {
   consultations: ConsultationRecord[];
@@ -13,6 +15,8 @@ interface ConsultationHistoryProps {
   currentUserRole?: string;
   onDeleteMessage?: (messageId: string) => void;
   onDeleteConsultation?: (consultationId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
+  todayDate?: string;
 }
 
 function formatDate(dateStr: string): string {
@@ -49,6 +53,16 @@ function recordsToText(records: ConsultationRecord[]): string {
 type TimelineItem =
   | { type: 'consultation'; date: string; data: ConsultationRecord }
   | { type: 'message'; date: string; data: MessageRecord };
+
+// 편집 관련 상태를 하나의 객체로 그룹화
+interface EditingState {
+  editingId: string | null;
+  editContent: string;
+  onStart: (id: string, content: string) => void;
+  onContentChange: (content: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}
 
 function hasContent(c: ConsultationRecord): boolean {
   return !!(c.note || (c.has_task && c.task_content));
@@ -98,22 +112,87 @@ function ConsultationItem({ consultation, onDelete }: { consultation: Consultati
   );
 }
 
-// 전달사항 아이템
-function MessageItem({ message, onDelete }: { message: MessageRecord; onDelete?: (id: string) => void }) {
+// 전달사항 아이템 (인라인 편집 지원)
+function MessageItem({
+  message,
+  onDelete,
+  canEdit,
+  editing,
+}: {
+  message: MessageRecord;
+  onDelete?: (id: string) => void;
+  canEdit?: boolean;
+  editing: EditingState;
+}) {
+  const isEditing = editing.editingId === message.id;
+
+  if (isEditing) {
+    return (
+      <div className="mt-1.5 p-2 bg-blue-50 rounded text-sm">
+        <span className="text-blue-700 font-medium">{message.author_name}: </span>
+        <Textarea
+          value={editing.editContent}
+          onChange={(e) => editing.onContentChange(e.target.value)}
+          className="mt-1 min-h-[60px] text-sm bg-white"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              editing.onSave();
+            }
+            if (e.key === 'Escape') {
+              editing.onCancel();
+            }
+          }}
+        />
+        <div className="flex justify-end gap-1 mt-1">
+          <button
+            type="button"
+            className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            onClick={editing.onCancel}
+            title="취소"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            className="p-1 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-100"
+            onClick={editing.onSave}
+            title="저장"
+          >
+            <Check className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-1.5 p-2 bg-blue-50 rounded text-sm group relative">
       <span className="text-blue-700 font-medium">{message.author_name}: </span>
       <span>{message.content}</span>
-      {onDelete && (
-        <button
-          type="button"
-          className="absolute top-1.5 right-1.5 p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={() => onDelete(message.id)}
-          title="삭제"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      )}
+      <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {canEdit && (
+          <button
+            type="button"
+            className="p-0.5 rounded text-gray-300 hover:text-blue-500 hover:bg-blue-100"
+            onClick={() => editing.onStart(message.id, message.content)}
+            title="수정"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50"
+            onClick={() => onDelete(message.id)}
+            title="삭제"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -152,10 +231,29 @@ function buildTimeline(consultations: ConsultationRecord[], messages: MessageRec
   return new Map([...map.entries()].sort(([a], [b]) => b.localeCompare(a)));
 }
 
-function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessage, onDeleteConsultation }: { date: string; items: TimelineItem[]; currentUserId?: string; isAdmin?: boolean; onDeleteMessage?: (id: string) => void; onDeleteConsultation?: (id: string) => void }) {
+function TimelineDateGroup({
+  date,
+  items,
+  currentUserId,
+  isAdmin,
+  onDeleteMessage,
+  onDeleteConsultation,
+  todayDate,
+  editing,
+}: {
+  date: string;
+  items: TimelineItem[];
+  currentUserId?: string;
+  isAdmin?: boolean;
+  onDeleteMessage?: (id: string) => void;
+  onDeleteConsultation?: (id: string) => void;
+  todayDate?: string;
+  editing: EditingState;
+}) {
   const firstConsultation = items.find(i => i.type === 'consultation');
   const consultation = firstConsultation ? (firstConsultation.data as ConsultationRecord) : null;
   const showName = consultation && hasDoctorName(consultation.doctor_name);
+  const isToday = date === (todayDate || getTodayString());
 
   return (
     <div className="py-2.5 border-b last:border-b-0">
@@ -169,16 +267,45 @@ function TimelineDateGroup({ date, items, currentUserId, isAdmin, onDeleteMessag
         }
         const msg = item.data as MessageRecord;
         const canDelete = isAdmin || (currentUserId && msg.author_id === currentUserId);
-        return <MessageItem key={`m-${i}`} message={msg} onDelete={canDelete ? onDeleteMessage : undefined} />;
+        const canEdit = isToday && (isAdmin || (currentUserId && msg.author_id === currentUserId));
+        return (
+          <MessageItem
+            key={`m-${i}`}
+            message={msg}
+            onDelete={canDelete ? onDeleteMessage : undefined}
+            canEdit={!!canEdit}
+            editing={editing}
+          />
+        );
       })}
     </div>
   );
 }
 
-export function ConsultationHistory({ consultations, messages = [], currentUserId, currentUserRole, onDeleteMessage, onDeleteConsultation }: ConsultationHistoryProps) {
+export function ConsultationHistory({ consultations, messages = [], currentUserId, currentUserRole, onDeleteMessage, onDeleteConsultation, onEditMessage, todayDate }: ConsultationHistoryProps) {
   const isAdmin = currentUserRole === 'admin';
   const [showOlder, setShowOlder] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+
+  const handleEditStart = useCallback((id: string, content: string) => {
+    setEditingId(id);
+    setEditContent(content);
+  }, []);
+
+  const handleEditCancel = useCallback(() => {
+    setEditingId(null);
+    setEditContent('');
+  }, []);
+
+  const handleEditSave = useCallback(() => {
+    if (editingId && editContent.trim() && onEditMessage) {
+      onEditMessage(editingId, editContent.trim());
+      setEditingId(null);
+      setEditContent('');
+    }
+  }, [editingId, editContent, onEditMessage]);
 
   const hasMessages = messages.length > 0;
 
@@ -276,6 +403,24 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
     setTimeout(() => setCopied(false), 2000);
   }, [meaningfulConsultations, showOlder]);
 
+  const editing = useMemo<EditingState>(() => ({
+    editingId,
+    editContent,
+    onStart: handleEditStart,
+    onContentChange: setEditContent,
+    onSave: handleEditSave,
+    onCancel: handleEditCancel,
+  }), [editingId, editContent, handleEditStart, handleEditSave, handleEditCancel]);
+
+  const timelineGroupProps = {
+    currentUserId,
+    isAdmin,
+    onDeleteMessage,
+    onDeleteConsultation: isAdmin ? onDeleteConsultation : undefined,
+    todayDate,
+    editing,
+  };
+
   if (totalCount === 0) {
     return (
       <Card>
@@ -319,7 +464,7 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
           recentDates.length > 0 ? (
             <div>
               {recentDates.map(([date, items]) => (
-                <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} onDeleteConsultation={isAdmin ? onDeleteConsultation : undefined} />
+                <TimelineDateGroup key={date} date={date} items={items} {...timelineGroupProps} />
               ))}
             </div>
           ) : (
@@ -375,7 +520,7 @@ export function ConsultationHistory({ consultations, messages = [], currentUserI
                       <div key={monthLabel}>
                         <p className="text-xs font-medium text-gray-400 mt-3 mb-1">{monthLabel}</p>
                         {entries.map(([date, items]) => (
-                          <TimelineDateGroup key={date} date={date} items={items} currentUserId={currentUserId} isAdmin={isAdmin} onDeleteMessage={onDeleteMessage} onDeleteConsultation={isAdmin ? onDeleteConsultation : undefined} />
+                          <TimelineDateGroup key={date} date={date} items={items} {...timelineGroupProps} />
                         ))}
                       </div>
                     ));
