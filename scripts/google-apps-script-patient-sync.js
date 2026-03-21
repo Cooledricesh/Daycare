@@ -72,9 +72,35 @@ function supabaseRequest(table, method, options) {
     fetchOptions.payload = JSON.stringify(options.body);
   }
 
-  var response = UrlFetchApp.fetch(url, fetchOptions);
-  var code = response.getResponseCode();
-  var text = response.getContentText();
+  var MAX_RETRIES = 3;
+  var response, code, text;
+
+  for (var attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      response = UrlFetchApp.fetch(url, fetchOptions);
+      code = response.getResponseCode();
+      text = response.getContentText();
+    } catch (e) {
+      // 네트워크 레벨 예외 (Address unavailable, Bandwidth quota exceeded 등)
+      if (attempt < MAX_RETRIES) {
+        var waitSec = (attempt + 1) * 3;
+        Logger.log('네트워크 오류, ' + waitSec + '초 후 재시도 (' + (attempt + 1) + '/' + MAX_RETRIES + '): ' + e.message);
+        Utilities.sleep(waitSec * 1000);
+        continue;
+      }
+      throw e;
+    }
+
+    // HTTP 429 Rate Limit도 동일 루프에서 처리
+    if (code === 429 && attempt < MAX_RETRIES) {
+      var waitSec = (attempt + 1) * 3;
+      Logger.log('Rate limit 도달, ' + waitSec + '초 후 재시도 (' + (attempt + 1) + '/' + MAX_RETRIES + ')');
+      Utilities.sleep(waitSec * 1000);
+      continue;
+    }
+
+    break;
+  }
 
   if (code < 200 || code >= 300) {
     throw new Error('Supabase API 오류 [' + code + ']: ' + text);
@@ -82,6 +108,35 @@ function supabaseRequest(table, method, options) {
 
   if (!text || text === '') return null;
   return JSON.parse(text);
+}
+
+/**
+ * 페이지네이션으로 전체 데이터 조회 (Supabase 기본 1000행 제한 대응)
+ * @param {string} table - 테이블명
+ * @param {string} selectQuery - select 쿼리 파라미터
+ * @param {string} filterQuery - 추가 필터 (선택)
+ * @returns {Array} - 전체 데이터
+ */
+function supabaseRequestAll(table, selectQuery, filterQuery) {
+  var PAGE_SIZE = 1000;
+  var allData = [];
+  var offset = 0;
+
+  while (true) {
+    var query = selectQuery + '&limit=' + PAGE_SIZE + '&offset=' + offset;
+    if (filterQuery) {
+      query += '&' + filterQuery;
+    }
+
+    var data = supabaseRequest(table, 'get', { query: query });
+    if (!data || data.length === 0) break;
+
+    allData = allData.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+
+  return allData;
 }
 
 // =============================================================================
@@ -235,12 +290,14 @@ function getDoctorMappings() {
 
 /**
  * 기존 환자 목록 조회 (patient_id_no 기준)
+ * 필요한 컬럼만 조회하여 대역폭 절약
  * @returns {Object} - { patient_id_no: patient_data }
  */
 function getExistingPatients() {
-  var data = supabaseRequest('patients', 'get', {
-    query: 'select=*',
-  });
+  var data = supabaseRequestAll(
+    'patients',
+    'select=id,patient_id_no,name,room_number,coordinator_id,doctor_id,gender,status'
+  );
 
   var map = {};
   if (data) {
@@ -355,8 +412,16 @@ function syncPatientDepartments() {
 
     // 소스에 있는 환자 ID 목록 (퇴원 처리용)
     var sourcePatientIdNos = {};
+    var now = new Date().toISOString();
 
-    // 4. 각 환자 처리
+    // 배치 처리용 수집 배열
+    var batchInserts = [];
+    var batchReactivateIds = [];
+    var batchReactivateData = {};
+    var batchUpdates = [];
+    var batchReactivatePatientIds = [];
+
+    // 4. 각 환자 분류 (API 호출 없이 데이터만 수집)
     for (var i = 0; i < daycarePatients.length; i++) {
       var patient = daycarePatients[i];
 
@@ -378,7 +443,7 @@ function syncPatientDepartments() {
       var doctorId = doctorMappings[patient.doctorName] || null;
 
       if (!existing) {
-        // 신규 환자 - INSERT
+        // 신규 환자 - 배치 INSERT 수집
         result.inserted++;
         result.changes.push({
           patientIdNo: patient.patientIdNo,
@@ -386,22 +451,20 @@ function syncPatientDepartments() {
           action: 'insert',
         });
 
-        supabaseRequest('patients', 'post', {
-          body: {
-            name: patient.name,
-            patient_id_no: patient.patientIdNo,
-            room_number: patient.roomNumber,
-            gender: gender,
-            coordinator_id: coordinatorId,
-            doctor_id: doctorId,
-            status: 'active',
-            last_synced_at: new Date().toISOString(),
-            sync_source: 'google_sheets',
-          },
+        batchInserts.push({
+          name: patient.name,
+          patient_id_no: patient.patientIdNo,
+          room_number: patient.roomNumber,
+          gender: gender,
+          coordinator_id: coordinatorId,
+          doctor_id: doctorId,
+          status: 'active',
+          last_synced_at: now,
+          sync_source: 'google_sheets',
         });
 
       } else if (existing.status === 'discharged') {
-        // 퇴원했다가 재입원 - REACTIVATE
+        // 퇴원했다가 재입원 - 배치 수집
         result.reactivated++;
         result.changes.push({
           patientIdNo: patient.patientIdNo,
@@ -410,22 +473,13 @@ function syncPatientDepartments() {
           fields: { status: { old: 'discharged', new: 'active' } },
         });
 
-        supabaseRequest('patients', 'patch', {
-          query: 'id=eq.' + existing.id,
-          body: {
-            status: 'active',
-            room_number: patient.roomNumber,
-            coordinator_id: coordinatorId,
-            doctor_id: doctorId,
-            last_synced_at: new Date().toISOString(),
-            sync_source: 'google_sheets',
-          },
-        });
-
-        // 재입원 시 기존 출석 패턴 초기화 (관리자가 새로 설정)
-        supabaseRequest('scheduled_patterns', 'delete', {
-          query: 'patient_id=eq.' + existing.id,
-        });
+        batchReactivateIds.push(existing.id);
+        batchReactivatePatientIds.push(existing.id);
+        batchReactivateData[existing.id] = {
+          room_number: patient.roomNumber,
+          coordinator_id: coordinatorId,
+          doctor_id: doctorId,
+        };
 
       } else {
         // 기존 환자 - 변경사항 확인
@@ -468,13 +522,9 @@ function syncPatientDepartments() {
             fields: changes,
           });
 
-          updateData.last_synced_at = new Date().toISOString();
+          updateData.last_synced_at = now;
           updateData.sync_source = 'google_sheets';
-
-          supabaseRequest('patients', 'patch', {
-            query: 'id=eq.' + existing.id,
-            body: updateData,
-          });
+          batchUpdates.push({ id: existing.id, data: updateData });
         } else {
           result.unchanged++;
         }
@@ -483,24 +533,22 @@ function syncPatientDepartments() {
       result.totalProcessed++;
     }
 
-    // 5. 명단에서 제외된 환자 퇴원 처리
+    // 5. 명단에서 제외된 환자 퇴원 처리 대상 수집
+    var batchDischargeIds = [];
     var existingKeys = Object.keys(existingPatients);
     for (var j = 0; j < existingKeys.length; j++) {
       var patientIdNo = existingKeys[j];
       var p = existingPatients[patientIdNo];
 
-      // 이미 퇴원 상태거나 소스에 있는 환자는 건너뛰기
       if (p.status === 'discharged' || sourcePatientIdNos[patientIdNo]) {
         continue;
       }
 
-      // 호실이 3000 미만인 환자는 병동 환자이므로 건너뛰기
       var roomNum = parseInt(p.room_number || '0', 10);
       if (isNaN(roomNum) || roomNum < 3000) {
         continue;
       }
 
-      // 명단에서 삭제됨 - 퇴원 처리
       result.discharged++;
       result.changes.push({
         patientIdNo: patientIdNo,
@@ -508,11 +556,60 @@ function syncPatientDepartments() {
         action: 'discharge',
       });
 
+      batchDischargeIds.push(p.id);
+    }
+
+    // 6. 배치 API 호출 실행
+    // 6a. 신규 환자 일괄 INSERT
+    if (batchInserts.length > 0) {
+      Logger.log('배치 INSERT: ' + batchInserts.length + '명');
+      supabaseRequest('patients', 'post', {
+        body: batchInserts,
+      });
+    }
+
+    // 6b. 재입원 환자 개별 PATCH (각각 다른 호실/담당자/의사)
+    for (var ri = 0; ri < batchReactivateIds.length; ri++) {
+      var rId = batchReactivateIds[ri];
+      var rData = batchReactivateData[rId];
+      rData.status = 'active';
+      rData.last_synced_at = now;
+      rData.sync_source = 'google_sheets';
       supabaseRequest('patients', 'patch', {
-        query: 'id=eq.' + p.id,
+        query: 'id=eq.' + rId,
+        body: rData,
+      });
+      if (ri < batchReactivateIds.length - 1) Utilities.sleep(200);
+    }
+
+    // 6c. 재입원 환자 출석 패턴 일괄 삭제
+    if (batchReactivatePatientIds.length > 0) {
+      Logger.log('재입원 패턴 초기화: ' + batchReactivatePatientIds.length + '명');
+      supabaseRequest('scheduled_patterns', 'delete', {
+        query: 'patient_id=in.(' + batchReactivatePatientIds.join(',') + ')',
+      });
+    }
+
+    // 6d. 변경된 환자 개별 PATCH (각각 다른 필드 변경)
+    if (batchUpdates.length > 0) {
+      Logger.log('배치 UPDATE: ' + batchUpdates.length + '명');
+      for (var ui = 0; ui < batchUpdates.length; ui++) {
+        supabaseRequest('patients', 'patch', {
+          query: 'id=eq.' + batchUpdates[ui].id,
+          body: batchUpdates[ui].data,
+        });
+        if (ui < batchUpdates.length - 1) Utilities.sleep(200);
+      }
+    }
+
+    // 6e. 퇴원 환자 일괄 PATCH
+    if (batchDischargeIds.length > 0) {
+      Logger.log('배치 퇴원 처리: ' + batchDischargeIds.length + '명');
+      supabaseRequest('patients', 'patch', {
+        query: 'id=in.(' + batchDischargeIds.join(',') + ')',
         body: {
           status: 'discharged',
-          last_synced_at: new Date().toISOString(),
+          last_synced_at: now,
           sync_source: 'google_sheets',
         },
       });
@@ -602,6 +699,7 @@ function testConnection() {
     try {
       var patients = supabaseRequest('patients', 'get', {
         query: 'select=id&limit=1',
+        headers: { 'Prefer': 'count=exact' },
       });
       Logger.log('Supabase 연결: OK');
       Logger.log('patients 테이블 접근 가능');
