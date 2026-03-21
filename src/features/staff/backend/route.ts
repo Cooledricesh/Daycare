@@ -11,6 +11,8 @@ import {
   getMessagesSchema,
   batchAttendanceSchema,
   batchCancelAttendanceSchema,
+  batchConsultationSchema,
+  batchCancelConsultationSchema,
 } from './schema';
 import {
   getMyPatients,
@@ -24,6 +26,8 @@ import {
   getMyMessages,
   batchCreateAttendance,
   batchCancelAttendance,
+  batchCreateConsultation,
+  batchCancelConsultation,
 } from './service';
 import { getPatientHistory } from '@/features/doctor/backend/service';
 
@@ -348,6 +352,56 @@ staffRoutes.post('/attendances/cancel', async (c) => {
   try {
     const params = batchCancelAttendanceSchema.parse(body);
     const result = await batchCancelAttendance(supabase, params);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/staff/consultations/batch
+ * 일괄 진찰 체크 (코디네이터)
+ */
+staffRoutes.post('/consultations/batch', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const body = await c.req.json();
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const params = batchConsultationSchema.parse(body);
+    const result = await batchCreateConsultation(supabase, params);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof StaffError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/staff/consultations/cancel
+ * 일괄 진찰 취소 (코디네이터)
+ */
+staffRoutes.post('/consultations/cancel', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const body = await c.req.json();
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  try {
+    const params = batchCancelConsultationSchema.parse(body);
+    const result = await batchCancelConsultation(supabase, params);
     return respond(c, success(result, 200));
   } catch (error) {
     if (error instanceof StaffError) {

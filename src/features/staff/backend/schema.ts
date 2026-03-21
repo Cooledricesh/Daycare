@@ -43,6 +43,7 @@ export type PatientSummary = {
   attendance_time: string | null;
   is_scheduled: boolean;  // 오늘 출석 예정 여부 (scheduled_attendances 기준)
   is_consulted: boolean;
+  is_coordinator_checked: boolean;  // 코디네이터가 체크한 진찰인지 여부
   has_task: boolean;
   task_content: string | null;
   task_completed: boolean;
@@ -125,6 +126,22 @@ export const batchCancelAttendanceSchema = z.object({
 });
 
 export type BatchCancelAttendanceRequest = z.infer<typeof batchCancelAttendanceSchema>;
+
+// 일괄 진찰 체크 스키마
+export const batchConsultationSchema = z.object({
+  patient_ids: z.array(z.string().uuid()).min(1),
+  date: z.string().optional(),
+});
+
+export type BatchConsultationRequest = z.infer<typeof batchConsultationSchema>;
+
+// 일괄 진찰 취소 스키마
+export const batchCancelConsultationSchema = z.object({
+  patient_ids: z.array(z.string().uuid()).min(1),
+  date: z.string().optional(),
+});
+
+export type BatchCancelConsultationRequest = z.infer<typeof batchCancelConsultationSchema>;
 
 // 전달사항 목록 조회 스키마
 export const getMessagesSchema = z.object({

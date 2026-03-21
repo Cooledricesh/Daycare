@@ -544,6 +544,7 @@ export async function createConsultation(
       has_task: params.has_task || false,
       task_content: params.task_content || null,
       task_target: params.task_target || null,
+      checked_by_coordinator: false,
     }, { onConflict: 'patient_id,date' })
     .select()
     .single();

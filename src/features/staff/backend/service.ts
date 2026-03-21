@@ -9,6 +9,8 @@ import type {
   GetMessagesParams,
   BatchAttendanceRequest,
   BatchCancelAttendanceRequest,
+  BatchConsultationRequest,
+  BatchCancelConsultationRequest,
   PatientSummary,
   PatientDetail,
   TaskCompletion,
@@ -60,21 +62,35 @@ export async function getMyPatients(
         return rpcPatients;
       }
 
-      // RPC 결과에 is_scheduled 정보를 추가
-      const { data: scheduledAttendances } = await (supabase
-        .from('scheduled_attendances') as any)
-        .select('patient_id')
-        .eq('date', date)
-        .eq('is_cancelled', false)
-        .in('patient_id', rpcPatientIds);
+      // RPC 결과에 is_scheduled, is_coordinator_checked 정보를 추가
+      const [
+        { data: scheduledAttendances },
+        { data: rpcConsultations },
+      ] = await Promise.all([
+        (supabase.from('scheduled_attendances') as any)
+          .select('patient_id')
+          .eq('date', date)
+          .eq('is_cancelled', false)
+          .in('patient_id', rpcPatientIds),
+        (supabase.from('consultations') as any)
+          .select('patient_id, checked_by_coordinator')
+          .eq('date', date)
+          .in('patient_id', rpcPatientIds),
+      ]);
 
       const scheduledSet = new Set<string>(
         (scheduledAttendances || []).map((s: any) => s.patient_id),
+      );
+      const coordinatorCheckedSet = new Set<string>(
+        (rpcConsultations || [])
+          .filter((c: any) => c.checked_by_coordinator)
+          .map((c: any) => c.patient_id),
       );
 
       return rpcPatients.map((p) => ({
         ...p,
         is_scheduled: scheduledSet.has(p.id),
+        is_coordinator_checked: coordinatorCheckedSet.has(p.id),
       }));
     }
   }
@@ -129,6 +145,7 @@ export async function getMyPatients(
           has_task,
           task_content,
           task_target,
+          checked_by_coordinator,
           task_completions(is_completed)
         `)
         .in('patient_id', patientIds)
@@ -174,6 +191,7 @@ export async function getMyPatients(
         attendance_time: attendance?.checked_at || null,
         is_scheduled: scheduledSet.has(p.id),
         is_consulted: !!consultation,
+        is_coordinator_checked: !!consultation?.checked_by_coordinator,
         has_task: !!consultation?.has_task,
         task_content: consultation?.task_content || null,
         task_completed:
@@ -582,18 +600,61 @@ export async function batchCreateAttendance(
 
 /**
  * 일괄 출석 취소
+ * 의사 진찰 기록이 있는 환자는 출석 취소 불가
+ * 코디 체크 진찰(checked_by_coordinator=true)은 출석 취소 시 함께 삭제
  */
 export async function batchCancelAttendance(
   supabase: SupabaseClient<Database>,
   params: BatchCancelAttendanceRequest,
-): Promise<{ cancelled: number }> {
+): Promise<{ cancelled: number; skippedConsulted: number; clearedCoordinatorConsultations: number }> {
   const date = params.date || getTodayString();
   const patientIds = params.patient_ids;
+
+  // 해당 날짜에 진찰 기록이 있는 환자 조회 (코디 체크 여부 포함)
+  const { data: consulted } = await (supabase
+    .from('consultations') as any)
+    .select('patient_id, checked_by_coordinator')
+    .in('patient_id', patientIds)
+    .eq('date', date);
+
+  // 의사 진찰은 출석 취소 불가, 코디 체크 진찰은 함께 삭제
+  const doctorConsultedSet = new Set<string>();
+  const coordinatorCheckedIds: string[] = [];
+
+  (consulted || []).forEach((c: any) => {
+    if (c.checked_by_coordinator) {
+      coordinatorCheckedIds.push(c.patient_id);
+    } else {
+      doctorConsultedSet.add(c.patient_id);
+    }
+  });
+
+  const cancellableIds = patientIds.filter((id) => !doctorConsultedSet.has(id));
+  const skippedConsulted = patientIds.filter((id) => doctorConsultedSet.has(id)).length;
+
+  if (cancellableIds.length === 0) {
+    return { cancelled: 0, skippedConsulted, clearedCoordinatorConsultations: 0 };
+  }
+
+  // 코디 체크 진찰 중 출석 취소 대상에 포함된 것들 삭제
+  const coordToDelete = coordinatorCheckedIds.filter((id) => cancellableIds.includes(id));
+  let clearedCoordinatorConsultations = 0;
+
+  if (coordToDelete.length > 0) {
+    const { data: deletedConsultations } = await (supabase
+      .from('consultations') as any)
+      .delete()
+      .in('patient_id', coordToDelete)
+      .eq('date', date)
+      .eq('checked_by_coordinator', true)
+      .select('patient_id');
+    clearedCoordinatorConsultations = (deletedConsultations || []).length;
+  }
 
   const { data: deleted, error } = await (supabase
     .from('attendances') as any)
     .delete()
-    .in('patient_id', patientIds)
+    .in('patient_id', cancellableIds)
     .eq('date', date)
     .select('patient_id');
 
@@ -604,5 +665,146 @@ export async function batchCancelAttendance(
     );
   }
 
-  return { cancelled: (deleted || []).length };
+  return { cancelled: (deleted || []).length, skippedConsulted, clearedCoordinatorConsultations };
+}
+
+/**
+ * 일괄 진찰 체크 (코디네이터)
+ * 출석 완료 + 미진찰 + 주치의 지정 환자만 진찰 레코드 생성
+ */
+export async function batchCreateConsultation(
+  supabase: SupabaseClient<Database>,
+  params: BatchConsultationRequest,
+): Promise<{ created: number; skippedAlreadyConsulted: number; skippedNotAttended: number; skippedNoDoctor: number }> {
+  const date = params.date || getTodayString();
+  const patientIds = params.patient_ids;
+
+  // 환자 정보 조회 (doctor_id 포함)
+  const [
+    { data: patients },
+    { data: existingConsultations },
+    { data: attendances },
+  ] = await Promise.all([
+    (supabase.from('patients') as any)
+      .select('id, doctor_id')
+      .in('id', patientIds),
+    (supabase.from('consultations') as any)
+      .select('patient_id')
+      .in('patient_id', patientIds)
+      .eq('date', date),
+    (supabase.from('attendances') as any)
+      .select('patient_id')
+      .in('patient_id', patientIds)
+      .eq('date', date),
+  ]);
+
+  const consultedSet = new Set<string>(
+    (existingConsultations || []).map((c: any) => c.patient_id),
+  );
+  const attendedSet = new Set<string>(
+    (attendances || []).map((a: any) => a.patient_id),
+  );
+  const patientMap = new Map<string, any>(
+    (patients || []).map((p: any) => [p.id, p]),
+  );
+
+  let skippedAlreadyConsulted = 0;
+  let skippedNotAttended = 0;
+  let skippedNoDoctor = 0;
+
+  const toCreate: { patient_id: string; doctor_id: string; date: string }[] = [];
+
+  for (const pid of patientIds) {
+    if (consultedSet.has(pid)) {
+      skippedAlreadyConsulted++;
+      continue;
+    }
+    if (!attendedSet.has(pid)) {
+      skippedNotAttended++;
+      continue;
+    }
+    const patient = patientMap.get(pid);
+    if (!patient?.doctor_id) {
+      skippedNoDoctor++;
+      continue;
+    }
+    toCreate.push({ patient_id: pid, doctor_id: patient.doctor_id, date });
+  }
+
+  if (toCreate.length === 0) {
+    return { created: 0, skippedAlreadyConsulted, skippedNotAttended, skippedNoDoctor };
+  }
+
+  const records = toCreate.map((item) => ({
+    patient_id: item.patient_id,
+    doctor_id: item.doctor_id,
+    date: item.date,
+    note: null,
+    has_task: false,
+    checked_by_coordinator: true,
+  }));
+
+  const { error } = await (supabase
+    .from('consultations') as any)
+    .insert(records);
+
+  if (error) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `진찰 체크에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  return { created: toCreate.length, skippedAlreadyConsulted, skippedNotAttended, skippedNoDoctor };
+}
+
+/**
+ * 일괄 진찰 취소 (코디네이터)
+ * checked_by_coordinator=true인 레코드만 삭제
+ */
+export async function batchCancelConsultation(
+  supabase: SupabaseClient<Database>,
+  params: BatchCancelConsultationRequest,
+): Promise<{ cancelled: number; skippedDoctorConsulted: number }> {
+  const date = params.date || getTodayString();
+  const patientIds = params.patient_ids;
+
+  // checked_by_coordinator 상태 조회
+  const { data: consultations } = await (supabase
+    .from('consultations') as any)
+    .select('patient_id, checked_by_coordinator')
+    .in('patient_id', patientIds)
+    .eq('date', date);
+
+  const coordinatorCheckedIds: string[] = [];
+  let skippedDoctorConsulted = 0;
+
+  (consultations || []).forEach((c: any) => {
+    if (c.checked_by_coordinator) {
+      coordinatorCheckedIds.push(c.patient_id);
+    } else {
+      skippedDoctorConsulted++;
+    }
+  });
+
+  if (coordinatorCheckedIds.length === 0) {
+    return { cancelled: 0, skippedDoctorConsulted };
+  }
+
+  const { data: deleted, error } = await (supabase
+    .from('consultations') as any)
+    .delete()
+    .in('patient_id', coordinatorCheckedIds)
+    .eq('date', date)
+    .eq('checked_by_coordinator', true)
+    .select('patient_id');
+
+  if (error) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `진찰 취소에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  return { cancelled: (deleted || []).length, skippedDoctorConsulted };
 }
