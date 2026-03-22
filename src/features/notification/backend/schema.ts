@@ -12,7 +12,7 @@ export type DismissSyncNotificationRequest = z.infer<typeof dismissSyncNotificat
 
 export interface SyncChangeItem {
   name: string;
-  action: 'insert' | 'discharge' | 'reactivate';
+  action: 'insert' | 'discharge' | 'ward_admission' | 'activity_stop' | 'reactivate';
 }
 
 export interface SyncNotificationItem {

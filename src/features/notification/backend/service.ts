@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, SyncChange } from '@/lib/supabase/types';
 import type { SyncNotificationsResponse, SyncNotificationItem, SyncChangeItem } from './schema';
 
-const RELEVANT_ACTIONS = new Set(['insert', 'discharge', 'reactivate']);
+const RELEVANT_ACTIONS = new Set(['insert', 'discharge', 'ward_admission', 'activity_stop', 'reactivate']);
 
 /**
  * 미확인 동기화 알림 조회

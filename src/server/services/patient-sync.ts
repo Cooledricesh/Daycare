@@ -2,6 +2,10 @@ import * as XLSX from 'xlsx';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, SyncDetails, SyncChange } from '@/lib/supabase/types';
 
+// 병동 호실 범위 (300~799)
+const WARD_ROOM_MIN = 300;
+const WARD_ROOM_MAX = 799;
+
 // Excel 데이터 구조 (파싱된 행)
 interface ExcelPatientRow {
   no: number;
@@ -259,6 +263,14 @@ export class PatientSyncService {
         return !isNaN(roomNum) && roomNum >= 3000;
       });
 
+      // 전체 환자 병록번호-호실 맵 (퇴원 유형 판별용)
+      const allPatientRoomMap = new Map<string, string>();
+      for (const p of allPatients) {
+        if (p.patientIdNo) {
+          allPatientRoomMap.set(p.patientIdNo, p.roomNumber);
+        }
+      }
+
       // 3. 매핑 데이터 조회
       const roomMappings = await this.getRoomMappings();
       const doctorMappings = await this.getDoctorMappings();
@@ -411,12 +423,24 @@ export class PatientSyncService {
           continue;
         }
 
-        // 명단에서 삭제됨 - 퇴원 처리
+        // 퇴원 유형 판별: 병동 입원 vs 마루 중단
+        const sourceRoom = allPatientRoomMap.get(patientIdNo);
+        let dischargeAction: 'ward_admission' | 'activity_stop';
+
+        if (sourceRoom) {
+          const sourceRoomNum = parseInt(sourceRoom, 10);
+          dischargeAction = (!isNaN(sourceRoomNum) && sourceRoomNum >= WARD_ROOM_MIN && sourceRoomNum <= WARD_ROOM_MAX)
+            ? 'ward_admission'
+            : 'activity_stop';
+        } else {
+          dischargeAction = 'activity_stop';
+        }
+
         result.summary.discharged++;
         result.changes.push({
           patientIdNo,
           name: patient.name,
-          action: 'discharge',
+          action: dischargeAction,
         });
 
         if (!options.dryRun) {

@@ -58,7 +58,7 @@ export interface SyncDetails {
 export interface SyncChange {
     patientIdNo: string;
     name: string;
-    action: 'insert' | 'update' | 'discharge' | 'reactivate';
+    action: 'insert' | 'update' | 'discharge' | 'ward_admission' | 'activity_stop' | 'reactivate';
     fields?: {
         [key: string]: { old: string | null; new: string | null };
     };
