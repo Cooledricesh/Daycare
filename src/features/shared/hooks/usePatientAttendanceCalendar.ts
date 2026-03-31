@@ -6,6 +6,7 @@ import { apiClient } from '@/lib/remote/api-client';
 interface CalendarData {
   attended_dates: string[];
   scheduled_dates: string[];
+  consulted_dates: string[];
 }
 
 export function usePatientAttendanceCalendar({

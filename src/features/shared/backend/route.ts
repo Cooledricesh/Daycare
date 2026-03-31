@@ -337,6 +337,7 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
   const [
     { data: attendances },
     { data: scheduledAttendances },
+    { data: consultations },
   ] = await Promise.all([
     (supabase.from('attendances') as any)
       .select('date')
@@ -348,6 +349,11 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
       .eq('patient_id', patientId)
       .gte('date', startDate)
       .lte('date', endDate),
+    (supabase.from('consultations') as any)
+      .select('date')
+      .eq('patient_id', patientId)
+      .gte('date', startDate)
+      .lte('date', endDate),
   ]);
 
   return respond(c, success({
@@ -355,6 +361,7 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
     scheduled_dates: (scheduledAttendances || [])
       .filter((s: any) => !s.is_cancelled)
       .map((s: any) => s.date),
+    consulted_dates: (consultations || []).map((c: any) => c.date),
   }, 200));
 });
 

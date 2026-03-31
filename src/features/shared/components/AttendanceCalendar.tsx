@@ -37,6 +37,7 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
 
   const attendedSet = new Set(data?.attended_dates || []);
   const scheduledSet = new Set(data?.scheduled_dates || []);
+  const consultedSet = new Set(data?.consulted_dates || []);
 
   const monthStart = startOfMonth(viewDate);
   const monthEnd = endOfMonth(viewDate);
@@ -95,13 +96,14 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
                 const inMonth = isSameMonth(day, viewDate);
                 const today = isToday(day);
                 const attended = attendedSet.has(dateStr);
+                const consulted = consultedSet.has(dateStr);
                 const scheduledAbsent = scheduledSet.has(dateStr) && !attendedSet.has(dateStr);
 
                 return (
                   <div
                     key={dateStr}
                     className={cn(
-                      'aspect-square flex items-center justify-center text-[11px] rounded-md',
+                      'aspect-square flex flex-col items-center justify-center text-[11px] rounded-md',
                       !inMonth && 'text-gray-200',
                       inMonth && !attended && !scheduledAbsent && 'text-gray-700',
                       today && 'font-bold ring-1 ring-gray-300',
@@ -109,7 +111,10 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
                       scheduledAbsent && 'bg-red-100 text-red-700 font-medium',
                     )}
                   >
-                    {format(day, 'd')}
+                    <span className="leading-none">{format(day, 'd')}</span>
+                    {attended && consulted && (
+                      <span className="text-[10px] text-emerald-600 font-bold leading-none mt-0.5">✓</span>
+                    )}
                   </div>
                 );
               })}
@@ -117,6 +122,13 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
 
             {/* 범례 */}
             <div className="flex gap-3 mt-2 text-[10px] text-gray-500 justify-center">
+              <span className="flex items-center gap-1">
+                <span className="flex flex-col items-center justify-center w-3.5 h-3.5 rounded-sm bg-green-100 border border-green-300">
+                  <span className="text-[6px] text-green-700 leading-none">1</span>
+                  <span className="text-[6px] text-emerald-600 font-bold leading-none">✓</span>
+                </span>
+                출석+진찰
+              </span>
               <span className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300 inline-block" />
                 출석
