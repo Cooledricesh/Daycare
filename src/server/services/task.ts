@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 
+type TaskCompletionRow = Database['public']['Tables']['task_completions']['Row'];
+
 export type TaskRole = 'coordinator' | 'nurse';
 
 export interface CompleteTaskParams {
@@ -37,8 +39,8 @@ export async function completeTask(
   params: CompleteTaskParams,
 ): Promise<TaskCompletionResult> {
   // consultation_id와 role로 task_completion 찾기
-  const { data: taskCompletion, error: findError } = await (supabase
-    .from('task_completions') as any)
+  const { data: taskCompletion, error: findError } = await supabase
+    .from('task_completions')
     .select('id, is_completed')
     .eq('consultation_id', params.consultation_id)
     .eq('role', role)
@@ -63,8 +65,8 @@ export async function completeTask(
   }
 
   // 처리 완료로 업데이트 (실제 처리자 기록)
-  const { data, error } = await (supabase
-    .from('task_completions') as any)
+  const { data: rawData, error } = await supabase
+    .from('task_completions')
     .update({
       is_completed: true,
       completed_by: staffId,
@@ -72,8 +74,10 @@ export async function completeTask(
       memo: params.memo || null,
     })
     .eq('id', taskCompletion.id)
-    .select()
+    .select('*')
     .single();
+
+  const data = rawData as TaskCompletionRow | null;
 
   if (error || !data) {
     throw new TaskError(

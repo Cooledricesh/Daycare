@@ -8,8 +8,8 @@ export async function ensureScheduleGenerated(
   supabase: SupabaseClient<Database>,
   date: string,
 ): Promise<void> {
-  const { count } = await (supabase
-    .from('scheduled_attendances') as any)
+  const { count } = await supabase
+    .from('scheduled_attendances')
     .select('*', { count: 'exact', head: true })
     .eq('date', date)
     .eq('source', 'auto');
@@ -21,24 +21,25 @@ export async function ensureScheduleGenerated(
   const dayOfWeek = new Date(y, m - 1, d).getDay();
 
   // 해당 요일의 active 패턴 조회 (active 환자만)
-  const { data: patterns } = await (supabase
-    .from('scheduled_patterns') as any)
+  const { data: patterns } = await supabase
+    .from('scheduled_patterns')
     .select('patient_id, patients!inner(status)')
     .eq('day_of_week', dayOfWeek)
     .eq('is_active', true)
-    .eq('patients.status', 'active');
+    .eq('patients.status', 'active')
+    .returns<{ patient_id: string }[]>();
 
   if (!patterns || patterns.length === 0) return;
 
-  const rows = patterns.map((p: any) => ({
+  const rows = patterns.map((p) => ({
     patient_id: p.patient_id,
     date,
-    source: 'auto',
+    source: 'auto' as const,
     is_cancelled: false,
   }));
 
-  await (supabase
-    .from('scheduled_attendances') as any)
+  await supabase
+    .from('scheduled_attendances')
     .upsert(rows, { onConflict: 'patient_id,date', ignoreDuplicates: true })
     .select('id');
 }

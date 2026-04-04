@@ -98,6 +98,7 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
             patients: {
                 Row: {
@@ -142,6 +143,7 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
             scheduled_patterns: {
                 Row: {
@@ -165,6 +167,7 @@ export interface Database {
                     is_active?: boolean;
                     created_at?: string;
                 };
+                Relationships: [];
             };
             scheduled_attendances: {
                 Row: {
@@ -191,6 +194,7 @@ export interface Database {
                     is_cancelled?: boolean;
                     created_at?: string;
                 };
+                Relationships: [];
             };
             attendances: {
                 Row: {
@@ -211,6 +215,7 @@ export interface Database {
                     date?: string;
                     checked_at?: string;
                 };
+                Relationships: [];
             };
             vitals: {
                 Row: {
@@ -243,6 +248,7 @@ export interface Database {
                     memo?: string | null;
                     recorded_at?: string;
                 };
+                Relationships: [];
             };
             consultations: {
                 Row: {
@@ -284,6 +290,7 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
             task_completions: {
                 Row: {
@@ -316,6 +323,7 @@ export interface Database {
                     memo?: string | null;
                     created_at?: string;
                 };
+                Relationships: [];
             };
             messages: {
                 Row: {
@@ -351,6 +359,7 @@ export interface Database {
                     read_at?: string | null;
                     created_at?: string;
                 };
+                Relationships: [];
             };
             daily_stats: {
                 Row: {
@@ -389,6 +398,7 @@ export interface Database {
                     consultation_rate_vs_attendance?: number | null;
                     calculated_at?: string;
                 };
+                Relationships: [];
             };
             room_coordinator_mapping: {
                 Row: {
@@ -418,6 +428,7 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
             sync_logs: {
                 Row: {
@@ -477,6 +488,7 @@ export interface Database {
                     details?: SyncDetails | null;
                     created_at?: string;
                 };
+                Relationships: [];
             };
             holidays: {
                 Row: {
@@ -500,6 +512,7 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
             notification_dismissals: {
                 Row: {
@@ -526,7 +539,12 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
         };
+        Views: Record<string, never>;
+        Functions: Record<string, never>;
+        Enums: Record<string, never>;
+        CompositeTypes: Record<string, never>;
     };
 }

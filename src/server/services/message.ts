@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 
+type MessageRow = Database['public']['Tables']['messages']['Row'];
+
 export type MessageAuthorRole = 'coordinator' | 'nurse';
 
 export interface CreateMessageParams {
@@ -37,7 +39,7 @@ export async function deleteMessage(
   authorId: string,
   isAdmin = false,
 ): Promise<void> {
-  let query = (supabase.from('messages') as any)
+  let query = supabase.from('messages')
     .delete()
     .eq('id', messageId);
 
@@ -72,7 +74,7 @@ export async function updateMessage(
   isAdmin = false,
   params: { content: string },
 ): Promise<void> {
-  let query = (supabase.from('messages') as any)
+  let query = supabase.from('messages')
     .update({ content: params.content })
     .eq('id', messageId);
 
@@ -116,11 +118,13 @@ export async function createMessage(
     is_read: false,
   };
 
-  const { data, error } = await (supabase
-    .from('messages') as any)
+  const { data: rawData, error } = await supabase
+    .from('messages')
     .insert([insertData])
-    .select()
+    .select('*')
     .single();
+
+  const data = rawData as MessageRow | null;
 
   if (error || !data) {
     throw new MessageError(
