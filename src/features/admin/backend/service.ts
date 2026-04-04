@@ -46,6 +46,88 @@ import type {
 
 const SALT_ROUNDS = 10;
 
+// ========== Row Type Aliases ==========
+
+type PatientRow = Database['public']['Tables']['patients']['Row'];
+type StaffRow = Database['public']['Tables']['staff']['Row'];
+type ScheduledPatternRow = Database['public']['Tables']['scheduled_patterns']['Row'];
+type ScheduledAttendanceRow = Database['public']['Tables']['scheduled_attendances']['Row'];
+type DailyStatsRow = Database['public']['Tables']['daily_stats']['Row'];
+type HolidayRow = Database['public']['Tables']['holidays']['Row'];
+type RoomMappingRow = Database['public']['Tables']['room_coordinator_mapping']['Row'];
+type SyncLogRow = Database['public']['Tables']['sync_logs']['Row'];
+type ConsultationRow = Database['public']['Tables']['consultations']['Row'];
+type AttendanceRow = Database['public']['Tables']['attendances']['Row'];
+type PatientUpdate = Database['public']['Tables']['patients']['Update'];
+type StaffUpdate = Database['public']['Tables']['staff']['Update'];
+type RoomMappingUpdate = Database['public']['Tables']['room_coordinator_mapping']['Update'];
+
+// ========== Join Query Result Interfaces ==========
+
+interface PatientWithJoins {
+  id: string;
+  name: string;
+  display_name: string | null;
+  gender: PatientRow['gender'];
+  room_number: string | null;
+  patient_id_no: string | null;
+  coordinator_id: string | null;
+  doctor_id: string | null;
+  status: PatientRow['status'];
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+  coordinator: { name: string } | null;
+  doctor: { name: string } | null;
+}
+
+interface PatientWithCoordinatorJoin {
+  id: string;
+  name: string;
+  coordinator: { name: string } | null;
+}
+
+interface ScheduleAttendanceWithPatient {
+  id: string;
+  patient_id: string;
+  source: ScheduledAttendanceRow['source'];
+  is_cancelled: boolean;
+  created_at: string;
+  patient: { name: string; coordinator_id: string | null } | null;
+  coordinator: { coordinator: { name: string } | null } | null;
+}
+
+interface ScheduledPatternWithPatient {
+  patient_id: string;
+  patients: { status: string };
+}
+
+interface RoomMappingWithCoordinator {
+  id: string;
+  room_prefix: string;
+  coordinator_id: string | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  coordinator: { id: string; name: string } | null;
+}
+
+interface StaffIdName {
+  id: string;
+  name: string;
+}
+
+interface PatientIdCoordinator {
+  id: string;
+  coordinator_id: string | null;
+}
+
+interface PatientDateRow {
+  patient_id: string;
+  date: string;
+}
+
 // ========== Patients Service ==========
 
 export async function getPatients(
@@ -96,7 +178,8 @@ export async function getPatients(
   }
 
   // schedule_pattern 가져오기
-  const patientIds = (data as any)?.map((p: any) => p.id) || [];
+  const rows = (data ?? []) as PatientWithJoins[];
+  const patientIds = rows.map((p) => p.id);
   const { data: patterns } = await supabase
     .from('scheduled_patterns')
     .select('patient_id, day_of_week')
@@ -104,14 +187,14 @@ export async function getPatients(
     .eq('is_active', true);
 
   const patternMap = new Map<string, number[]>();
-  (patterns as any)?.forEach((p: any) => {
+  (patterns ?? []).forEach((p) => {
     if (!patternMap.has(p.patient_id)) {
       patternMap.set(p.patient_id, []);
     }
     patternMap.get(p.patient_id)!.push(p.day_of_week);
   });
 
-  const result: PatientWithCoordinator[] = (data || []).map((p: any) => ({
+  const result: PatientWithCoordinator[] = rows.map((p) => ({
     id: p.id,
     name: p.name,
     display_name: p.display_name ?? null,
@@ -171,11 +254,12 @@ export async function getPatientDetail(
     .select('id, day_of_week, is_active')
     .eq('patient_id', patientId);
 
-  const scheduleDays = ((patterns as any) || [])
-    .filter((p: any) => p.is_active)
-    .map((p: any) => p.day_of_week);
+  const patternRows = patterns ?? [];
+  const scheduleDays = patternRows
+    .filter((p) => p.is_active)
+    .map((p) => p.day_of_week);
 
-  const patientData = data as any;
+  const patientData = data as PatientWithJoins;
   return {
     id: patientData.id,
     name: patientData.name,
@@ -192,7 +276,7 @@ export async function getPatientDetail(
     created_at: patientData.created_at,
     updated_at: patientData.updated_at,
     schedule_pattern: formatScheduleDays(scheduleDays),
-    schedule_patterns: (patterns as any) || [],
+    schedule_patterns: patternRows,
   };
 }
 
@@ -201,8 +285,8 @@ export async function createPatient(
   request: CreatePatientRequest,
 ): Promise<PatientWithCoordinator> {
   // 트랜잭션: 환자 생성 + 스케줄 패턴 생성
-  const { data: patient, error: patientError } = await (supabase
-    .from('patients') as any)
+  const { data: patient, error: patientError } = await supabase
+    .from('patients')
     .insert({
       name: request.name,
       gender: request.gender || null,
@@ -214,6 +298,7 @@ export async function createPatient(
       status: 'active',
     })
     .select()
+    .returns<PatientRow[]>()
     .single();
 
   if (patientError || !patient) {
@@ -231,13 +316,13 @@ export async function createPatient(
       is_active: true,
     }));
 
-    const { error: patternError } = await (supabase
-      .from('scheduled_patterns') as any)
+    const { error: patternError } = await supabase
+      .from('scheduled_patterns')
       .insert(patterns);
 
     if (patternError) {
       // 롤백을 위해 환자 삭제
-      await (supabase.from('patients') as any).delete().eq('id', patient.id);
+      await supabase.from('patients').delete().eq('id', patient.id);
       throw new AdminError(
         AdminErrorCode.PATIENT_CREATE_FAILED,
         `스케줄 패턴 생성 실패: ${patternError.message}`,
@@ -251,13 +336,13 @@ export async function createPatient(
 
   if (patient.coordinator_id || patient.doctor_id) {
     const staffIds = [patient.coordinator_id, patient.doctor_id].filter(Boolean);
-    const { data: staffList } = await (supabase
-      .from('staff') as any)
+    const { data: staffList } = await supabase
+      .from('staff')
       .select('id, name')
       .in('id', staffIds);
 
     if (staffList) {
-      const staffMap = new Map<string, string>(staffList.map((s: any) => [s.id, s.name]));
+      const staffMap = new Map<string, string>(staffList.map((s) => [s.id, s.name]));
       coordinatorName = staffMap.get(patient.coordinator_id) ?? null;
       doctorName = staffMap.get(patient.doctor_id) ?? null;
     }
@@ -288,7 +373,7 @@ export async function updatePatient(
   request: UpdatePatientRequest,
 ): Promise<PatientWithCoordinator> {
   // 환자 정보 업데이트
-  const updateData: any = {};
+  const updateData: PatientUpdate = {};
   if (request.name !== undefined) updateData.name = request.name;
   if (request.gender !== undefined) updateData.gender = request.gender || null;
   if (request.room_number !== undefined) updateData.room_number = request.room_number || null;
@@ -298,11 +383,12 @@ export async function updatePatient(
   if (request.status !== undefined) updateData.status = request.status;
   if (request.memo !== undefined) updateData.memo = request.memo || null;
 
-  const { data: patient, error: patientError } = await (supabase
-    .from('patients') as any)
+  const { data: patient, error: patientError } = await supabase
+    .from('patients')
     .update(updateData)
     .eq('id', patientId)
     .select()
+    .returns<PatientRow[]>()
     .single();
 
   if (patientError || !patient) {
@@ -315,8 +401,8 @@ export async function updatePatient(
   // 스케줄 패턴 업데이트
   if (request.schedule_days !== undefined) {
     // 기존 패턴 삭제
-    await (supabase
-      .from('scheduled_patterns') as any)
+    await supabase
+      .from('scheduled_patterns')
       .delete()
       .eq('patient_id', patientId);
 
@@ -328,8 +414,8 @@ export async function updatePatient(
         is_active: true,
       }));
 
-      const { error: patternError } = await (supabase
-        .from('scheduled_patterns') as any)
+      const { error: patternError } = await supabase
+        .from('scheduled_patterns')
         .insert(patterns);
 
       if (patternError) {
@@ -409,8 +495,8 @@ export async function createStaff(
   // 비밀번호 해싱
   const passwordHash = await bcrypt.hash(request.password, SALT_ROUNDS);
 
-  const { data, error } = await (supabase
-    .from('staff') as any)
+  const { data, error } = await supabase
+    .from('staff')
     .insert({
       name: request.name,
       login_id: request.login_id,
@@ -452,13 +538,13 @@ export async function updateStaff(
     );
   }
 
-  const updateData: any = {};
+  const updateData: StaffUpdate = {};
   if (request.name !== undefined) updateData.name = request.name;
   if (request.role !== undefined) updateData.role = request.role;
   if (request.is_active !== undefined) updateData.is_active = request.is_active;
 
-  const { data, error } = await (supabase
-    .from('staff') as any)
+  const { data, error } = await supabase
+    .from('staff')
     .update(updateData)
     .eq('id', staffId)
     .select('id, login_id, name, role, is_active, created_at, updated_at')
@@ -481,8 +567,8 @@ export async function resetStaffPassword(
 ): Promise<{ success: boolean }> {
   const passwordHash = await bcrypt.hash(request.new_password, SALT_ROUNDS);
 
-  const { error } = await (supabase
-    .from('staff') as any)
+  const { error } = await supabase
+    .from('staff')
     .update({ password_hash: passwordHash })
     .eq('id', staffId);
 
@@ -548,22 +634,23 @@ export async function getSchedulePatterns(
     );
   }
 
-  const patientIds = (data as any)?.map((p: any) => p.id) || [];
-  const { data: patterns } = await (supabase
-    .from('scheduled_patterns') as any)
+  const patientRows = (data ?? []) as PatientWithCoordinatorJoin[];
+  const patientIds = patientRows.map((p) => p.id);
+  const { data: patterns } = await supabase
+    .from('scheduled_patterns')
     .select('patient_id, day_of_week')
     .in('patient_id', patientIds)
     .eq('is_active', true);
 
   const patternMap = new Map<string, number[]>();
-  (patterns as any)?.forEach((p: any) => {
+  (patterns ?? []).forEach((p) => {
     if (!patternMap.has(p.patient_id)) {
       patternMap.set(p.patient_id, []);
     }
     patternMap.get(p.patient_id)!.push(p.day_of_week);
   });
 
-  const result: SchedulePatternItem[] = (data || []).map((p: any) => ({
+  const result: SchedulePatternItem[] = patientRows.map((p) => ({
     patient_id: p.id,
     patient_name: p.name,
     coordinator_name: p.coordinator?.name || null,
@@ -584,8 +671,8 @@ export async function updateSchedulePattern(
   request: UpdateSchedulePatternRequest,
 ): Promise<{ success: boolean }> {
   // 기존 패턴 삭제
-  await (supabase
-    .from('scheduled_patterns') as any)
+  await supabase
+    .from('scheduled_patterns')
     .delete()
     .eq('patient_id', patientId);
 
@@ -597,8 +684,8 @@ export async function updateSchedulePattern(
       is_active: true,
     }));
 
-    const { error } = await (supabase
-      .from('scheduled_patterns') as any)
+    const { error } = await supabase
+      .from('scheduled_patterns')
       .insert(patterns);
 
     if (error) {
@@ -623,12 +710,13 @@ export async function generateScheduledAttendances(
   const dayOfWeek = new Date(y, m - 1, d).getDay();
 
   // 해당 요일의 active 패턴 조회 (active 환자만)
-  const { data: patterns, error: patternsError } = await (supabase
-    .from('scheduled_patterns') as any)
+  const { data: patterns, error: patternsError } = await supabase
+    .from('scheduled_patterns')
     .select('patient_id, patients!inner(status)')
     .eq('day_of_week', dayOfWeek)
     .eq('is_active', true)
-    .eq('patients.status', 'active');
+    .eq('patients.status', 'active')
+    .returns<ScheduledPatternWithPatient[]>();
 
   if (patternsError) {
     throw new AdminError(
@@ -641,17 +729,17 @@ export async function generateScheduledAttendances(
     return { generated: 0, skipped: 0 };
   }
 
-  const rows = patterns.map((p: any) => ({
+  const upsertRows = patterns.map((p) => ({
     patient_id: p.patient_id,
     date,
-    source: 'auto',
+    source: 'auto' as const,
     is_cancelled: false,
   }));
 
   // ignoreDuplicates: 기존 수동/취소 레코드 보존
-  const { data: inserted, error: insertError } = await (supabase
-    .from('scheduled_attendances') as any)
-    .upsert(rows, { onConflict: 'patient_id,date', ignoreDuplicates: true })
+  const { data: inserted, error: insertError } = await supabase
+    .from('scheduled_attendances')
+    .upsert(upsertRows, { onConflict: 'patient_id,date', ignoreDuplicates: true })
     .select('id');
 
   if (insertError) {
@@ -662,7 +750,7 @@ export async function generateScheduledAttendances(
   }
 
   const generated = inserted?.length ?? 0;
-  return { generated, skipped: rows.length - generated };
+  return { generated, skipped: upsertRows.length - generated };
 }
 
 export async function calculateDailyStats(
@@ -678,25 +766,25 @@ export async function calculateDailyStats(
     { count: registeredCount },
     { data: existingStats },
   ] = await Promise.all([
-    (supabase.from('scheduled_attendances') as any)
+    supabase.from('scheduled_attendances')
       .select('*', { count: 'exact', head: true })
       .eq('date', date)
       .eq('is_cancelled', false),
-    (supabase.from('attendances') as any)
+    supabase.from('attendances')
       .select('*', { count: 'exact', head: true })
       .eq('date', date),
-    (supabase.from('consultations') as any)
+    supabase.from('consultations')
       .select('*', { count: 'exact', head: true })
       .eq('date', date),
-    (supabase.from('patients') as any)
+    supabase.from('patients')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active'),
     needsFetch
-      ? (supabase.from('daily_stats') as any)
+      ? supabase.from('daily_stats')
           .select('registered_count')
           .eq('date', date)
           .maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null } as { data: { registered_count: number } | null }),
   ]);
 
   const ac = attendanceCount ?? 0;
@@ -723,8 +811,8 @@ export async function calculateDailyStats(
     ? Math.min(Math.round((cc / ac) * 10000) / 100, 100)
     : null;
 
-  const { data, error } = await (supabase
-    .from('daily_stats') as any)
+  const { data, error } = await supabase
+    .from('daily_stats')
     .upsert({
       date,
       scheduled_count: sc,
@@ -771,7 +859,7 @@ interface StatsAggregate {
 }
 
 function aggregateStats(
-  rows: any[],
+  rows: DailyStatsRow[],
   holidayMap: Map<string, string>,
 ): StatsAggregate {
   const acc: StatsAggregate = {
@@ -831,8 +919,8 @@ export async function getHolidays(
   supabase: SupabaseClient<Database>,
   query: GetHolidaysQuery,
 ): Promise<HolidayItem[]> {
-  const { data, error } = await (supabase
-    .from('holidays') as any)
+  const { data, error } = await supabase
+    .from('holidays')
     .select('*')
     .gte('date', query.start_date)
     .lte('date', query.end_date)
@@ -852,8 +940,8 @@ export async function createHoliday(
   supabase: SupabaseClient<Database>,
   request: CreateHolidayRequest,
 ): Promise<HolidayItem> {
-  const { data, error } = await (supabase
-    .from('holidays') as any)
+  const { data, error } = await supabase
+    .from('holidays')
     .insert({
       date: request.date,
       reason: request.reason,
@@ -881,8 +969,8 @@ export async function deleteHoliday(
   supabase: SupabaseClient<Database>,
   holidayId: string,
 ): Promise<{ success: boolean }> {
-  const { error } = await (supabase
-    .from('holidays') as any)
+  const { error } = await supabase
+    .from('holidays')
     .delete()
     .eq('id', holidayId);
 
@@ -958,7 +1046,7 @@ export async function batchCalculateStats(
   const end = new Date(request.end_date + 'T00:00:00');
   const todayKST = getTodayString();
 
-  const { data: existingCounts } = await (supabase as any)
+  const { data: existingCounts } = await supabase
     .from('daily_stats')
     .select('date, registered_count')
     .gte('date', request.start_date)
@@ -1031,11 +1119,12 @@ export async function getDailySchedule(
     );
   }
 
-  const items: DailyScheduleItem[] = (data || []).map((item: any) => ({
+  const scheduleRows = (data ?? []) as ScheduleAttendanceWithPatient[];
+  const items: DailyScheduleItem[] = scheduleRows.map((item) => ({
     id: item.id,
     patient_id: item.patient_id,
     patient_name: item.patient?.name || '',
-    coordinator_name: item.patient?.coordinator?.name || null,
+    coordinator_name: item.coordinator?.coordinator?.name || null,
     source: item.source,
     is_cancelled: item.is_cancelled,
     created_at: item.created_at,
@@ -1061,12 +1150,12 @@ export async function addManualSchedule(
   request: AddManualScheduleRequest,
 ): Promise<DailyScheduleItem> {
   // 중복 확인
-  const { data: existing } = await (supabase
-    .from('scheduled_attendances') as any)
+  const { data: existing } = await supabase
+    .from('scheduled_attendances')
     .select('id')
     .eq('patient_id', request.patient_id)
     .eq('date', request.date)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     throw new AdminError(
@@ -1075,8 +1164,8 @@ export async function addManualSchedule(
     );
   }
 
-  const { data, error } = await (supabase
-    .from('scheduled_attendances') as any)
+  const { data, error } = await supabase
+    .from('scheduled_attendances')
     .insert({
       patient_id: request.patient_id,
       date: request.date,
@@ -1092,6 +1181,7 @@ export async function addManualSchedule(
       patient:patients!patient_id(name, coordinator_id),
       coordinator:patients!patient_id(coordinator:staff!coordinator_id(name))
     `)
+    .returns<ScheduleAttendanceWithPatient[]>()
     .single();
 
   if (error || !data) {
@@ -1104,9 +1194,9 @@ export async function addManualSchedule(
   return {
     id: data.id,
     patient_id: data.patient_id,
-    patient_name: (data as any).patient?.name || '',
-    coordinator_name: (data as any).patient?.coordinator?.name || null,
-    source: data.source as 'auto' | 'manual',
+    patient_name: data.patient?.name || '',
+    coordinator_name: data.coordinator?.coordinator?.name || null,
+    source: data.source,
     is_cancelled: data.is_cancelled,
     created_at: data.created_at,
   };
@@ -1117,8 +1207,8 @@ export async function cancelSchedule(
   scheduleId: string,
   request: CancelScheduleRequest,
 ): Promise<{ id: string; is_cancelled: boolean }> {
-  const { data, error } = await (supabase
-    .from('scheduled_attendances') as any)
+  const { data, error } = await supabase
+    .from('scheduled_attendances')
     .update({ is_cancelled: request.is_cancelled })
     .eq('id', scheduleId)
     .select('id, is_cancelled')
@@ -1131,7 +1221,7 @@ export async function cancelSchedule(
     );
   }
 
-  return data as { id: string; is_cancelled: boolean };
+  return { id: data.id, is_cancelled: data.is_cancelled };
 }
 
 export async function deleteSchedule(
@@ -1139,21 +1229,21 @@ export async function deleteSchedule(
   scheduleId: string,
 ): Promise<{ success: boolean }> {
   // source='manual'만 삭제 가능
-  const { data: schedule } = await (supabase
-    .from('scheduled_attendances') as any)
+  const { data: schedule } = await supabase
+    .from('scheduled_attendances')
     .select('source')
     .eq('id', scheduleId)
     .single();
 
-  if ((schedule as any)?.source !== 'manual') {
+  if (schedule?.source !== 'manual') {
     throw new AdminError(
       AdminErrorCode.CANNOT_DELETE_AUTO_SCHEDULE,
       '자동 생성된 스케줄은 삭제할 수 없습니다. 취소로만 처리 가능합니다.',
     );
   }
 
-  const { error } = await (supabase
-    .from('scheduled_attendances') as any)
+  const { error } = await supabase
+    .from('scheduled_attendances')
     .delete()
     .eq('id', scheduleId);
 
@@ -1199,33 +1289,35 @@ export async function getStatsSummary(
     holidays,
     prevHolidays,
   ] = await Promise.all([
-    (supabase.from('daily_stats') as any)
+    supabase.from('daily_stats')
       .select('*')
       .gte('date', query.start_date)
-      .lte('date', query.end_date),
-    (supabase.from('scheduled_attendances') as any)
+      .lte('date', query.end_date)
+      .returns<DailyStatsRow[]>(),
+    supabase.from('scheduled_attendances')
       .select('*', { count: 'exact', head: true })
       .eq('date', today)
       .eq('is_cancelled', false),
-    (supabase.from('attendances') as any)
+    supabase.from('attendances')
       .select('*', { count: 'exact', head: true })
       .eq('date', today),
-    (supabase.from('consultations') as any)
+    supabase.from('consultations')
       .select('*', { count: 'exact', head: true })
       .eq('date', today),
-    (supabase.from('patients') as any)
+    supabase.from('patients')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active'),
-    (supabase.from('daily_stats') as any)
+    supabase.from('daily_stats')
       .select('*')
       .gte('date', prevStartDate)
-      .lte('date', prevEndDate),
+      .lte('date', prevEndDate)
+      .returns<DailyStatsRow[]>(),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
     getHolidayDatesMap(supabase, prevStartDate, prevEndDate),
   ]);
 
-  const periodAgg = aggregateStats((periodStats as any) || [], holidays);
-  const prevAgg = aggregateStats((prevStats as any) || [], prevHolidays);
+  const periodAgg = aggregateStats(periodStats ?? [], holidays);
+  const prevAgg = aggregateStats(prevStats ?? [], prevHolidays);
 
   return {
     period: {
@@ -1273,7 +1365,8 @@ export async function getDailyStats(
       .select('*')
       .gte('date', query.start_date)
       .lte('date', query.end_date)
-      .order('date'),
+      .order('date')
+      .returns<DailyStatsRow[]>(),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
   ]);
 
@@ -1284,12 +1377,12 @@ export async function getDailyStats(
     );
   }
 
-  return (data || []).map((row: any) => ({
+  return (data || []).map((row) => ({
     ...row,
     is_holiday: holidays.has(row.date),
     holiday_reason: holidays.get(row.date) || undefined,
     is_weekend: isWeekend(row.date),
-  })) as DailyStatsItem[];
+  }));
 }
 
 // ========== Room Mapping Service ==========
@@ -1299,7 +1392,7 @@ export async function getRoomMappings(
 ): Promise<RoomMappingItem[]> {
   // 매핑 데이터와 환자 목록을 병렬 조회
   const [{ data: mappings, error }, { data: patients }] = await Promise.all([
-    (supabase.from('room_coordinator_mapping') as any)
+    supabase.from('room_coordinator_mapping')
       .select(`
         id,
         room_prefix,
@@ -1310,6 +1403,7 @@ export async function getRoomMappings(
         updated_at,
         coordinator:staff!coordinator_id(id, name)
       `)
+      .returns<RoomMappingWithCoordinator[]>()
       .order('room_prefix'),
     supabase
       .from('patients')
@@ -1325,11 +1419,12 @@ export async function getRoomMappings(
   }
 
   // 각 호실별 환자 수 계산
-  const roomPrefixes = (mappings || []).map((m: any) => m.room_prefix);
+  const mappingRows = mappings ?? [];
+  const roomPrefixes = mappingRows.map((m) => m.room_prefix);
   const patientCounts: Record<string, number> = {};
 
   if (roomPrefixes.length > 0) {
-    (patients || []).forEach((p: any) => {
+    (patients || []).forEach((p) => {
       if (p.room_number) {
         const prefix = p.room_number.toString().substring(0, 4);
         if (roomPrefixes.includes(prefix)) {
@@ -1339,7 +1434,7 @@ export async function getRoomMappings(
     });
   }
 
-  return (mappings || []).map((m: any) => ({
+  return mappingRows.map((m) => ({
     id: m.id,
     room_prefix: m.room_prefix,
     coordinator_id: m.coordinator_id,
@@ -1357,7 +1452,7 @@ export async function updateRoomMapping(
   roomPrefix: string,
   request: UpdateRoomMappingRequest,
 ): Promise<RoomMappingItem> {
-  const updateData: any = {};
+  const updateData: RoomMappingUpdate = {};
   if (request.coordinator_id !== undefined) {
     updateData.coordinator_id = request.coordinator_id || null;
   }
@@ -1368,8 +1463,8 @@ export async function updateRoomMapping(
     updateData.is_active = request.is_active;
   }
 
-  const { data, error } = await (supabase
-    .from('room_coordinator_mapping') as any)
+  const { data, error } = await supabase
+    .from('room_coordinator_mapping')
     .update(updateData)
     .eq('room_prefix', roomPrefix)
     .select(`
@@ -1382,6 +1477,7 @@ export async function updateRoomMapping(
       updated_at,
       coordinator:staff!coordinator_id(id, name)
     `)
+    .returns<RoomMappingWithCoordinator[]>()
     .single();
 
   if (error || !data) {
@@ -1394,8 +1490,8 @@ export async function updateRoomMapping(
   // 하이브리드 방식: coordinator_id가 변경되면 해당 호실 환자들 일괄 업데이트
   if (request.coordinator_id !== undefined) {
     const newCoordinatorId = request.coordinator_id || null;
-    await (supabase
-      .from('patients') as any)
+    await supabase
+      .from('patients')
       .update({ coordinator_id: newCoordinatorId })
       .eq('room_number', roomPrefix)
       .eq('status', 'active');
@@ -1406,7 +1502,7 @@ export async function updateRoomMapping(
     id: data.id,
     room_prefix: data.room_prefix,
     coordinator_id: data.coordinator_id,
-    coordinator_name: (data as any).coordinator?.name || null,
+    coordinator_name: data.coordinator?.name || null,
     description: data.description,
     is_active: data.is_active,
     patient_count: 0,
@@ -1419,8 +1515,8 @@ export async function createRoomMapping(
   supabase: SupabaseClient<Database>,
   request: CreateRoomMappingRequest,
 ): Promise<RoomMappingItem> {
-  const { data, error } = await (supabase
-    .from('room_coordinator_mapping') as any)
+  const { data, error } = await supabase
+    .from('room_coordinator_mapping')
     .insert({
       room_prefix: request.room_prefix,
       coordinator_id: request.coordinator_id || null,
@@ -1437,6 +1533,7 @@ export async function createRoomMapping(
       updated_at,
       coordinator:staff!coordinator_id(id, name)
     `)
+    .returns<RoomMappingWithCoordinator[]>()
     .single();
 
   if (error) {
@@ -1454,8 +1551,8 @@ export async function createRoomMapping(
 
   // 하이브리드 방식: 새 매핑 추가 시 해당 호실 환자들 coordinator_id 업데이트
   if (request.coordinator_id) {
-    await (supabase
-      .from('patients') as any)
+    await supabase
+      .from('patients')
       .update({ coordinator_id: request.coordinator_id })
       .eq('room_number', request.room_prefix)
       .eq('status', 'active');
@@ -1466,7 +1563,7 @@ export async function createRoomMapping(
     id: data.id,
     room_prefix: data.room_prefix,
     coordinator_id: data.coordinator_id,
-    coordinator_name: (data as any).coordinator?.name || null,
+    coordinator_name: data.coordinator?.name || null,
     description: data.description,
     is_active: data.is_active,
     patient_count: 0,
@@ -1479,8 +1576,8 @@ export async function deleteRoomMapping(
   supabase: SupabaseClient<Database>,
   roomPrefix: string,
 ): Promise<{ success: boolean }> {
-  const { error } = await (supabase
-    .from('room_coordinator_mapping') as any)
+  const { error } = await supabase
+    .from('room_coordinator_mapping')
     .delete()
     .eq('room_prefix', roomPrefix);
 
@@ -1502,11 +1599,12 @@ export async function getSyncLogs(
 ): Promise<{ data: SyncLogItem[]; total: number; page: number; limit: number }> {
   const offset = (query.page - 1) * query.limit;
 
-  const { data, error, count } = await (supabase
-    .from('sync_logs') as any)
+  const { data, error, count } = await supabase
+    .from('sync_logs')
     .select('*', { count: 'exact' })
     .order('started_at', { ascending: false })
-    .range(offset, offset + query.limit - 1);
+    .range(offset, offset + query.limit - 1)
+    .returns<SyncLogRow[]>();
 
   if (error) {
     throw new AdminError(
@@ -1526,11 +1624,12 @@ export async function getSyncLogs(
 export async function getSyncLogById(
   supabase: SupabaseClient<Database>,
   logId: string,
-): Promise<any> {
-  const { data, error } = await (supabase
-    .from('sync_logs') as any)
+): Promise<SyncLogRow> {
+  const { data, error } = await supabase
+    .from('sync_logs')
     .select('*')
     .eq('id', logId)
+    .returns<SyncLogRow[]>()
     .single();
 
   if (error || !data) {
@@ -1557,23 +1656,23 @@ export async function getCoordinatorWorkload(
     { data: consultationRows },
     holidayMap,
   ] = await Promise.all([
-    (supabase.from('staff') as any)
+    supabase.from('staff')
       .select('id, name')
       .eq('role', 'coordinator')
       .eq('is_active', true),
-    (supabase.from('patients') as any)
+    supabase.from('patients')
       .select('id, coordinator_id')
       .eq('status', 'active'),
-    (supabase.from('scheduled_attendances') as any)
+    supabase.from('scheduled_attendances')
       .select('patient_id, date')
       .gte('date', query.start_date)
       .lte('date', query.end_date)
       .eq('is_cancelled', false),
-    (supabase.from('attendances') as any)
+    supabase.from('attendances')
       .select('patient_id, date')
       .gte('date', query.start_date)
       .lte('date', query.end_date),
-    (supabase.from('consultations') as any)
+    supabase.from('consultations')
       .select('patient_id, date')
       .gte('date', query.start_date)
       .lte('date', query.end_date),
@@ -1652,7 +1751,7 @@ export async function getCoordinatorWorkload(
   }
 
   // 코디네이터별 워크로드 계산 (팀 평균 산정을 위해 먼저 raw 데이터 생성)
-  const rawItems = (coordinators || []).map((coord: { id: string; name: string }) => {
+  const rawItems = (coordinators || []).map((coord) => {
     const totalScheduled = coordinatorScheduled.get(coord.id) ?? 0;
     const totalAttended = coordinatorAttended.get(coord.id) ?? 0;
     const totalConsulted = coordinatorConsulted.get(coord.id) ?? 0;
@@ -1729,8 +1828,8 @@ export async function deleteConsultation(
   supabase: SupabaseClient<Database>,
   consultationId: string,
 ): Promise<void> {
-  const { data, error } = await (supabase
-    .from('consultations') as any)
+  const { data, error } = await supabase
+    .from('consultations')
     .delete()
     .eq('id', consultationId)
     .select('id');
