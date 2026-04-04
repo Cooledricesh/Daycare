@@ -4,8 +4,8 @@ test.describe('Doctor History Page', () => {
   test.beforeEach(async ({ page }) => {
     // doctor_parksh 의사 계정으로 로그인
     await page.goto('/login');
-    await page.getByLabel('아이디').fill('doctor_parksh');
-    await page.getByLabel('비밀번호').fill('1234');
+    await page.getByLabel('아이디').fill('0052');
+    await page.getByLabel('비밀번호').fill('y8vawp0t');
     await page.getByRole('button', { name: '로그인' }).click();
 
     // 로그인 완료 대기

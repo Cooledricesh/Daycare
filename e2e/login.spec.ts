@@ -34,9 +34,9 @@ test.describe('Login Page', () => {
     await page.getByLabel('비밀번호').fill('wrong_password');
     await page.getByRole('button', { name: '로그인' }).click();
 
-    // Wait for error message (database error or invalid credentials)
+    // Wait for error message
     await expect(
-      page.getByText(/잘못된 아이디|데이터베이스 오류/)
+      page.getByText(/아이디 또는 비밀번호를 다시 확인|잘못된 아이디 또는 비밀번호|로그인 처리 중 오류/)
     ).toBeVisible({ timeout: 10000 });
   });
 });
