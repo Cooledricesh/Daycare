@@ -272,6 +272,7 @@ export async function getPatientDetail(
       .select('date, note, staff:doctor_id(name)')
       .eq('patient_id', params.patient_id)
       .gte('date', oneMonthAgoStr)
+      .neq('date', date)
       .order('date', { ascending: false })
       .limit(10)
       .returns<RecentConsultationResult[]>(),
