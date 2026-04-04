@@ -1266,20 +1266,19 @@ export async function getStatsSummary(
     .toISOString()
     .split('T')[0];
 
-  // 8개 쿼리 병렬 실행 (공휴일 조회 추가)
+  // 7개 쿼리 병렬 실행 (daily_stats 통합 쿼리)
   const [
-    { data: periodStats },
+    { data: allStats },
     { count: scheduledCount },
     { count: attendanceCount },
     { count: consultationCount },
     { count: registeredCount },
-    { data: prevStats },
     holidays,
     prevHolidays,
   ] = await Promise.all([
     supabase.from('daily_stats')
       .select('*')
-      .gte('date', query.start_date)
+      .gte('date', prevStartDate)
       .lte('date', query.end_date)
       .returns<DailyStatsRow[]>(),
     supabase.from('scheduled_attendances')
@@ -1295,17 +1294,16 @@ export async function getStatsSummary(
     supabase.from('patients')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active'),
-    supabase.from('daily_stats')
-      .select('*')
-      .gte('date', prevStartDate)
-      .lte('date', prevEndDate)
-      .returns<DailyStatsRow[]>(),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
     getHolidayDatesMap(supabase, prevStartDate, prevEndDate),
   ]);
 
-  const periodAgg = aggregateStats(periodStats ?? [], holidays);
-  const prevAgg = aggregateStats(prevStats ?? [], prevHolidays);
+  const allStatsRows = allStats ?? [];
+  const periodStats = allStatsRows.filter((r) => r.date >= query.start_date);
+  const prevStats = allStatsRows.filter((r) => r.date < query.start_date);
+
+  const periodAgg = aggregateStats(periodStats, holidays);
+  const prevAgg = aggregateStats(prevStats, prevHolidays);
 
   return {
     period: {
