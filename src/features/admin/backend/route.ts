@@ -343,8 +343,8 @@ adminRoutes.put('/schedule/patterns/:patient_id', async (c) => {
 
   // coordinator인 경우 담당 환자 검증
   if (user && user.role === 'coordinator') {
-    const { data: patient } = await (supabase
-      .from('patients') as any)
+    const { data: patient } = await supabase
+      .from('patients')
       .select('coordinator_id')
       .eq('id', patientId)
       .single();

@@ -2,6 +2,8 @@ import * as XLSX from 'xlsx';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, SyncDetails, SyncChange } from '@/lib/supabase/types';
 
+type PatientRow = Database['public']['Tables']['patients']['Row'];
+
 // 병동 호실 범위 (300~799)
 const WARD_ROOM_MIN = 300;
 const WARD_ROOM_MAX = 799;
@@ -58,7 +60,7 @@ export function parseExcelBuffer(buffer: Buffer): ExcelPatientRow[] {
   const sheet = workbook.Sheets[sheetName];
 
   // 헤더를 건너뛰고 데이터만 가져오기
-  const rawData = XLSX.utils.sheet_to_json<any>(sheet, { header: 1 });
+  const rawData = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
 
   // 첫 번째 행은 헤더이므로 건너뜀
   const dataRows = rawData.slice(1);
@@ -70,7 +72,7 @@ export function parseExcelBuffer(buffer: Buffer): ExcelPatientRow[] {
     if (!row || !row[2]) continue; // IDNO(C열)가 없으면 건너뛰기
 
     const patient: ExcelPatientRow = {
-      no: row[0] || 0,
+      no: Number(row[0]) || 0,
       roomNumber: String(row[1] || '').trim(),
       patientIdNo: String(row[2] || '').trim(),
       name: String(row[3] || '').trim(),
@@ -115,8 +117,8 @@ export class PatientSyncService {
    * 호실-담당자 매핑 조회
    */
   private async getRoomMappings(): Promise<Map<string, string | null>> {
-    const { data, error } = await (this.supabase
-      .from('room_coordinator_mapping') as any)
+    const { data, error } = await this.supabase
+      .from('room_coordinator_mapping')
       .select('room_prefix, coordinator_id')
       .eq('is_active', true);
 
@@ -133,8 +135,8 @@ export class PatientSyncService {
    * 의사명 -> 의사 ID 매핑 조회
    */
   private async getDoctorMappings(): Promise<Map<string, string>> {
-    const { data, error } = await (this.supabase
-      .from('staff') as any)
+    const { data, error } = await this.supabase
+      .from('staff')
       .select('id, name')
       .eq('role', 'doctor')
       .eq('is_active', true);
@@ -151,14 +153,15 @@ export class PatientSyncService {
   /**
    * 기존 환자 목록 조회 (patient_id_no 기준)
    */
-  private async getExistingPatients(): Promise<Map<string, any>> {
-    const { data, error } = await (this.supabase
-      .from('patients') as any)
-      .select('*');
+  private async getExistingPatients(): Promise<Map<string, PatientRow>> {
+    const { data, error } = await this.supabase
+      .from('patients')
+      .select('*')
+      .returns<PatientRow[]>();
 
     if (error) throw error;
 
-    const map = new Map<string, any>();
+    const map = new Map<string, PatientRow>();
     for (const patient of data || []) {
       if (patient.patient_id_no) {
         map.set(patient.patient_id_no, patient);
@@ -171,8 +174,8 @@ export class PatientSyncService {
    * 동기화 로그 생성
    */
   private async createSyncLog(options: SyncOptions): Promise<string> {
-    const { data, error } = await (this.supabase
-      .from('sync_logs') as any)
+    const { data, error } = await this.supabase
+      .from('sync_logs')
       .insert({
         source: options.source,
         triggered_by: options.triggeredBy,
@@ -198,8 +201,8 @@ export class PatientSyncService {
       skipped_reasons: result.skippedReasons,
     };
 
-    const { error } = await (this.supabase
-      .from('sync_logs') as any)
+    const { error } = await this.supabase
+      .from('sync_logs')
       .update({
         status,
         completed_at: new Date().toISOString(),
@@ -309,7 +312,7 @@ export class PatientSyncService {
           });
 
           if (!options.dryRun) {
-            await (this.supabase.from('patients') as any).insert({
+            await this.supabase.from('patients').insert({
               name: patient.name,
               patient_id_no: patient.patientIdNo,
               room_number: patient.roomNumber,
@@ -332,8 +335,8 @@ export class PatientSyncService {
           });
 
           if (!options.dryRun) {
-            await (this.supabase
-              .from('patients') as any)
+            await this.supabase
+              .from('patients')
               .update({
                 status: 'active',
                 room_number: patient.roomNumber,
@@ -344,8 +347,8 @@ export class PatientSyncService {
               .eq('id', existing.id);
 
             // 재입원 시 기존 출석 패턴 초기화 (관리자가 새로 설정)
-            await (this.supabase
-              .from('scheduled_patterns') as any)
+            await this.supabase
+              .from('scheduled_patterns')
               .delete()
               .eq('patient_id', existing.id);
           }
@@ -389,8 +392,8 @@ export class PatientSyncService {
             });
 
             if (!options.dryRun) {
-              await (this.supabase
-                .from('patients') as any)
+              await this.supabase
+                .from('patients')
                 .update({
                   name: patient.name,
                   room_number: patient.roomNumber,
@@ -444,8 +447,8 @@ export class PatientSyncService {
         });
 
         if (!options.dryRun) {
-          await (this.supabase
-            .from('patients') as any)
+          await this.supabase
+            .from('patients')
             .update({
               status: 'discharged',
               updated_at: new Date().toISOString(),
