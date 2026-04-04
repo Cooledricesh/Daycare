@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { CreateAttendanceRequest, Attendance } from '../backend/schema';
+import { sharedKeys } from '../../shared/hooks/query-keys';
 
 interface CreateAttendanceResponse {
   attendance: Attendance;
@@ -15,7 +16,7 @@ export function useCreateAttendance() {
       return response.data.attendance;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shared', 'absence-risk-overview'] });
+      queryClient.invalidateQueries({ queryKey: sharedKeys.absenceRiskOverview.all });
     },
   });
 }

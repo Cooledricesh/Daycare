@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type { CoordinatorWorkloadSummary } from '../backend/schema';
 
 interface UseCoordinatorWorkloadParams {
@@ -12,7 +13,7 @@ interface UseCoordinatorWorkloadParams {
 
 export function useCoordinatorWorkload({ enabled = true, ...params }: UseCoordinatorWorkloadParams) {
   return useQuery({
-    queryKey: ['admin', 'coordinator-workload', params],
+    queryKey: adminKeys.coordinatorWorkload.detail(params),
     enabled,
     queryFn: async () => {
       const searchParams = new URLSearchParams({

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type { SyncLogItem, GetSyncLogsQuery } from '../backend/schema';
 
 interface SyncLogsResponse {
@@ -36,7 +37,7 @@ interface SyncResult {
 
 export function useSyncLogs(query: Partial<GetSyncLogsQuery>) {
   return useQuery({
-    queryKey: ['admin', 'sync-logs', query],
+    queryKey: adminKeys.syncLogs.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (query.page) params.set('page', String(query.page));
@@ -53,7 +54,7 @@ export function useSyncLogs(query: Partial<GetSyncLogsQuery>) {
 
 export function useSyncLogById(logId: string | null) {
   return useQuery({
-    queryKey: ['admin', 'sync-logs', logId],
+    queryKey: adminKeys.syncLogs.detail(logId!),
     queryFn: async () => {
       if (!logId) return null;
       const response = await apiClient.get<SyncLogItem>(
@@ -88,8 +89,8 @@ export function useRunSync() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'sync-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.syncLogs.all });
+      queryClient.invalidateQueries({ queryKey: adminKeys.patients.all });
     },
   });
 }

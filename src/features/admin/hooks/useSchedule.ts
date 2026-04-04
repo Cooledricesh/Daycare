@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type {
   GetSchedulePatternsQuery,
   UpdateSchedulePatternRequest,
@@ -23,7 +24,7 @@ interface SchedulePatternsResponse {
 
 export function useSchedulePatterns(query: Partial<GetSchedulePatternsQuery>) {
   return useQuery({
-    queryKey: ['admin', 'schedule-patterns', query],
+    queryKey: adminKeys.schedulePatterns.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (query.page) params.set('page', String(query.page));
@@ -57,14 +58,14 @@ export function useUpdateSchedulePattern() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'schedule-patterns'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.schedulePatterns.all });
     },
   });
 }
 
 export function useDailySchedule(query: GetDailyScheduleQuery) {
   return useQuery({
-    queryKey: ['admin', 'daily-schedule', query],
+    queryKey: adminKeys.dailySchedule.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('date', query.date);
@@ -92,7 +93,7 @@ export function useAddManualSchedule() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dailySchedule.all });
     },
   });
 }
@@ -115,7 +116,7 @@ export function useCancelSchedule() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dailySchedule.all });
     },
   });
 }
@@ -131,7 +132,7 @@ export function useDeleteSchedule() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dailySchedule.all });
     },
   });
 }
@@ -148,7 +149,7 @@ export function useGenerateSchedule() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dailySchedule.all });
     },
   });
 }
@@ -165,7 +166,7 @@ export function useBatchGenerateSchedules() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-schedule'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dailySchedule.all });
     },
   });
 }

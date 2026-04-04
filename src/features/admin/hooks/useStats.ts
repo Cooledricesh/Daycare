@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type {
   GetStatsSummaryQuery,
   GetDailyStatsQuery,
@@ -12,7 +13,7 @@ import type {
 
 export function useStatsSummary(query: GetStatsSummaryQuery) {
   return useQuery({
-    queryKey: ['admin', 'stats-summary', query],
+    queryKey: adminKeys.statsSummary.detail(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('start_date', query.start_date);
@@ -29,7 +30,7 @@ export function useStatsSummary(query: GetStatsSummaryQuery) {
 
 export function useDailyStats(query: GetDailyStatsQuery) {
   return useQuery({
-    queryKey: ['admin', 'daily-stats', query],
+    queryKey: adminKeys.dailyStats.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('start_date', query.start_date);
@@ -56,8 +57,8 @@ export function useBatchRecalculateStats() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'stats-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'daily-stats'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.statsSummary.all });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dailyStats.all });
     },
   });
 }

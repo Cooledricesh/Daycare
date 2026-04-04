@@ -2,6 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
+import { sharedKeys } from '../../shared/hooks/query-keys';
 import type {
   GetHolidaysQuery,
   HolidayItem,
@@ -9,17 +11,17 @@ import type {
 } from '../backend/schema';
 
 function invalidateHolidayRelatedQueries(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: ['admin', 'holidays'] });
-  queryClient.invalidateQueries({ queryKey: ['admin', 'stats-summary'] });
-  queryClient.invalidateQueries({ queryKey: ['admin', 'daily-stats'] });
-  queryClient.invalidateQueries({ queryKey: ['shared', 'stats-summary'] });
-  queryClient.invalidateQueries({ queryKey: ['shared', 'daily-stats'] });
-  queryClient.invalidateQueries({ queryKey: ['shared', 'day-of-week-stats'] });
+  queryClient.invalidateQueries({ queryKey: adminKeys.holidays.all });
+  queryClient.invalidateQueries({ queryKey: adminKeys.statsSummary.all });
+  queryClient.invalidateQueries({ queryKey: adminKeys.dailyStats.all });
+  queryClient.invalidateQueries({ queryKey: sharedKeys.statsSummary.all });
+  queryClient.invalidateQueries({ queryKey: sharedKeys.dailyStats.all });
+  queryClient.invalidateQueries({ queryKey: sharedKeys.dayOfWeekStats.all });
 }
 
 export function useHolidays(query: GetHolidaysQuery) {
   return useQuery({
-    queryKey: ['admin', 'holidays', query],
+    queryKey: adminKeys.holidays.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('start_date', query.start_date);

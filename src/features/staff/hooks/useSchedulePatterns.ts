@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { staffKeys } from './query-keys';
 import type { MyPatientSchedulePattern, UpdateSchedulePatternRequest } from '../backend/schema';
 
 interface SchedulePatternsResponse {
@@ -10,7 +11,7 @@ interface SchedulePatternsResponse {
 
 export function useMySchedulePatterns() {
   return useQuery({
-    queryKey: ['staff', 'schedule-patterns'],
+    queryKey: staffKeys.schedulePatterns.all,
     queryFn: async () => {
       const response = await apiClient.get<SchedulePatternsResponse>(
         '/api/staff/schedule-patterns'
@@ -39,7 +40,7 @@ export function useUpdateSchedulePattern() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'schedule-patterns'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.schedulePatterns.all });
     },
   });
 }

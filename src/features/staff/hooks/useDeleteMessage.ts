@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { staffKeys } from './query-keys';
 
 export const useDeleteMessage = () => {
   const queryClient = useQueryClient();
@@ -11,8 +12,8 @@ export const useDeleteMessage = () => {
       await apiClient.delete(`/api/staff/messages/${messageId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patient.all });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patientHistory.all });
     },
   });
 };

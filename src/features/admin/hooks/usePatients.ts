@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type {
   GetPatientsQuery,
   CreatePatientRequest,
@@ -19,7 +20,7 @@ interface PatientsResponse {
 
 export function usePatients(query: Partial<GetPatientsQuery>) {
   return useQuery({
-    queryKey: ['admin', 'patients', query],
+    queryKey: adminKeys.patients.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (query.page) params.set('page', String(query.page));
@@ -39,7 +40,7 @@ export function usePatients(query: Partial<GetPatientsQuery>) {
 
 export function usePatientDetail(patientId: string | null) {
   return useQuery({
-    queryKey: ['admin', 'patients', patientId],
+    queryKey: adminKeys.patients.detail(patientId!),
     queryFn: async () => {
       if (!patientId) return null;
       const response = await apiClient.get<PatientDetail>(
@@ -63,7 +64,7 @@ export function useCreatePatient() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.patients.all });
     },
   });
 }
@@ -86,14 +87,14 @@ export function useUpdatePatient() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.patients.all });
     },
   });
 }
 
 export function useCoordinators() {
   return useQuery({
-    queryKey: ['admin', 'coordinators'],
+    queryKey: adminKeys.coordinators.all,
     queryFn: async () => {
       const response = await apiClient.get<{ coordinators: any[] }>(
         '/api/admin/coordinators'
@@ -106,7 +107,7 @@ export function useCoordinators() {
 
 export function useDoctors() {
   return useQuery({
-    queryKey: ['admin', 'doctors'],
+    queryKey: adminKeys.doctors.all,
     queryFn: async () => {
       const response = await apiClient.get<{ data: any[] }>(
         '/api/admin/staff?role=doctor&status=active&limit=100'

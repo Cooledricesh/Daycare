@@ -4,10 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { AbsenceOverviewItem } from '../backend/schema';
 import type { AbsencePeriod } from '../constants/risk-thresholds';
+import { sharedKeys } from '@/features/shared/hooks/query-keys';
 
 export function useAbsenceOverview(period: AbsencePeriod = '30d') {
   return useQuery({
-    queryKey: ['shared', 'absence-risk-overview', period],
+    queryKey: sharedKeys.absenceRiskOverview.detail(period),
     queryFn: async () => {
       const response = await apiClient.get<AbsenceOverviewItem[]>(
         `/api/shared/absence-risk/overview?period=${period}`,

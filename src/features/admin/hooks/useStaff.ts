@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type {
   GetStaffQuery,
   CreateStaffRequest,
@@ -19,7 +20,7 @@ interface StaffResponse {
 
 export function useStaff(query: Partial<GetStaffQuery>) {
   return useQuery({
-    queryKey: ['admin', 'staff', query],
+    queryKey: adminKeys.staff.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (query.page) params.set('page', String(query.page));
@@ -38,7 +39,7 @@ export function useStaff(query: Partial<GetStaffQuery>) {
 
 export function useStaffById(staffId: string | null) {
   return useQuery({
-    queryKey: ['admin', 'staff', staffId],
+    queryKey: adminKeys.staff.detail(staffId!),
     queryFn: async () => {
       if (!staffId) return null;
       const response = await apiClient.get<StaffPublic>(
@@ -59,7 +60,7 @@ export function useCreateStaff() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.staff.all });
     },
   });
 }
@@ -76,7 +77,7 @@ export function useUpdateStaff() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.staff.all });
     },
   });
 }

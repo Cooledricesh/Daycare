@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, extractApiErrorMessage } from '@/lib/remote/api-client';
 import type { Message } from '../backend/schema';
+import { staffKeys } from './query-keys';
 
 type CreateMessageParams = {
   patientId: string;
@@ -31,8 +32,8 @@ export const useCreateMessage = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patient.all });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patientHistory.all });
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error);

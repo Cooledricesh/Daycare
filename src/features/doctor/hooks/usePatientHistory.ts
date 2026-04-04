@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { PatientHistory } from '../backend/schema';
+import { doctorKeys } from './query-keys';
 
 interface UsePatientHistoryParams {
   patientId: string;
@@ -11,7 +12,7 @@ interface UsePatientHistoryParams {
 
 export function usePatientHistory({ patientId, months = 1 }: UsePatientHistoryParams) {
   return useQuery({
-    queryKey: ['doctor', 'patient-history', patientId, months],
+    queryKey: doctorKeys.patientHistory.detail(patientId, months),
     queryFn: async () => {
       const url = `/api/doctor/history/${patientId}?months=${months}`;
       const response = await apiClient.get<PatientHistory>(url);

@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { TaskItem } from '../backend/schema';
+import { sharedKeys } from '../../shared/hooks/query-keys';
 
 interface UseTasksParams {
   date?: string;
@@ -13,7 +14,7 @@ interface UseTasksParams {
 
 export function useTasks(params: UseTasksParams = {}) {
   return useQuery({
-    queryKey: ['shared', 'tasks', params],
+    queryKey: sharedKeys.tasks.list(params),
     staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 import type { PatientDetail } from '@/features/staff/backend/schema';
 import type { PatientHistory } from '@/features/doctor/backend/schema';
@@ -18,7 +19,7 @@ type UseAdminPatientsResponse = {
 
 export const useAdminPatients = (params: UseAdminPatientsParams = {}) => {
   return useQuery({
-    queryKey: ['admin', 'dashboard', 'patients', params.date],
+    queryKey: adminKeys.dashboard.patients(params.date ?? ''),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) searchParams.append('date', params.date);
@@ -44,7 +45,7 @@ type UseAdminPatientDetailResponse = {
 
 export const useAdminPatientDetail = (params: UseAdminPatientDetailParams) => {
   return useQuery({
-    queryKey: ['admin', 'dashboard', 'patient', params.patientId, params.date],
+    queryKey: adminKeys.dashboard.patient(params.patientId, params.date ?? ''),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) searchParams.append('date', params.date);
@@ -71,7 +72,7 @@ export function useAdminPatientHistory({
   enabled = true,
 }: UseAdminPatientHistoryParams) {
   return useQuery({
-    queryKey: ['admin', 'dashboard', 'patient-history', patientId, months],
+    queryKey: adminKeys.dashboard.patientHistory(patientId, months),
     queryFn: async () => {
       const url = `/api/admin/dashboard/patient/${patientId}/history?months=${months}`;
       const response = await apiClient.get<PatientHistory>(url);
@@ -105,8 +106,8 @@ export const useAdminCreateMessage = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
     },
   });
 };
@@ -119,8 +120,8 @@ export const useAdminDeleteMessage = () => {
       await apiClient.delete(`/api/admin/dashboard/messages/${messageId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
     },
   });
 };
@@ -133,8 +134,8 @@ export const useAdminUpdateMessage = () => {
       await apiClient.patch(`/api/admin/dashboard/messages/${messageId}`, { content });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
     },
   });
 };
@@ -147,9 +148,9 @@ export const useAdminDeleteConsultation = () => {
       await apiClient.delete(`/api/admin/dashboard/consultations/${consultationId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patient-history'] });
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientsAll });
     },
   });
 };
@@ -171,7 +172,7 @@ export const useAdminCompleteTask = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.all });
     },
   });
 };

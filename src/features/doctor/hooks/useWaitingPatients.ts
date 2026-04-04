@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { WaitingPatient } from '../backend/schema';
+import { doctorKeys } from './query-keys';
 
 type UseWaitingPatientsParams = {
   date?: string;
@@ -10,7 +11,7 @@ type UseWaitingPatientsParams = {
 
 export function useWaitingPatients(params: UseWaitingPatientsParams = {}) {
   return useQuery({
-    queryKey: ['doctor', 'waiting-patients', params],
+    queryKey: doctorKeys.waitingPatients.list(params),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) {

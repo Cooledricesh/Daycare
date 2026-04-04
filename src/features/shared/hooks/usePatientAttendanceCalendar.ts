@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { sharedKeys } from './query-keys';
 
 interface CalendarData {
   attended_dates: string[];
@@ -21,7 +22,7 @@ export function usePatientAttendanceCalendar({
   enabled?: boolean;
 }) {
   return useQuery({
-    queryKey: ['shared', 'attendance-calendar', patientId, year, month],
+    queryKey: sharedKeys.attendanceCalendar.detail(patientId, year, month),
     queryFn: async () => {
       const params = new URLSearchParams({ year: String(year), month: String(month) });
       const response = await apiClient.get<CalendarData>(

@@ -2,6 +2,8 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { staffKeys } from './query-keys';
+import { sharedKeys } from '../../shared/hooks/query-keys';
 
 interface BatchConsultationParams {
   patientIds: string[];
@@ -35,8 +37,8 @@ export function useBatchConsultation() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'my-patients'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'absence-risk-overview'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.myPatients.all });
+      queryClient.invalidateQueries({ queryKey: sharedKeys.absenceRiskOverview.all });
     },
   });
 }
@@ -56,8 +58,8 @@ export function useCancelConsultation() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'my-patients'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'absence-risk-overview'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.myPatients.all });
+      queryClient.invalidateQueries({ queryKey: sharedKeys.absenceRiskOverview.all });
     },
   });
 }

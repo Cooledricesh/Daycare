@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { PrescriptionItem } from '../backend/schema';
+import { nurseKeys } from './query-keys';
 
 type UsePrescriptionsParams = {
   date?: string;
@@ -15,7 +16,7 @@ type UsePrescriptionsResponse = {
 
 export const usePrescriptions = (params: UsePrescriptionsParams = {}) => {
   return useQuery({
-    queryKey: ['nurse', 'prescriptions', params.date, params.filter],
+    queryKey: nurseKeys.prescriptions.list(params.date ?? '', params.filter ?? ''),
     staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();

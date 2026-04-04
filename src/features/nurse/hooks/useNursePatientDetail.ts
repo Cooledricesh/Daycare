@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { PatientDetail } from '@/features/staff/backend/schema';
+import { nurseKeys } from './query-keys';
 
 type UseNursePatientDetailParams = {
   patientId: string;
@@ -16,7 +17,7 @@ type UseNursePatientDetailResponse = {
 
 export const useNursePatientDetail = (params: UseNursePatientDetailParams) => {
   return useQuery({
-    queryKey: ['nurse', 'patient', params.patientId, params.date],
+    queryKey: nurseKeys.patient.detail(params.patientId, params.date ?? ''),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params.date) {

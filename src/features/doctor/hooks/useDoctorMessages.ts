@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { DoctorMessage } from '../backend/schema';
+import { sharedKeys } from '../../shared/hooks/query-keys';
 
 interface UseDoctorMessagesParams {
   startDate?: string;
@@ -12,7 +13,7 @@ interface UseDoctorMessagesParams {
 
 export function useDoctorMessages(params: UseDoctorMessagesParams = {}) {
   return useQuery({
-    queryKey: ['shared', 'messages', params],
+    queryKey: sharedKeys.messages.list(params),
     staleTime: 60 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
@@ -40,8 +41,8 @@ export function useMarkMessageRead() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shared', 'messages'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'tasks'] });
+      queryClient.invalidateQueries({ queryKey: sharedKeys.messages.all });
+      queryClient.invalidateQueries({ queryKey: sharedKeys.tasks.all });
     },
   });
 }

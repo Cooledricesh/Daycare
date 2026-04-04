@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, extractApiErrorMessage } from '@/lib/remote/api-client';
 import type { TaskCompletion } from '../backend/schema';
+import { nurseKeys } from './query-keys';
 
 type CompleteTaskParams = {
   consultationId: string;
@@ -28,8 +29,8 @@ export const useCompleteTask = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nurse', 'prescriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['nurse', 'patients'] });
+      queryClient.invalidateQueries({ queryKey: nurseKeys.prescriptions.all });
+      queryClient.invalidateQueries({ queryKey: nurseKeys.patients.all });
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error);

@@ -2,6 +2,10 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { staffKeys } from '../../staff/hooks/query-keys';
+import { adminKeys } from '../../admin/hooks/query-keys';
+import { doctorKeys } from '../../doctor/hooks/query-keys';
+import { nurseKeys } from '../../nurse/hooks/query-keys';
 
 interface UpdateDisplayNameParams {
   patientId: string;
@@ -19,10 +23,10 @@ export function useUpdateDisplayName() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
-      queryClient.invalidateQueries({ queryKey: ['admin'] });
-      queryClient.invalidateQueries({ queryKey: ['doctor'] });
-      queryClient.invalidateQueries({ queryKey: ['nurse'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.all });
+      queryClient.invalidateQueries({ queryKey: adminKeys.all });
+      queryClient.invalidateQueries({ queryKey: doctorKeys.all });
+      queryClient.invalidateQueries({ queryKey: nurseKeys.all });
       queryClient.invalidateQueries({ queryKey: ['patients'] });
     },
   });

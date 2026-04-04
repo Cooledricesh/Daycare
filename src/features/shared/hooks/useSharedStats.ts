@@ -8,10 +8,11 @@ import type {
   StatsSummary,
   DailyStatsItem,
 } from '@/features/admin/backend/schema';
+import { sharedKeys } from './query-keys';
 
 export function useSharedStatsSummary(query: GetStatsSummaryQuery) {
   return useQuery({
-    queryKey: ['shared', 'stats-summary', query],
+    queryKey: sharedKeys.statsSummary.detail(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('start_date', query.start_date);
@@ -28,7 +29,7 @@ export function useSharedStatsSummary(query: GetStatsSummaryQuery) {
 
 export function useSharedDailyStats(query: GetDailyStatsQuery) {
   return useQuery({
-    queryKey: ['shared', 'daily-stats', query],
+    queryKey: sharedKeys.dailyStats.list(query),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('start_date', query.start_date);

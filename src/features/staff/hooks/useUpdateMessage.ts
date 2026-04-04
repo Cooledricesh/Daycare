@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { staffKeys } from './query-keys';
 
 interface UpdateMessageParams {
   messageId: string;
@@ -16,8 +17,8 @@ export const useUpdateMessage = () => {
       await apiClient.patch(`/api/staff/messages/${messageId}`, { content });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient'] });
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient-history'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patient.all });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patientHistory.all });
     },
   });
 };

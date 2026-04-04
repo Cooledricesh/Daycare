@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, extractApiErrorMessage } from '@/lib/remote/api-client';
+import { staffKeys } from './query-keys';
 import type { TaskCompletion } from '../backend/schema';
 
 type CompleteTaskParams = {
@@ -28,8 +29,8 @@ export const useCompleteTask = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'my-patients'] });
-      queryClient.invalidateQueries({ queryKey: ['staff', 'patient'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.myPatients.all });
+      queryClient.invalidateQueries({ queryKey: staffKeys.patient.all });
     },
     onError: (error) => {
       const message = extractApiErrorMessage(error);

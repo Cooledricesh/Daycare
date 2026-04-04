@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { adminKeys } from './query-keys';
 import type {
   RoomMappingItem,
   CreateRoomMappingRequest,
@@ -14,7 +15,7 @@ interface RoomMappingResponse {
 
 export function useRoomMappings() {
   return useQuery({
-    queryKey: ['admin', 'room-mapping'],
+    queryKey: adminKeys.roomMapping.all,
     queryFn: async () => {
       const response = await apiClient.get<RoomMappingResponse>(
         '/api/admin/settings/room-mapping'
@@ -37,7 +38,7 @@ export function useCreateRoomMapping() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'room-mapping'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.roomMapping.all });
     },
   });
 }
@@ -60,7 +61,7 @@ export function useUpdateRoomMapping() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'room-mapping'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.roomMapping.all });
     },
   });
 }
@@ -76,7 +77,7 @@ export function useDeleteRoomMapping() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'room-mapping'] });
+      queryClient.invalidateQueries({ queryKey: adminKeys.roomMapping.all });
     },
   });
 }

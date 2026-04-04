@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
+import { staffKeys } from './query-keys';
 import type { MessageItem } from '../backend/schema';
 
 interface UseMessagesParams {
@@ -10,7 +11,7 @@ interface UseMessagesParams {
 
 export function useMessages(params: UseMessagesParams = {}) {
   return useQuery({
-    queryKey: ['staff', 'messages', params],
+    queryKey: staffKeys.messages.list(params as Record<string, unknown>),
     staleTime: 30 * 1000,
     queryFn: async () => {
       const searchParams = new URLSearchParams();
@@ -40,7 +41,7 @@ export function useCreateMessage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff', 'messages'] });
+      queryClient.invalidateQueries({ queryKey: staffKeys.messages.all });
     },
   });
 }

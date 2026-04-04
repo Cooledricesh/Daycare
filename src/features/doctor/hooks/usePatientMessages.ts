@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import type { PatientMessage } from '../backend/schema';
+import { doctorKeys } from './query-keys';
 
 type UsePatientMessagesParams = {
   patientId: string | null;
@@ -11,7 +12,7 @@ type UsePatientMessagesParams = {
 
 export function usePatientMessages(params: UsePatientMessagesParams) {
   return useQuery({
-    queryKey: ['doctor', 'patient-messages', params.patientId, params.date],
+    queryKey: doctorKeys.patientMessages.detail(params.patientId ?? '', params.date ?? ''),
     queryFn: async () => {
       if (!params.patientId) return [];
 
