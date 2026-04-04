@@ -76,7 +76,7 @@ export async function createAttendance(
 
   const { data, error } = await supabase
     .from('attendances')
-    .insert([insertData] as any)
+    .insert([insertData])
     .select('id, patient_id, date, checked_at')
     .single();
 
@@ -133,7 +133,7 @@ export async function createVitals(
 
   const { data, error} = await supabase
     .from('vitals')
-    .upsert([insertData] as any, {
+    .upsert([insertData], {
       onConflict: 'patient_id,date',
     })
     .select('id, patient_id, date, systolic, diastolic, blood_sugar, memo, recorded_at')

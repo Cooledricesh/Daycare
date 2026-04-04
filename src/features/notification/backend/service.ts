@@ -14,8 +14,8 @@ export async function getSyncNotifications(
   staffId: string,
 ): Promise<SyncNotificationsResponse> {
   // 1. 사용자의 마지막 확인 sync_log ID 조회
-  const { data: dismissal } = await (supabase
-    .from('notification_dismissals') as any)
+  const { data: dismissal } = await supabase
+    .from('notification_dismissals')
     .select('last_dismissed_sync_id')
     .eq('staff_id', staffId)
     .single();
@@ -23,8 +23,8 @@ export async function getSyncNotifications(
   const lastDismissedSyncId = dismissal?.last_dismissed_sync_id ?? null;
 
   // 2. 입퇴원 변동이 있는 완료된 sync_logs 조회
-  let query = (supabase
-    .from('sync_logs') as any)
+  let query = supabase
+    .from('sync_logs')
     .select('id, completed_at, inserted, discharged, reactivated, details')
     .eq('status', 'completed')
     .or('inserted.gt.0,discharged.gt.0,reactivated.gt.0')
@@ -33,8 +33,8 @@ export async function getSyncNotifications(
 
   // last_dismissed_sync_id가 있으면 그 이후 것만
   if (lastDismissedSyncId) {
-    const { data: lastLog } = await (supabase
-      .from('sync_logs') as any)
+    const { data: lastLog } = await supabase
+      .from('sync_logs')
       .select('completed_at')
       .eq('id', lastDismissedSyncId)
       .single();
@@ -52,7 +52,7 @@ export async function getSyncNotifications(
 
   // 3. changes에서 입원/퇴원/재입원만 필터링
   const notifications: SyncNotificationItem[] = syncLogs
-    .map((log: any) => {
+    .map((log) => {
       const allChanges: SyncChange[] = log.details?.changes ?? [];
       const relevantChanges: SyncChangeItem[] = allChanges
         .filter((c) => RELEVANT_ACTIONS.has(c.action))
@@ -83,8 +83,8 @@ export async function dismissSyncNotification(
   staffId: string,
   syncLogId: string,
 ): Promise<void> {
-  const { error } = await (supabase
-    .from('notification_dismissals') as any)
+  const { error } = await supabase
+    .from('notification_dismissals')
     .upsert(
       {
         staff_id: staffId,

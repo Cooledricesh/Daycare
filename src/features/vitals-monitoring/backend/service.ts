@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/supabase/types';
 import { subMonths, subYears, format } from 'date-fns';
 import { classifyBloodPressure, classifyBloodSugar, isAbnormalBP, isAbnormalBS } from '../lib/vitals-utils';
 import type { VitalsOverviewItem, PatientVitalsDetail, VitalsRecord, VitalsStats, GetPatientVitalsQuery } from './schema';
@@ -36,24 +37,40 @@ function computeStats(records: VitalsRecord[]): VitalsStats {
   };
 }
 
-export async function getVitalsOverview(supabase: SupabaseClient): Promise<VitalsOverviewItem[]> {
+interface PatientOverviewRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  room_number: string | null;
+  coordinator: { name: string } | null;
+}
+
+interface VitalsOverviewRow {
+  patient_id: string;
+  date: string;
+  systolic: number | null;
+  diastolic: number | null;
+  blood_sugar: number | null;
+}
+
+export async function getVitalsOverview(supabase: SupabaseClient<Database>): Promise<VitalsOverviewItem[]> {
   const thirtyDaysAgo = format(subMonths(new Date(), 1), 'yyyy-MM-dd');
 
   const [patientsResult, vitalsResult] = await Promise.all([
-    (supabase.from('patients') as any)
+    supabase.from('patients')
       .select('id, name, display_name, room_number, coordinator:staff!patients_coordinator_id_fkey(name)')
-      .eq('status', 'active'),
-    (supabase.from('vitals') as any)
+      .eq('status', 'active')
+      .returns<PatientOverviewRow[]>(),
+    supabase.from('vitals')
       .select('patient_id, date, systolic, diastolic, blood_sugar')
       .gte('date', thirtyDaysAgo)
       .order('date', { ascending: false }),
   ]);
 
-  const patients: any[] = patientsResult.data || [];
-  const vitals: any[] = vitalsResult.data || [];
+  const patients = patientsResult.data || [];
+  const vitals = vitalsResult.data || [];
 
-  // 환자별 최신 vitals 레코드 추출
-  const latestByPatient = new Map<string, any>();
+  const latestByPatient = new Map<string, VitalsOverviewRow>();
   const countByPatient = new Map<string, number>();
 
   for (const v of vitals) {
@@ -107,18 +124,18 @@ export async function getVitalsOverview(supabase: SupabaseClient): Promise<Vital
 }
 
 export async function getPatientVitalsDetail(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   patientId: string,
   period: GetPatientVitalsQuery['period'],
 ): Promise<PatientVitalsDetail> {
   const startDate = getPeriodStartDate(period);
 
   const [patientResult, vitalsResult] = await Promise.all([
-    (supabase.from('patients') as any)
+    supabase.from('patients')
       .select('id, name, display_name, room_number')
       .eq('id', patientId)
       .single(),
-    (supabase.from('vitals') as any)
+    supabase.from('vitals')
       .select('date, systolic, diastolic, blood_sugar, memo')
       .eq('patient_id', patientId)
       .gte('date', startDate)
