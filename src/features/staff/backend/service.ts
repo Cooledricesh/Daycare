@@ -21,7 +21,6 @@ import type {
 import { StaffError, StaffErrorCode } from './error';
 import {
   completeTask as completeTaskShared,
-  TaskError,
 } from '@/server/services/task';
 import {
   createMessage as createMessageShared,
@@ -344,26 +343,18 @@ export async function completeTask(
   staffId: string,
   params: CompleteTaskRequest,
 ): Promise<TaskCompletion> {
-  try {
-    const result = await completeTaskShared(supabase, staffId, 'coordinator', {
-      consultation_id: params.consultation_id,
-      memo: params.memo,
-    });
-    return result;
-  } catch (error) {
-    if (error instanceof TaskError) {
-      const errorCodeMap: Record<string, StaffErrorCode> = {
+  return completeTaskShared(supabase, staffId, 'coordinator', {
+    consultation_id: params.consultation_id,
+    memo: params.memo,
+    mapError: (err) => {
+      const codeMap: Record<string, StaffErrorCode> = {
         TASK_NOT_FOUND: StaffErrorCode.TASK_NOT_FOUND,
         TASK_ALREADY_COMPLETED: StaffErrorCode.TASK_ALREADY_COMPLETED,
         TASK_UPDATE_FAILED: StaffErrorCode.INVALID_REQUEST,
       };
-      throw new StaffError(
-        errorCodeMap[error.code] || StaffErrorCode.INVALID_REQUEST,
-        error.message,
-      );
-    }
-    throw error;
-  }
+      return new StaffError(codeMap[err.code] ?? StaffErrorCode.INVALID_REQUEST, err.message);
+    },
+  });
 }
 
 /**

@@ -38,7 +38,6 @@ interface PrescriptionConsultationRow extends ConsultationJoinRow {
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 import {
   completeTask as completeTaskShared,
-  TaskError,
 } from '@/server/services/task';
 import {
   createMessage as createMessageShared,
@@ -251,26 +250,18 @@ export async function completeTask(
   staffId: string,
   params: CompleteTaskRequest,
 ): Promise<TaskCompletion> {
-  try {
-    const result = await completeTaskShared(supabase, staffId, 'nurse', {
-      consultation_id: params.consultation_id,
-      memo: params.memo,
-    });
-    return result;
-  } catch (error) {
-    if (error instanceof TaskError) {
-      const errorCodeMap: Record<string, NurseErrorCode> = {
+  return completeTaskShared(supabase, staffId, 'nurse', {
+    consultation_id: params.consultation_id,
+    memo: params.memo,
+    mapError: (err) => {
+      const codeMap: Record<string, NurseErrorCode> = {
         TASK_NOT_FOUND: NurseErrorCode.TASK_NOT_FOUND,
         TASK_ALREADY_COMPLETED: NurseErrorCode.TASK_ALREADY_COMPLETED,
         TASK_UPDATE_FAILED: NurseErrorCode.INVALID_REQUEST,
       };
-      throw new NurseError(
-        errorCodeMap[error.code] || NurseErrorCode.INVALID_REQUEST,
-        error.message,
-      );
-    }
-    throw error;
-  }
+      return new NurseError(codeMap[err.code] ?? NurseErrorCode.INVALID_REQUEST, err.message);
+    },
+  });
 }
 
 /**

@@ -8,6 +8,7 @@ export type TaskRole = 'coordinator' | 'nurse';
 export interface CompleteTaskParams {
   consultation_id: string;
   memo?: string;
+  mapError?: (error: TaskError) => Error;
 }
 
 export interface TaskCompletionResult {
@@ -38,59 +39,66 @@ export async function completeTask(
   role: TaskRole,
   params: CompleteTaskParams,
 ): Promise<TaskCompletionResult> {
-  // consultation_id와 role로 task_completion 찾기
-  const { data: taskCompletion, error: findError } = await supabase
-    .from('task_completions')
-    .select('id, is_completed')
-    .eq('consultation_id', params.consultation_id)
-    .eq('role', role)
-    .maybeSingle();
+  try {
+    // consultation_id와 role로 task_completion 찾기
+    const { data: taskCompletion, error: findError } = await supabase
+      .from('task_completions')
+      .select('id, is_completed')
+      .eq('consultation_id', params.consultation_id)
+      .eq('role', role)
+      .maybeSingle();
 
-  if (findError) {
-    throw new TaskError(
-      'TASK_NOT_FOUND',
-      `지시사항을 찾을 수 없습니다: ${findError.message}`,
-    );
+    if (findError) {
+      throw new TaskError(
+        'TASK_NOT_FOUND',
+        `지시사항을 찾을 수 없습니다: ${findError.message}`,
+      );
+    }
+
+    if (!taskCompletion) {
+      throw new TaskError('TASK_NOT_FOUND', '지시사항을 찾을 수 없습니다');
+    }
+
+    if (taskCompletion.is_completed) {
+      throw new TaskError(
+        'TASK_ALREADY_COMPLETED',
+        '이미 처리 완료된 지시사항입니다',
+      );
+    }
+
+    // 처리 완료로 업데이트 (실제 처리자 기록)
+    const { data: rawData, error } = await supabase
+      .from('task_completions')
+      .update({
+        is_completed: true,
+        completed_by: staffId,
+        completed_at: new Date().toISOString(),
+        memo: params.memo || null,
+      })
+      .eq('id', taskCompletion.id)
+      .select('*')
+      .single();
+
+    const data = rawData as TaskCompletionRow | null;
+
+    if (error || !data) {
+      throw new TaskError(
+        'TASK_UPDATE_FAILED',
+        `지시사항 처리에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
+      );
+    }
+
+    return {
+      id: data.id,
+      consultation_id: data.consultation_id,
+      is_completed: data.is_completed,
+      completed_at: data.completed_at,
+      memo: data.memo,
+    };
+  } catch (error) {
+    if (error instanceof TaskError && params.mapError) {
+      throw params.mapError(error);
+    }
+    throw error;
   }
-
-  if (!taskCompletion) {
-    throw new TaskError('TASK_NOT_FOUND', '지시사항을 찾을 수 없습니다');
-  }
-
-  if (taskCompletion.is_completed) {
-    throw new TaskError(
-      'TASK_ALREADY_COMPLETED',
-      '이미 처리 완료된 지시사항입니다',
-    );
-  }
-
-  // 처리 완료로 업데이트 (실제 처리자 기록)
-  const { data: rawData, error } = await supabase
-    .from('task_completions')
-    .update({
-      is_completed: true,
-      completed_by: staffId,
-      completed_at: new Date().toISOString(),
-      memo: params.memo || null,
-    })
-    .eq('id', taskCompletion.id)
-    .select('*')
-    .single();
-
-  const data = rawData as TaskCompletionRow | null;
-
-  if (error || !data) {
-    throw new TaskError(
-      'TASK_UPDATE_FAILED',
-      `지시사항 처리에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
-    );
-  }
-
-  return {
-    id: data.id,
-    consultation_id: data.consultation_id,
-    is_completed: data.is_completed,
-    completed_at: data.completed_at,
-    memo: data.memo,
-  };
 }
