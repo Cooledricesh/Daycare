@@ -1,9 +1,9 @@
+// @vitest-environment node
 import { describe, it, expect, beforeAll } from 'vitest';
 import { signJWT, verifyJWT, hashPassword, comparePassword } from './auth';
 
 describe('auth', () => {
-  describe.skip('signJWT', () => {
-    // NOTE: jsdom 환경에서 jose 라이브러리의 TextEncoder 문제로 인해 스킵
+  describe('signJWT', () => {
     it('JWT 토큰을 생성한다', async () => {
       const payload = {
         sub: 'user123',
@@ -15,7 +15,7 @@ describe('auth', () => {
 
       expect(token).toBeDefined();
       expect(typeof token).toBe('string');
-      expect(token.split('.')).toHaveLength(3); // JWT는 3부분으로 구성
+      expect(token.split('.')).toHaveLength(3);
     });
 
     it('서로 다른 payload는 서로 다른 토큰을 생성한다', async () => {
@@ -29,8 +29,7 @@ describe('auth', () => {
     });
   });
 
-  describe.skip('verifyJWT', () => {
-    // NOTE: jsdom 환경에서 jose 라이브러리의 TextEncoder 문제로 인해 스킵
+  describe('verifyJWT', () => {
     it('유효한 JWT 토큰을 검증하고 payload를 반환한다', async () => {
       const payload = {
         sub: 'user123',
@@ -58,11 +57,34 @@ describe('auth', () => {
       const payload = { sub: 'user123', role: 'doctor', name: '홍길동' };
       const token = await signJWT(payload);
 
-      // 토큰의 일부를 변조
       const tamperedToken = token.substring(0, token.length - 5) + 'xxxxx';
       const verified = await verifyJWT(tamperedToken);
 
       expect(verified).toBeNull();
+    });
+
+    it('빈 문자열 토큰은 null을 반환한다', async () => {
+      const verified = await verifyJWT('');
+      expect(verified).toBeNull();
+    });
+
+    it('토큰에 설정된 payload 필드를 모두 검증한다', async () => {
+      const payload = {
+        sub: 'staff-1',
+        role: 'coordinator',
+        name: '박코디',
+      };
+
+      const token = await signJWT(payload);
+      const verified = await verifyJWT(token);
+
+      expect(verified).not.toBeNull();
+      expect(verified?.sub).toBe('staff-1');
+      expect(verified?.role).toBe('coordinator');
+      expect(verified?.name).toBe('박코디');
+      // iat, exp 필드가 존재하는지 확인
+      expect(verified?.iat).toBeDefined();
+      expect(verified?.exp).toBeDefined();
     });
   });
 
@@ -83,6 +105,12 @@ describe('auth', () => {
       const hash2 = await hashPassword(password);
 
       expect(hash1).not.toBe(hash2);
+    });
+
+    it('빈 문자열도 해시할 수 있다', async () => {
+      const hash = await hashPassword('');
+      expect(hash).toBeDefined();
+      expect(hash.length).toBeGreaterThan(0);
     });
   });
 
@@ -107,6 +135,11 @@ describe('auth', () => {
 
     it('빈 문자열 비밀번호는 false를 반환한다', async () => {
       const isValid = await comparePassword('', hash);
+      expect(isValid).toBe(false);
+    });
+
+    it('대소문자가 다르면 false를 반환한다', async () => {
+      const isValid = await comparePassword('Password123', hash);
       expect(isValid).toBe(false);
     });
   });
