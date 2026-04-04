@@ -140,7 +140,7 @@ export function StaffFormModal({
             <Label htmlFor="name">이름 *</Label>
             <Input
               id="name"
-              {...(form as any).register('name')}
+              {...(mode === 'create' ? createForm.register('name') : updateForm.register('name'))}
               placeholder="직원 이름"
               disabled={isLoading}
             />
@@ -193,7 +193,14 @@ export function StaffFormModal({
             <Label>역할 *</Label>
             <Select
               value={roleValue}
-              onValueChange={(value: any) => (form as any).setValue('role', value)}
+              onValueChange={(value: string) => {
+                const role = value as StaffCreateData['role'];
+                if (mode === 'create') {
+                  createForm.setValue('role', role);
+                } else {
+                  updateForm.setValue('role', role);
+                }
+              }}
               disabled={isLoading}
             >
               <SelectTrigger>

@@ -60,8 +60,8 @@ sharedRoutes.patch('/patients/:id/display-name', async (c) => {
 
   const displayName = parseResult.data.display_name?.trim() || null;
 
-  const { data, error } = await (supabase
-    .from('patients') as any)
+  const { data, error } = await supabase
+    .from('patients')
     .update({ display_name: displayName })
     .eq('id', patientId)
     .select('id, name, display_name')
@@ -286,8 +286,8 @@ sharedRoutes.post('/change-password', async (c) => {
 
   try {
     // 현재 사용자 조회
-    const { data: staff, error } = await (supabase
-      .from('staff') as any)
+    const { data: staff, error } = await supabase
+      .from('staff')
       .select('id, password_hash')
       .eq('id', user.sub)
       .single();
@@ -304,8 +304,8 @@ sharedRoutes.post('/change-password', async (c) => {
 
     // 새 비밀번호 해싱 및 업데이트
     const newHash = await hashPassword(new_password);
-    const { error: updateError } = await (supabase
-      .from('staff') as any)
+    const { error: updateError } = await supabase
+      .from('staff')
       .update({ password_hash: newHash })
       .eq('id', user.sub);
 
@@ -339,17 +339,17 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
     { data: scheduledAttendances },
     { data: consultations },
   ] = await Promise.all([
-    (supabase.from('attendances') as any)
+    supabase.from('attendances')
       .select('date')
       .eq('patient_id', patientId)
       .gte('date', startDate)
       .lte('date', endDate),
-    (supabase.from('scheduled_attendances') as any)
+    supabase.from('scheduled_attendances')
       .select('date, is_cancelled')
       .eq('patient_id', patientId)
       .gte('date', startDate)
       .lte('date', endDate),
-    (supabase.from('consultations') as any)
+    supabase.from('consultations')
       .select('date')
       .eq('patient_id', patientId)
       .gte('date', startDate)
@@ -357,11 +357,11 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
   ]);
 
   return respond(c, success({
-    attended_dates: (attendances || []).map((a: any) => a.date),
+    attended_dates: (attendances || []).map((a) => a.date),
     scheduled_dates: (scheduledAttendances || [])
-      .filter((s: any) => !s.is_cancelled)
-      .map((s: any) => s.date),
-    consulted_dates: (consultations || []).map((c: any) => c.date),
+      .filter((s) => !s.is_cancelled)
+      .map((s) => s.date),
+    consulted_dates: (consultations || []).map((con) => con.date),
   }, 200));
 });
 

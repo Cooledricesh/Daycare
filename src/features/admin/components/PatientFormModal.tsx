@@ -307,7 +307,7 @@ export function PatientFormModal({
               <Label htmlFor="status">상태</Label>
               <Select
                 value={watchedValues.status}
-                onValueChange={(value) => setValue('status', value as any)}
+                onValueChange={(value) => setValue('status', value as PatientFormData['status'])}
                 disabled={isLoading}
               >
                 <SelectTrigger>
