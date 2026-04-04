@@ -36,6 +36,8 @@ export function createMockSupabase(): MockSupabaseChain {
 
   let result = { data: null as unknown, error: null as { message: string } | null };
 
+  const mockReturns = vi.fn();
+
   const chain = {
     select: mockSelect,
     insert: mockInsert,
@@ -52,10 +54,11 @@ export function createMockSupabase(): MockSupabaseChain {
     limit: mockLimit,
     single: mockSingle,
     maybeSingle: mockMaybeSingle,
+    returns: mockReturns,
   };
 
   // 모든 체이닝 메서드가 chain 자신을 반환
-  for (const mock of [mockSelect, mockInsert, mockUpdate, mockDelete, mockUpsert, mockEq, mockOrder, mockLimit]) {
+  for (const mock of [mockSelect, mockInsert, mockUpdate, mockDelete, mockUpsert, mockEq, mockOrder, mockLimit, mockReturns]) {
     mock.mockReturnValue(chain);
   }
 
