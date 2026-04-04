@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@/lib/supabase/types';
+import type { Database, TaskTarget, Gender } from '@/lib/supabase/types';
 import type {
   GetTasksParams,
   GetPatientHistoryParams,
@@ -19,6 +19,164 @@ import { DoctorError, DoctorErrorCode } from './error';
 import { getTodayString, getMonthsAgoString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 
+type ConsultationsRow = Database['public']['Tables']['consultations']['Row'];
+type TaskCompletionsRow = Database['public']['Tables']['task_completions']['Row'];
+type AttendancesRow = Database['public']['Tables']['attendances']['Row'];
+type MessagesRow = Database['public']['Tables']['messages']['Row'];
+type PatientsRow = Database['public']['Tables']['patients']['Row'];
+type TaskCompletionsInsert = Database['public']['Tables']['task_completions']['Insert'];
+
+/** consultations + patients join (getTasks) */
+interface ConsultationWithPatient {
+  id: string;
+  date: string;
+  patient_id: string;
+  task_content: string | null;
+  task_target: TaskTarget | null;
+  created_at: string;
+  patients: {
+    id: string;
+    name: string;
+    room_number: string | null;
+    coordinator: { name: string } | null;
+    coordinator_id: string | null;
+  } | null;
+}
+
+/** task_completions select result */
+interface TaskCompletionResult {
+  consultation_id: string;
+  role: 'coordinator' | 'nurse';
+  is_completed: boolean;
+  completed_at: string | null;
+}
+
+/** patients join (getPatientHistory) */
+interface PatientWithJoins {
+  id: string;
+  name: string;
+  gender: Gender | null;
+  room_number: string | null;
+  coordinator: { name: string } | null;
+  doctor: { name: string } | null;
+}
+
+/** consultations join (getPatientHistory) */
+interface ConsultationWithDoctor {
+  id: string;
+  date: string;
+  note: string | null;
+  has_task: boolean;
+  task_content: string | null;
+  task_target: TaskTarget | null;
+  created_at: string;
+  doctor: { name: string } | null;
+}
+
+/** messages join (getPatientHistory / getMessages) */
+interface MessageWithAuthor {
+  id: string;
+  date: string;
+  author_id: string;
+  content: string;
+  is_read: boolean;
+  author_role: 'coordinator' | 'nurse';
+  created_at: string;
+  author: { name: string } | null;
+}
+
+/** vitals select result */
+interface VitalsResult {
+  date: string;
+  systolic: number | null;
+  diastolic: number | null;
+  blood_sugar: number | null;
+}
+
+/** messages join (getMessages) */
+interface MessageWithPatient {
+  id: string;
+  patient_id: string;
+  date: string;
+  content: string;
+  is_read: boolean;
+  author_role: 'coordinator' | 'nurse';
+  created_at: string;
+  patients: { name: string; coordinator_id: string | null } | null;
+  author: { name: string } | null;
+}
+
+/** patients join (getWaitingPatients) */
+interface PatientWithCoordinator {
+  id: string;
+  name: string;
+  display_name: string | null;
+  gender: Gender | null;
+  room_number: string | null;
+  coordinator: { name: string } | null;
+}
+
+/** attendances select result */
+interface AttendanceResult {
+  patient_id: string;
+  checked_at: string;
+}
+
+/** consultations with task_completions join */
+interface ConsultationWithTaskCompletions {
+  patient_id: string;
+  has_task: boolean;
+  task_completions: { is_completed: boolean }[];
+}
+
+/** messages patient_id only */
+interface MessagePatientId {
+  patient_id: string;
+}
+
+/** vitals for waiting patients */
+interface VitalsForPatient {
+  patient_id: string;
+  systolic: number | null;
+  diastolic: number | null;
+  blood_sugar: number | null;
+}
+
+/** scheduled_attendances select result */
+interface ScheduledAttendanceResult {
+  patient_id: string;
+}
+
+/** consultations for task status */
+interface ConsultationForTask {
+  id: string;
+  patient_id: string;
+  task_target: TaskTarget | null;
+}
+
+/** task completion status */
+interface TaskCompletionStatus {
+  consultation_id: string;
+  role: 'coordinator' | 'nurse';
+  is_completed: boolean;
+}
+
+/** patients select for createConsultation */
+interface PatientIdWithCoordinator {
+  id: string;
+  coordinator_id: string | null;
+}
+
+/** patient messages join */
+interface PatientMessageWithAuthor {
+  id: string;
+  content: string;
+  is_read: boolean;
+  author_role: 'coordinator' | 'nurse';
+  created_at: string;
+  author: { name: string } | null;
+}
+
 /**
  * 지시사항 목록 조회 (날짜 범위 지원)
  */
@@ -29,8 +187,8 @@ export async function getTasks(
   options?: { coordinatorId?: string },
 ): Promise<TaskItem[]> {
   // 진찰 기록 중 has_task가 true인 것만 조회
-  let query = (supabase
-    .from('consultations') as any)
+  let query = supabase
+    .from('consultations')
     .select(`
       id,
       date,
@@ -61,7 +219,8 @@ export async function getTasks(
     query = query.eq('date', params.date || getTodayString());
   }
 
-  const { data: consultations, error: consultationsError } = await query;
+  const { data: rawConsultations, error: consultationsError } = await query;
+  const consultations = rawConsultations as ConsultationWithPatient[] | null;
 
   if (consultationsError) {
     throw new DoctorError(
@@ -75,17 +234,18 @@ export async function getTasks(
   }
 
   // 진찰 ID 목록
-  const consultationIds = consultations.map((c: any) => c.id);
+  const consultationIds = consultations.map((c) => c.id);
 
   // task_completions 조회
-  const { data: completions } = await (supabase
-    .from('task_completions') as any)
+  const { data: completions } = await supabase
+    .from('task_completions')
     .select('consultation_id, role, is_completed, completed_at')
-    .in('consultation_id', consultationIds);
+    .in('consultation_id', consultationIds)
+    .returns<TaskCompletionResult[]>();
 
   // completion Map 생성
-  const completionMap = new Map<string, any[]>();
-  (completions || []).forEach((tc: any) => {
+  const completionMap = new Map<string, TaskCompletionResult[]>();
+  (completions || []).forEach((tc) => {
     if (!completionMap.has(tc.consultation_id)) {
       completionMap.set(tc.consultation_id, []);
     }
@@ -93,10 +253,10 @@ export async function getTasks(
   });
 
   // 결과 변환
-  const tasks: TaskItem[] = consultations.map((c: any) => {
+  const tasks: TaskItem[] = consultations.map((c) => {
     const taskCompletions = completionMap.get(c.id) || [];
-    const coordinatorCompletion = taskCompletions.find((tc: any) => tc.role === 'coordinator');
-    const nurseCompletion = taskCompletions.find((tc: any) => tc.role === 'nurse');
+    const coordinatorCompletion = taskCompletions.find((tc) => tc.role === 'coordinator');
+    const nurseCompletion = taskCompletions.find((tc) => tc.role === 'nurse');
 
     return {
       consultation_id: c.id,
@@ -143,7 +303,7 @@ export async function getPatientHistory(
     { data: messages },
     { data: vitals },
   ] = await Promise.all([
-    (supabase.from('patients') as any)
+    supabase.from('patients')
       .select(`
         id,
         name,
@@ -153,8 +313,9 @@ export async function getPatientHistory(
         doctor:doctor_id(name)
       `)
       .eq('id', patient_id)
+      .returns<PatientWithJoins[]>()
       .single(),
-    (supabase.from('consultations') as any)
+    supabase.from('consultations')
       .select(`
         id,
         date,
@@ -167,8 +328,9 @@ export async function getPatientHistory(
       `)
       .eq('patient_id', patient_id)
       .gte('date', fromDate)
-      .order('date', { ascending: false }),
-    (supabase.from('messages') as any)
+      .order('date', { ascending: false })
+      .returns<ConsultationWithDoctor[]>(),
+    supabase.from('messages')
       .select(`
         id,
         date,
@@ -181,12 +343,14 @@ export async function getPatientHistory(
       `)
       .eq('patient_id', patient_id)
       .gte('date', fromDate)
-      .order('date', { ascending: false }),
-    (supabase.from('vitals') as any)
+      .order('date', { ascending: false })
+      .returns<MessageWithAuthor[]>(),
+    supabase.from('vitals')
       .select('date, systolic, diastolic, blood_sugar')
       .eq('patient_id', patient_id)
       .gte('date', fromDate)
-      .order('date', { ascending: false }),
+      .order('date', { ascending: false })
+      .returns<VitalsResult[]>(),
   ]);
 
   if (patientError || !patient) {
@@ -205,7 +369,7 @@ export async function getPatientHistory(
       coordinator_name: patient.coordinator?.name || null,
       doctor_name: patient.doctor?.name || null,
     },
-    consultations: (consultations || []).map((c: any) => ({
+    consultations: (consultations || []).map((c) => ({
       id: c.id,
       date: c.date,
       doctor_name: c.doctor?.name || '알 수 없음',
@@ -215,7 +379,7 @@ export async function getPatientHistory(
       task_target: c.task_target,
       created_at: c.created_at || null,
     })),
-    messages: (messages || []).map((m: any) => ({
+    messages: (messages || []).map((m) => ({
       id: m.id,
       date: m.date,
       author_id: m.author_id,
@@ -225,7 +389,7 @@ export async function getPatientHistory(
       is_read: m.is_read,
       created_at: m.created_at,
     })),
-    vitals: (vitals || []).map((v: any) => ({
+    vitals: (vitals || []).map((v) => ({
       date: v.date,
       systolic: v.systolic,
       diastolic: v.diastolic,
@@ -242,8 +406,8 @@ export async function getMessages(
   params: GetMessagesParams,
   options?: { coordinatorId?: string },
 ): Promise<DoctorMessage[]> {
-  let query = (supabase
-    .from('messages') as any)
+  let query = supabase
+    .from('messages')
     .select(`
       id,
       patient_id,
@@ -276,7 +440,8 @@ export async function getMessages(
     query = query.eq('is_read', false);
   }
 
-  const { data: messages, error } = await query;
+  const { data: rawMessages, error } = await query;
+  const messages = rawMessages as MessageWithPatient[] | null;
 
   if (error) {
     throw new DoctorError(
@@ -285,7 +450,7 @@ export async function getMessages(
     );
   }
 
-  return (messages || []).map((m: any) => ({
+  return (messages || []).map((m) => ({
     id: m.id,
     patient_id: m.patient_id,
     patient_name: m.patients?.name || '알 수 없음',
@@ -307,8 +472,8 @@ export async function markMessageRead(
 ): Promise<{ success: boolean }> {
   const { message_id } = params;
 
-  const { error } = await (supabase
-    .from('messages') as any)
+  const { error } = await supabase
+    .from('messages')
     .update({
       is_read: true,
       read_at: new Date().toISOString(),
@@ -336,8 +501,8 @@ export async function getWaitingPatients(
   const date = params.date || getTodayString();
 
   // 모든 활성 환자 조회 (스케줄/출석 여부 무관)
-  const { data: allPatients, error: patientsError } = await (supabase
-    .from('patients') as any)
+  const { data: allPatients, error: patientsError } = await supabase
+    .from('patients')
     .select(`
       id,
       name,
@@ -347,7 +512,8 @@ export async function getWaitingPatients(
       coordinator:coordinator_id(name)
     `)
     .eq('status', 'active')
-    .order('room_number', { ascending: true });
+    .order('room_number', { ascending: true })
+    .returns<PatientWithCoordinator[]>();
 
   if (patientsError) {
     throw new DoctorError(
@@ -356,7 +522,7 @@ export async function getWaitingPatients(
     );
   }
 
-  const patientList = (allPatients || []).map((p: any) => ({
+  const patientList = (allPatients || []).map((p) => ({
     patient_id: p.id,
     patients: p,
   }));
@@ -366,7 +532,7 @@ export async function getWaitingPatients(
   }
 
   // 환자 ID 목록
-  const patientIds = patientList.map((p: any) => p.patient_id);
+  const patientIds = patientList.map((p) => p.patient_id);
 
   // 단계 2: 독립적인 5개 쿼리 병렬 실행 (ensureScheduleGenerated 포함)
   const [
@@ -375,45 +541,49 @@ export async function getWaitingPatients(
     { data: unreadMessages },
     { data: vitals },
   ] = await Promise.all([
-    (supabase.from('attendances') as any)
+    supabase.from('attendances')
       .select('patient_id, checked_at')
       .eq('date', date)
-      .in('patient_id', patientIds),
-    (supabase.from('consultations') as any)
+      .in('patient_id', patientIds)
+      .returns<AttendanceResult[]>(),
+    supabase.from('consultations')
       .select('patient_id, has_task, task_completions(is_completed)')
       .eq('date', date)
-      .in('patient_id', patientIds),
-    (supabase.from('messages') as any)
+      .in('patient_id', patientIds)
+      .returns<ConsultationWithTaskCompletions[]>(),
+    supabase.from('messages')
       .select('patient_id')
       .eq('date', date)
       .eq('is_read', false)
-      .in('patient_id', patientIds),
-    (supabase.from('vitals') as any)
+      .in('patient_id', patientIds)
+      .returns<MessagePatientId[]>(),
+    supabase.from('vitals')
       .select('patient_id, systolic, diastolic, blood_sugar')
       .eq('date', date)
-      .in('patient_id', patientIds),
+      .in('patient_id', patientIds)
+      .returns<VitalsForPatient[]>(),
     ensureScheduleGenerated(supabase, date),
   ]);
 
   // 출석 Map 생성
   const attendanceMap = new Map<string, string>();
-  (attendances || []).forEach((a: any) => {
+  (attendances || []).forEach((a) => {
     attendanceMap.set(a.patient_id, a.checked_at);
   });
 
   // 진찰 기록 Map (지시사항 상태 포함)
-  const consultationMap = new Map<string, any>(
-    (consultations || []).map((c: any) => [c.patient_id, c])
+  const consultationMap = new Map<string, ConsultationWithTaskCompletions>(
+    (consultations || []).map((c) => [c.patient_id, c])
   );
 
   const unreadMap = new Map<string, number>();
-  (unreadMessages || []).forEach((m: any) => {
+  (unreadMessages || []).forEach((m) => {
     unreadMap.set(m.patient_id, (unreadMap.get(m.patient_id) || 0) + 1);
   });
 
   // 활력징후 Map 생성
-  const vitalsMap = new Map<string, any>();
-  (vitals || []).forEach((v: any) => {
+  const vitalsMap = new Map<string, { systolic: number | null; diastolic: number | null; blood_sugar: number | null }>();
+  (vitals || []).forEach((v) => {
     vitalsMap.set(v.patient_id, {
       systolic: v.systolic,
       diastolic: v.diastolic,
@@ -426,38 +596,41 @@ export async function getWaitingPatients(
     { data: scheduledAttendances },
     { data: taskConsultations },
   ] = await Promise.all([
-    (supabase.from('scheduled_attendances') as any)
+    supabase.from('scheduled_attendances')
       .select('patient_id')
       .eq('date', date)
       .eq('is_cancelled', false)
-      .in('patient_id', patientIds),
-    (supabase.from('consultations') as any)
+      .in('patient_id', patientIds)
+      .returns<ScheduledAttendanceResult[]>(),
+    supabase.from('consultations')
       .select('id, patient_id, task_target')
       .eq('date', date)
       .eq('has_task', true)
-      .in('patient_id', patientIds),
+      .in('patient_id', patientIds)
+      .returns<ConsultationForTask[]>(),
   ]);
 
   const scheduledSet = new Set<string>(
-    (scheduledAttendances || []).map((s: any) => s.patient_id),
+    (scheduledAttendances || []).map((s) => s.patient_id),
   );
 
   // 단계 4: 지시사항 완료 상태 조회 (조건부)
-  const taskConsultationIds = (taskConsultations || []).map((c: any) => c.id);
-  let taskCompletions: any[] = [];
+  const taskConsultationIds = (taskConsultations || []).map((c) => c.id);
+  let taskCompletions: TaskCompletionStatus[] = [];
   if (taskConsultationIds.length > 0) {
-    const { data } = await (supabase
-      .from('task_completions') as any)
+    const { data } = await supabase
+      .from('task_completions')
       .select('consultation_id, role, is_completed')
-      .in('consultation_id', taskConsultationIds);
+      .in('consultation_id', taskConsultationIds)
+      .returns<TaskCompletionStatus[]>();
     taskCompletions = data || [];
   }
 
   // 환자별 지시사항 상태 Map: 'none' | 'pending' | 'completed'
   const taskStatusMap = new Map<string, 'none' | 'pending' | 'completed'>();
-  (taskConsultations || []).forEach((c: any) => {
-    const completions = taskCompletions.filter((tc: any) => tc.consultation_id === c.id);
-    const allCompleted = completions.length > 0 && completions.every((tc: any) => tc.is_completed);
+  (taskConsultations || []).forEach((c) => {
+    const completions = taskCompletions.filter((tc) => tc.consultation_id === c.id);
+    const allCompleted = completions.length > 0 && completions.every((tc) => tc.is_completed);
 
     const currentStatus = taskStatusMap.get(c.patient_id);
     if (!currentStatus || currentStatus === 'none') {
@@ -469,7 +642,7 @@ export async function getWaitingPatients(
   });
 
   // 결과 변환 - 출석 체크 여부와 상관없이 모든 예정 환자 반환
-  return patientList.map((p: any) => ({
+  return patientList.map((p) => ({
     id: p.patients.id,
     name: p.patients.name,
     display_name: p.patients.display_name ?? null,
@@ -497,11 +670,13 @@ export async function createConsultation(
   const date = params.date || getTodayString();
 
   // 환자 존재 확인 (coordinator_id도 함께 조회)
-  const { data: patient, error: patientError } = await (supabase
-    .from('patients') as any)
+  const { data: rawPatient, error: patientError } = await supabase
+    .from('patients')
     .select('id, coordinator_id')
     .eq('id', params.patient_id)
     .single();
+
+  const patient = rawPatient as PatientIdWithCoordinator | null;
 
   if (patientError || !patient) {
     throw new DoctorError(
@@ -511,8 +686,8 @@ export async function createConsultation(
   }
 
   // 출석 기록 확인 및 자동 생성
-  const { data: existingAttendance } = await (supabase
-    .from('attendances') as any)
+  const { data: existingAttendance } = await supabase
+    .from('attendances')
     .select('id')
     .eq('patient_id', params.patient_id)
     .eq('date', date)
@@ -520,8 +695,8 @@ export async function createConsultation(
 
   // 출석 기록이 없으면 자동 생성
   if (!existingAttendance) {
-    const { error: attendanceError } = await (supabase
-      .from('attendances') as any)
+    const { error: attendanceError } = await supabase
+      .from('attendances')
       .insert({
         patient_id: params.patient_id,
         date,
@@ -534,8 +709,9 @@ export async function createConsultation(
   }
 
   // 진찰 기록 생성 (같은 환자+날짜에 이미 기록이 있으면 업데이트)
-  const { data: consultation, error: consultationError } = await (supabase
-    .from('consultations') as any)
+  type ConsultationsRowType = Database['public']['Tables']['consultations']['Row'];
+  const { data: rawConsultation, error: consultationError } = await supabase
+    .from('consultations')
     .upsert({
       patient_id: params.patient_id,
       doctor_id: doctorId,
@@ -549,23 +725,25 @@ export async function createConsultation(
     .select()
     .single();
 
-  if (consultationError) {
+  const consultation = rawConsultation as ConsultationsRowType | null;
+
+  if (consultationError || !consultation) {
     throw new DoctorError(
       DoctorErrorCode.INVALID_REQUEST,
-      `진찰 기록 생성에 실패했습니다: ${consultationError.message}`,
+      `진찰 기록 생성에 실패했습니다: ${consultationError?.message ?? 'unknown error'}`,
     );
   }
 
   // has_task가 true인 경우 task_completions 레코드 생성 (기존 레코드 삭제 후 재생성)
   if (params.has_task && params.task_target) {
     // 기존 미완료 task_completions 삭제 (이미 완료된 건 유지)
-    await (supabase
-      .from('task_completions') as any)
+    await supabase
+      .from('task_completions')
       .delete()
       .eq('consultation_id', consultation.id)
       .eq('is_completed', false);
 
-    const completionRecords: any[] = [];
+    const completionRecords: TaskCompletionsInsert[] = [];
 
     if (params.task_target === 'coordinator' || params.task_target === 'both') {
       completionRecords.push({
@@ -586,8 +764,8 @@ export async function createConsultation(
     }
 
     if (completionRecords.length > 0) {
-      await (supabase
-        .from('task_completions') as any)
+      await supabase
+        .from('task_completions')
         .insert(completionRecords);
     }
   }
@@ -614,8 +792,8 @@ export async function getPatientMessages(
 ): Promise<PatientMessage[]> {
   const date = params.date || getTodayString();
 
-  const { data: messages, error } = await (supabase
-    .from('messages') as any)
+  const { data: rawMessages, error } = await supabase
+    .from('messages')
     .select(`
       id,
       content,
@@ -635,7 +813,9 @@ export async function getPatientMessages(
     );
   }
 
-  return (messages || []).map((m: any) => ({
+  const messages = (rawMessages || []) as PatientMessageWithAuthor[];
+
+  return messages.map((m) => ({
     id: m.id,
     author_name: m.author?.name || '알 수 없음',
     author_role: m.author_role,
