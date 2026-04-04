@@ -413,7 +413,9 @@ export class PatientSyncService {
         result.summary.totalProcessed++;
       }
 
-      // 5. 명단에서 제외된 환자 퇴원 처리
+      // 5. 명단에서 제외된 환자 퇴원 처리 (배치)
+      const dischargeIds: string[] = [];
+
       for (const [patientIdNo, patient] of existingPatients) {
         // 이미 퇴원 상태거나 소스에 있는 환자는 건너뛰기
         if (patient.status === 'discharged' || sourcePatientIdNos.has(patientIdNo)) {
@@ -446,15 +448,18 @@ export class PatientSyncService {
           action: dischargeAction,
         });
 
-        if (!options.dryRun) {
-          await this.supabase
-            .from('patients')
-            .update({
-              status: 'discharged',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', patient.id);
-        }
+        dischargeIds.push(patient.id);
+      }
+
+      // 배치 UPDATE: 퇴원 대상 전체를 한 번에 처리
+      if (!options.dryRun && dischargeIds.length > 0) {
+        await this.supabase
+          .from('patients')
+          .update({
+            status: 'discharged',
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', dischargeIds);
       }
 
       // 동기화 로그 업데이트
