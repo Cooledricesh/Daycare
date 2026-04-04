@@ -79,6 +79,7 @@ interface PatientWithJoins {
   updated_at: string;
   coordinator: { name: string } | null;
   doctor: { name: string } | null;
+  scheduled_patterns: { day_of_week: number }[];
 }
 
 interface PatientWithCoordinatorJoin {
@@ -152,7 +153,8 @@ export async function getPatients(
       created_at,
       updated_at,
       coordinator:staff!coordinator_id(name),
-      doctor:staff!doctor_id(name)
+      doctor:staff!doctor_id(name),
+      scheduled_patterns(day_of_week)
     `, { count: 'exact' });
 
   // 필터 적용 (display_name도 검색 대상)
@@ -167,6 +169,7 @@ export async function getPatients(
   }
 
   const { data, error, count } = await queryBuilder
+    .eq('scheduled_patterns.is_active', true)
     .order('created_at', { ascending: false })
     .range(offset, offset + query.limit - 1);
 
@@ -177,22 +180,7 @@ export async function getPatients(
     );
   }
 
-  // schedule_pattern 가져오기
   const rows = (data ?? []) as PatientWithJoins[];
-  const patientIds = rows.map((p) => p.id);
-  const { data: patterns } = await supabase
-    .from('scheduled_patterns')
-    .select('patient_id, day_of_week')
-    .in('patient_id', patientIds)
-    .eq('is_active', true);
-
-  const patternMap = new Map<string, number[]>();
-  (patterns ?? []).forEach((p) => {
-    if (!patternMap.has(p.patient_id)) {
-      patternMap.set(p.patient_id, []);
-    }
-    patternMap.get(p.patient_id)!.push(p.day_of_week);
-  });
 
   const result: PatientWithCoordinator[] = rows.map((p) => ({
     id: p.id,
@@ -209,7 +197,7 @@ export async function getPatients(
     memo: p.memo,
     created_at: p.created_at,
     updated_at: p.updated_at,
-    schedule_pattern: formatScheduleDays(patternMap.get(p.id) || []),
+    schedule_pattern: formatScheduleDays((p.scheduled_patterns || []).map((sp) => sp.day_of_week)),
   }));
 
   return {
