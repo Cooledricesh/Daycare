@@ -26,7 +26,6 @@ import {
   createMessage as createMessageShared,
   deleteMessage as deleteMessageShared,
   updateMessage as updateMessageShared,
-  MessageError,
 } from '@/server/services/message';
 import { getMonthsAgoString, getTodayString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
@@ -365,19 +364,13 @@ export async function createMessage(
   staffId: string,
   params: CreateMessageRequest,
 ): Promise<Message> {
-  try {
-    const result = await createMessageShared(supabase, staffId, 'coordinator', {
-      patient_id: params.patient_id,
-      date: params.date,
-      content: params.content,
-    });
-    return result;
-  } catch (error) {
-    if (error instanceof MessageError) {
-      throw new StaffError(StaffErrorCode.MESSAGE_SAVE_FAILED, error.message);
-    }
-    throw error;
-  }
+  return createMessageShared(supabase, staffId, 'coordinator', {
+    patient_id: params.patient_id,
+    date: params.date,
+    content: params.content,
+  }, {
+    mapError: (err) => new StaffError(StaffErrorCode.MESSAGE_SAVE_FAILED, err.message),
+  });
 }
 
 /**
@@ -389,14 +382,9 @@ export async function deleteMessage(
   messageId: string,
   isAdmin = false,
 ): Promise<void> {
-  try {
-    await deleteMessageShared(supabase, messageId, staffId, isAdmin);
-  } catch (error) {
-    if (error instanceof MessageError) {
-      throw new StaffError(StaffErrorCode.MESSAGE_DELETE_FAILED, error.message);
-    }
-    throw error;
-  }
+  await deleteMessageShared(supabase, messageId, staffId, isAdmin, {
+    mapError: (err) => new StaffError(StaffErrorCode.MESSAGE_DELETE_FAILED, err.message),
+  });
 }
 
 /**
@@ -409,14 +397,9 @@ export async function updateMessage(
   content: string,
   isAdmin = false,
 ): Promise<void> {
-  try {
-    await updateMessageShared(supabase, messageId, staffId, isAdmin, { content });
-  } catch (error) {
-    if (error instanceof MessageError) {
-      throw new StaffError(StaffErrorCode.MESSAGE_UPDATE_FAILED, error.message);
-    }
-    throw error;
-  }
+  await updateMessageShared(supabase, messageId, staffId, isAdmin, { content }, {
+    mapError: (err) => new StaffError(StaffErrorCode.MESSAGE_UPDATE_FAILED, err.message),
+  });
 }
 
 /**

@@ -30,6 +30,10 @@ export class MessageError extends Error {
   }
 }
 
+export interface MessageErrorMapOptions {
+  mapError?: (error: MessageError) => Error;
+}
+
 /**
  * 전달사항 삭제 (작성자 본인 또는 admin만 삭제 가능)
  */
@@ -38,29 +42,37 @@ export async function deleteMessage(
   messageId: string,
   authorId: string,
   isAdmin = false,
+  options?: MessageErrorMapOptions,
 ): Promise<void> {
-  let query = supabase.from('messages')
-    .delete()
-    .eq('id', messageId);
+  try {
+    let query = supabase.from('messages')
+      .delete()
+      .eq('id', messageId);
 
-  if (!isAdmin) {
-    query = query.eq('author_id', authorId);
-  }
+    if (!isAdmin) {
+      query = query.eq('author_id', authorId);
+    }
 
-  const { data, error } = await query.select('id');
+    const { data, error } = await query.select('id');
 
-  if (error) {
-    throw new MessageError(
-      'MESSAGE_DELETE_FAILED',
-      `전달사항 삭제에 실패했습니다: ${error.message}`,
-    );
-  }
+    if (error) {
+      throw new MessageError(
+        'MESSAGE_DELETE_FAILED',
+        `전달사항 삭제에 실패했습니다: ${error.message}`,
+      );
+    }
 
-  if (!data || data.length === 0) {
-    throw new MessageError(
-      isAdmin ? 'MESSAGE_DELETE_FAILED' : 'MESSAGE_NOT_OWNED',
-      isAdmin ? '전달사항을 찾을 수 없습니다.' : '본인이 작성한 전달사항만 삭제할 수 있습니다.',
-    );
+    if (!data || data.length === 0) {
+      throw new MessageError(
+        isAdmin ? 'MESSAGE_DELETE_FAILED' : 'MESSAGE_NOT_OWNED',
+        isAdmin ? '전달사항을 찾을 수 없습니다.' : '본인이 작성한 전달사항만 삭제할 수 있습니다.',
+      );
+    }
+  } catch (error) {
+    if (error instanceof MessageError && options?.mapError) {
+      throw options.mapError(error);
+    }
+    throw error;
   }
 }
 
@@ -73,29 +85,37 @@ export async function updateMessage(
   authorId: string,
   isAdmin = false,
   params: { content: string },
+  options?: MessageErrorMapOptions,
 ): Promise<void> {
-  let query = supabase.from('messages')
-    .update({ content: params.content })
-    .eq('id', messageId);
+  try {
+    let query = supabase.from('messages')
+      .update({ content: params.content })
+      .eq('id', messageId);
 
-  if (!isAdmin) {
-    query = query.eq('author_id', authorId);
-  }
+    if (!isAdmin) {
+      query = query.eq('author_id', authorId);
+    }
 
-  const { data, error } = await query.select('id');
+    const { data, error } = await query.select('id');
 
-  if (error) {
-    throw new MessageError(
-      'MESSAGE_UPDATE_FAILED',
-      `전달사항 수정에 실패했습니다: ${error.message}`,
-    );
-  }
+    if (error) {
+      throw new MessageError(
+        'MESSAGE_UPDATE_FAILED',
+        `전달사항 수정에 실패했습니다: ${error.message}`,
+      );
+    }
 
-  if (!data || data.length === 0) {
-    throw new MessageError(
-      isAdmin ? 'MESSAGE_UPDATE_FAILED' : 'MESSAGE_NOT_OWNED',
-      isAdmin ? '전달사항을 찾을 수 없습니다.' : '본인이 작성한 전달사항만 수정할 수 있습니다.',
-    );
+    if (!data || data.length === 0) {
+      throw new MessageError(
+        isAdmin ? 'MESSAGE_UPDATE_FAILED' : 'MESSAGE_NOT_OWNED',
+        isAdmin ? '전달사항을 찾을 수 없습니다.' : '본인이 작성한 전달사항만 수정할 수 있습니다.',
+      );
+    }
+  } catch (error) {
+    if (error instanceof MessageError && options?.mapError) {
+      throw options.mapError(error);
+    }
+    throw error;
   }
 }
 
@@ -108,37 +128,45 @@ export async function createMessage(
   authorId: string,
   authorRole: MessageAuthorRole,
   params: CreateMessageParams,
+  options?: MessageErrorMapOptions,
 ): Promise<MessageResult> {
-  const insertData = {
-    patient_id: params.patient_id,
-    date: params.date,
-    author_id: authorId,
-    author_role: authorRole,
-    content: params.content,
-    is_read: false,
-  };
+  try {
+    const insertData = {
+      patient_id: params.patient_id,
+      date: params.date,
+      author_id: authorId,
+      author_role: authorRole,
+      content: params.content,
+      is_read: false,
+    };
 
-  const { data: rawData, error } = await supabase
-    .from('messages')
-    .insert([insertData])
-    .select('*')
-    .single();
+    const { data: rawData, error } = await supabase
+      .from('messages')
+      .insert([insertData])
+      .select('*')
+      .single();
 
-  const data = rawData as MessageRow | null;
+    const data = rawData as MessageRow | null;
 
-  if (error || !data) {
-    throw new MessageError(
-      'MESSAGE_SAVE_FAILED',
-      `전달사항 저장에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
-    );
+    if (error || !data) {
+      throw new MessageError(
+        'MESSAGE_SAVE_FAILED',
+        `전달사항 저장에 실패했습니다: ${error?.message || '알 수 없는 오류'}`,
+      );
+    }
+
+    return {
+      id: data.id,
+      patient_id: data.patient_id,
+      date: data.date,
+      content: data.content,
+      is_read: data.is_read,
+      created_at: data.created_at,
+    };
+  } catch (error) {
+    if (error instanceof MessageError && options?.mapError) {
+      throw options.mapError(error);
+    }
+    throw error;
   }
-
-  return {
-    id: data.id,
-    patient_id: data.patient_id,
-    date: data.date,
-    content: data.content,
-    is_read: data.is_read,
-    created_at: data.created_at,
-  };
 }
