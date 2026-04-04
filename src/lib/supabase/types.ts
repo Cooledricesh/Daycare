@@ -103,6 +103,7 @@ export interface Database {
                 Row: {
                     id: string;
                     name: string;
+                    display_name: string | null;
                     gender: Gender | null;
                     room_number: string | null;
                     patient_id_no: string | null;
@@ -116,6 +117,7 @@ export interface Database {
                 Insert: {
                     id?: string;
                     name: string;
+                    display_name?: string | null;
                     gender?: Gender | null;
                     room_number?: string | null;
                     patient_id_no?: string | null;
@@ -129,6 +131,7 @@ export interface Database {
                 Update: {
                     id?: string;
                     name?: string;
+                    display_name?: string | null;
                     gender?: Gender | null;
                     room_number?: string | null;
                     patient_id_no?: string | null;
@@ -251,6 +254,7 @@ export interface Database {
                     has_task: boolean;
                     task_content: string | null;
                     task_target: TaskTarget | null;
+                    checked_by_coordinator: boolean;
                     created_at: string;
                     updated_at: string;
                 };
@@ -263,6 +267,7 @@ export interface Database {
                     has_task?: boolean;
                     task_content?: string | null;
                     task_target?: TaskTarget | null;
+                    checked_by_coordinator?: boolean;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -275,6 +280,7 @@ export interface Database {
                     has_task?: boolean;
                     task_content?: string | null;
                     task_target?: TaskTarget | null;
+                    checked_by_coordinator?: boolean;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -353,8 +359,10 @@ export interface Database {
                     scheduled_count: number;
                     attendance_count: number;
                     consultation_count: number;
+                    registered_count: number;
                     attendance_rate: number | null;
                     consultation_rate: number | null;
+                    consultation_rate_vs_attendance: number | null;
                     calculated_at: string;
                 };
                 Insert: {
@@ -363,8 +371,10 @@ export interface Database {
                     scheduled_count?: number;
                     attendance_count?: number;
                     consultation_count?: number;
+                    registered_count?: number;
                     attendance_rate?: number | null;
                     consultation_rate?: number | null;
+                    consultation_rate_vs_attendance?: number | null;
                     calculated_at?: string;
                 };
                 Update: {
@@ -373,8 +383,10 @@ export interface Database {
                     scheduled_count?: number;
                     attendance_count?: number;
                     consultation_count?: number;
+                    registered_count?: number;
                     attendance_rate?: number | null;
                     consultation_rate?: number | null;
+                    consultation_rate_vs_attendance?: number | null;
                     calculated_at?: string;
                 };
             };
@@ -464,6 +476,55 @@ export interface Database {
                     error_message?: string | null;
                     details?: SyncDetails | null;
                     created_at?: string;
+                };
+            };
+            holidays: {
+                Row: {
+                    id: string;
+                    date: string;
+                    reason: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    date: string;
+                    reason: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    date?: string;
+                    reason?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            notification_dismissals: {
+                Row: {
+                    id: string;
+                    staff_id: string;
+                    last_dismissed_sync_id: string | null;
+                    dismissed_at: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    staff_id: string;
+                    last_dismissed_sync_id?: string | null;
+                    dismissed_at?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    staff_id?: string;
+                    last_dismissed_sync_id?: string | null;
+                    dismissed_at?: string;
+                    created_at?: string;
+                    updated_at?: string;
                 };
             };
         };
