@@ -28,6 +28,7 @@ import {
   updateMessage as updateMessageShared,
 } from '@/server/services/message';
 import { getMonthsAgoString, getTodayString } from '@/lib/date';
+import { getPatientDayDetail } from '@/server/services/patient-detail';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 
 type PatientRow = Database['public']['Tables']['patients']['Row'];
@@ -259,31 +260,14 @@ export async function getPatientDetail(
   // 모든 쿼리를 병렬로 실행 (patient_id는 이미 알고 있으므로)
   const [
     { data: patient, error: patientError },
-    { data: attendance },
-    { data: consultation },
-    { data: vitals },
+    dayDetail,
     { data: recentConsultations },
   ] = await Promise.all([
     supabase.from('patients')
       .select('id, name, display_name, gender, coordinator_id')
       .eq('id', params.patient_id)
       .single(),
-    supabase.from('attendances')
-      .select('checked_at')
-      .eq('patient_id', params.patient_id)
-      .eq('date', date)
-      .maybeSingle(),
-    supabase.from('consultations')
-      .select('id, note, has_task, task_content, task_target, task_completions(id, is_completed, completed_at, memo, role)')
-      .eq('patient_id', params.patient_id)
-      .eq('date', date)
-      .returns<ConsultationDetailResult[]>()
-      .maybeSingle(),
-    supabase.from('vitals')
-      .select('systolic, diastolic, blood_sugar')
-      .eq('patient_id', params.patient_id)
-      .eq('date', date)
-      .maybeSingle(),
+    getPatientDayDetail(supabase, params.patient_id, date),
     supabase.from('consultations')
       .select('date, note, staff:doctor_id(name)')
       .eq('patient_id', params.patient_id)
@@ -292,6 +276,8 @@ export async function getPatientDetail(
       .limit(10)
       .returns<RecentConsultationResult[]>(),
   ]);
+
+  const { attendance, consultation, vitals } = dayDetail;
 
   if (patientError || !patient) {
     throw new StaffError(
