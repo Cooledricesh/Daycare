@@ -11,6 +11,30 @@ import type {
   Message,
 } from './schema';
 import { NurseError, NurseErrorCode } from './error';
+
+interface NursePatientRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  gender: string | null;
+  coordinator: { name: string } | null;
+}
+
+interface ConsultationJoinRow {
+  id: string;
+  patient_id: string;
+  note: string | null;
+  has_task: boolean;
+  task_content: string | null;
+  task_target: string | null;
+  staff: { name: string } | null;
+  task_completions: { id: string; is_completed: boolean; completed_at: string | null; role: string }[];
+}
+
+interface PrescriptionConsultationRow extends ConsultationJoinRow {
+  created_at: string;
+  patients: { name: string; coordinator_id: string | null };
+}
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 import {
   completeTask as completeTaskShared,
@@ -34,11 +58,12 @@ export async function getNursePatients(
   const date = params.date || getTodayString();
 
   // 1. 모든 활성 환자 조회
-  const { data: patients, error: patientsError } = await (supabase
-    .from('patients') as any)
+  const { data: patients, error: patientsError } = await supabase
+    .from('patients')
     .select('id, name, display_name, gender, coordinator:staff!patients_coordinator_id_fkey(name)')
     .eq('status', 'active')
-    .order('name');
+    .order('name')
+    .returns<NursePatientRow[]>();
 
   if (patientsError) {
     throw new NurseError(
@@ -47,7 +72,7 @@ export async function getNursePatients(
     );
   }
 
-  const patientIds = (patients || []).map((p: any) => p.id);
+  const patientIds = (patients || []).map((p) => p.id);
   if (patientIds.length === 0) return [];
 
   // 오늘 스케줄이 없으면 패턴에서 자동 생성
@@ -59,11 +84,12 @@ export async function getNursePatients(
     { data: consultations },
     { data: scheduledAttendances },
   ] = await Promise.all([
-    (supabase.from('attendances') as any)
+    supabase.from('attendances')
       .select('patient_id, checked_at')
       .in('patient_id', patientIds)
-      .eq('date', date),
-    (supabase.from('consultations') as any)
+      .eq('date', date)
+      .returns<{ patient_id: string; checked_at: string }[]>(),
+    supabase.from('consultations')
       .select(`
         id,
         patient_id,
@@ -75,33 +101,35 @@ export async function getNursePatients(
         task_completions(id, is_completed, completed_at, role)
       `)
       .in('patient_id', patientIds)
-      .eq('date', date),
-    (supabase.from('scheduled_attendances') as any)
+      .eq('date', date)
+      .returns<ConsultationJoinRow[]>(),
+    supabase.from('scheduled_attendances')
       .select('patient_id')
       .eq('date', date)
       .eq('is_cancelled', false)
-      .in('patient_id', patientIds),
+      .in('patient_id', patientIds)
+      .returns<{ patient_id: string }[]>(),
   ]);
 
   // 4. Map 생성
-  const attendanceMap = new Map<string, any>(
-    (attendances || []).map((a: any) => [a.patient_id, a]),
+  const attendanceMap = new Map(
+    (attendances || []).map((a) => [a.patient_id, a] as const),
   );
-  const consultationMap = new Map<string, any>(
-    (consultations || []).map((c: any) => [c.patient_id, c]),
+  const consultationMap = new Map(
+    (consultations || []).map((c) => [c.patient_id, c] as const),
   );
-  const scheduledSet = new Set<string>(
-    (scheduledAttendances || []).map((s: any) => s.patient_id),
+  const scheduledSet = new Set(
+    (scheduledAttendances || []).map((s) => s.patient_id),
   );
 
   // 5. 데이터 변환
-  const hasNurseTask = (c: any) => !!c?.has_task;
+  const hasNurseTask = (c: ConsultationJoinRow | undefined) => !!c?.has_task;
 
-  const items: NursePatientSummary[] = (patients || []).map((p: any) => {
+  const items: NursePatientSummary[] = (patients || []).map((p) => {
     const attendance = attendanceMap.get(p.id);
     const consultation = consultationMap.get(p.id);
     const anyTaskCompletion = consultation?.task_completions?.find(
-      (tc: any) => tc.is_completed,
+      (tc) => tc.is_completed,
     );
 
     return {
@@ -146,8 +174,8 @@ export async function getPrescriptions(
   const date = params.date || getTodayString();
 
   // 오늘 모든 진료 기록 조회 (간호사가 투약 변경/진료 메모 확인용)
-  const query = (supabase
-    .from('consultations') as any)
+  const query = supabase
+    .from('consultations')
     .select(`
       id,
       patient_id,
@@ -160,7 +188,8 @@ export async function getPrescriptions(
       staff!consultations_doctor_id_fkey(name),
       task_completions(id, is_completed, completed_at, role)
     `)
-    .eq('date', date);
+    .eq('date', date)
+    .returns<PrescriptionConsultationRow[]>();
 
   const { data, error } = await query;
 
@@ -176,12 +205,12 @@ export async function getPrescriptions(
   }
 
   // 데이터 변환 및 필터링
-  const hasNurseTask = (c: any) => !!c.has_task;
+  const hasNurseTask = (c: PrescriptionConsultationRow) => !!c.has_task;
 
-  const items: PrescriptionItem[] = (data as any[])
+  const items: PrescriptionItem[] = (data || [])
     .map((c) => {
       const anyTaskCompletion = c.task_completions?.find(
-        (tc: any) => tc.is_completed,
+        (tc) => tc.is_completed,
       );
 
       return {

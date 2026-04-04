@@ -12,6 +12,7 @@ import type {
   PatientAbsenceDetail,
   AbsenceDailyRecord,
 } from './schema';
+import type { Database } from '@/lib/supabase/types';
 
 const PAGE_SIZE = 1000;
 
@@ -33,10 +34,10 @@ function getPeriodDates(period: GetAbsenceOverviewQuery['period']): {
   return { startDate, endDate, halfDate };
 }
 
-async function fetchAllRows(
-  buildQuery: () => any,
-): Promise<any[]> {
-  const all: any[] = [];
+async function fetchAllRows<T>(
+  buildQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> },
+): Promise<T[]> {
+  const all: T[] = [];
   let offset = 0;
 
   while (true) {
@@ -63,9 +64,14 @@ type PatientAttendanceMap = Map<
   { scheduledDates: Set<string>; attendedDates: Set<string> }
 >;
 
+interface PatientDateRow {
+  patient_id: string;
+  date: string;
+}
+
 function buildPatientAttendanceMap(
-  scheduledAttendances: any[],
-  attendances: any[],
+  scheduledAttendances: PatientDateRow[],
+  attendances: PatientDateRow[],
 ): PatientAttendanceMap {
   const map: PatientAttendanceMap = new Map();
 
@@ -135,39 +141,49 @@ function calculateAttendanceRateForPeriod(
   return Math.round((attended.length / scheduled.length) * 100);
 }
 
+interface AbsencePatientRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  room_number: string | null;
+  coordinator: { id: string; name: string } | null;
+}
+
 export async function getAbsenceOverview(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   query: GetAbsenceOverviewQuery,
 ): Promise<AbsenceOverviewItem[]> {
   const { startDate, endDate, halfDate } = getPeriodDates(query.period);
 
-  let patientsQuery = (supabase.from('patients') as any)
+  const patientsQueryBase = supabase.from('patients')
     .select('id, name, display_name, room_number, coordinator:staff!patients_coordinator_id_fkey(id, name)')
     .eq('status', 'active');
 
-  if (query.coordinator_id) {
-    patientsQuery = patientsQuery.eq('coordinator_id', query.coordinator_id);
-  }
+  const patientsQuery = query.coordinator_id
+    ? patientsQueryBase.eq('coordinator_id', query.coordinator_id)
+    : patientsQueryBase;
 
   const [patientsResult, scheduledAttendances, attendances, holidayMap] = await Promise.all([
-    patientsQuery,
-    fetchAllRows(() =>
-      (supabase.from('scheduled_attendances') as any)
+    patientsQuery.returns<AbsencePatientRow[]>(),
+    fetchAllRows<PatientDateRow>(() =>
+      supabase.from('scheduled_attendances')
         .select('patient_id, date')
         .eq('is_cancelled', false)
         .gte('date', startDate)
-        .lte('date', endDate),
+        .lte('date', endDate)
+        .returns<PatientDateRow[]>(),
     ),
-    fetchAllRows(() =>
-      (supabase.from('attendances') as any)
+    fetchAllRows<PatientDateRow>(() =>
+      supabase.from('attendances')
         .select('patient_id, date')
         .gte('date', startDate)
-        .lte('date', endDate),
+        .lte('date', endDate)
+        .returns<PatientDateRow[]>(),
     ),
     getHolidayDatesMap(supabase, startDate, endDate),
   ]);
 
-  const patients: any[] = patientsResult.data || [];
+  const patients = patientsResult.data || [];
 
   const attendanceMap = buildPatientAttendanceMap(scheduledAttendances, attendances);
 
@@ -248,8 +264,30 @@ export async function getAbsenceOverview(
   return result;
 }
 
+interface DetailPatientRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  room_number: string | null;
+  coordinator: { name: string } | null;
+}
+
+interface ScheduledPatternRow {
+  day_of_week: number;
+  is_active: boolean;
+}
+
+interface ScheduledAttendanceRow {
+  date: string;
+  is_cancelled: boolean;
+}
+
+interface AttendanceDateRow {
+  date: string;
+}
+
 export async function getAbsenceDetail(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   patientId: string,
   query: GetAbsenceDetailQuery,
 ): Promise<PatientAbsenceDetail> {
@@ -257,27 +295,31 @@ export async function getAbsenceDetail(
 
   const [patientResult, patternsResult, scheduledResult, attendedResult, holidayMap] =
     await Promise.all([
-      (supabase.from('patients') as any)
+      supabase.from('patients')
         .select('id, name, display_name, room_number, coordinator:staff!patients_coordinator_id_fkey(name)')
         .eq('id', patientId)
+        .returns<DetailPatientRow[]>()
         .single(),
-      (supabase.from('scheduled_patterns') as any)
+      supabase.from('scheduled_patterns')
         .select('day_of_week, is_active')
         .eq('patient_id', patientId)
-        .eq('is_active', true),
-      (supabase.from('scheduled_attendances') as any)
+        .eq('is_active', true)
+        .returns<ScheduledPatternRow[]>(),
+      supabase.from('scheduled_attendances')
         .select('date, is_cancelled')
         .eq('patient_id', patientId)
         .eq('is_cancelled', false)
         .gte('date', startDate)
         .lte('date', endDate)
-        .limit(30000),
-      (supabase.from('attendances') as any)
+        .limit(30000)
+        .returns<ScheduledAttendanceRow[]>(),
+      supabase.from('attendances')
         .select('date')
         .eq('patient_id', patientId)
         .gte('date', startDate)
         .lte('date', endDate)
-        .limit(30000),
+        .limit(30000)
+        .returns<AttendanceDateRow[]>(),
       getHolidayDatesMap(supabase, startDate, endDate),
     ]);
 
@@ -289,16 +331,16 @@ export async function getAbsenceDetail(
   }
 
   const patient = patientResult.data;
-  const patterns: any[] = patternsResult.data || [];
-  const scheduledAttendances: any[] = scheduledResult.data || [];
-  const attendances: any[] = attendedResult.data || [];
+  const patterns = patternsResult.data || [];
+  const scheduledAttendances = scheduledResult.data || [];
+  const attendances = attendedResult.data || [];
 
-  const scheduledDates = new Set(scheduledAttendances.map((s: any) => s.date));
-  const attendedDates = new Set(attendances.map((a: any) => a.date));
+  const scheduledDates = new Set(scheduledAttendances.map(s => s.date));
+  const attendedDates = new Set(attendances.map(a => a.date));
 
-  const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+  const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
   const schedulePattern = patterns
-    .map((p: any) => DAY_KO[p.day_of_week])
+    .map(p => DAY_KO[p.day_of_week])
     .join(',');
 
   const allDates = eachDayOfInterval({
