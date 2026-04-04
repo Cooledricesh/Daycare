@@ -18,7 +18,7 @@
 | **Phase 9** | 로그인/비밀번호 UX | ✅ **완료** | 오류 문구, 아이디 유지, 비밀번호 4자 |
 | **Phase 2** | 타입 안전성 | 🔶 후순위 | 82+ `as any` 제거 필요 |
 | **Phase 3** | 코드 중복 제거 | 🔶 후순위 | task/message 공통 서비스 |
-| **Phase 4** | 테스트 커버리지 | 🔶 후순위 | E2E 테스트 8개 추가됨 |
+| **Phase 4** | 테스트 커버리지 | ✅ **완료** | Unit 63개, 공통서비스 100%, auth 100% |
 | **Phase 6** | 성능 최적화 | 🔶 후순위 | N+1 쿼리 해결 |
 
 ---
@@ -132,13 +132,28 @@ const { data } = await supabase.from('patients').select('id, name, gender')
 - `staff/backend/service.ts` ↔ `nurse/backend/service.ts` (task completion)
 - 여러 곳에서 동일한 날짜 포맷팅 로직
 
-### Phase 4: 테스트 커버리지 확대
+### Phase 4: 테스트 커버리지 확대 ✅
 
-**우선순위**:
-1. P0: 인증/권한 테스트 (`token.test.ts`, `auth.test.ts`)
-2. P1: 핵심 서비스 테스트 (`admin/service.test.ts` 등)
-3. P2: API 라우트 통합 테스트
-4. P3: 컴포넌트 테스트
+**현재 커버리지** (2026-04-04 측정):
+
+| 파일 | Stmts | Branch | Funcs | Lines |
+|------|-------|--------|-------|-------|
+| server/services (task, message) | 100% | 89.13% | 100% | 100% |
+| lib (auth, token) | 91.66% | 50% | 100% | 91.66% |
+| patient/backend | 100% | 90.62% | 100% | 100% |
+| doctor/backend | 25.36% | 20.43% | 15.62% | 27.2% |
+| nurse/backend | 35.71% | 10.71% | 28.57% | 37.66% |
+
+**완료 항목**:
+- ✅ P0: 인증/권한 테스트 (JWT sign/verify, password hash/compare)
+- ✅ P1-공통: task completion, message CRUD 서비스 테스트
+- ✅ P1-feature: nurse, doctor 핵심 함수 테스트
+- ✅ Supabase mock 헬퍼 공통화 (`src/test-utils/supabase-mock.ts`)
+
+**후속 과제 (P2)**:
+- doctor/nurse 서비스의 복잡한 병렬 쿼리 함수 (getWaitingPatients, getNursePatients)
+- API 라우트 통합 테스트
+- 컴포넌트 테스트
 
 ### Phase 6: 성능 최적화
 
