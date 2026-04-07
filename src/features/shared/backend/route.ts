@@ -29,6 +29,7 @@ import { getPatientVitalsQuerySchema } from '@/features/vitals-monitoring/backen
 import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-monitoring/backend/service';
 import absenceRiskRoutes from '@/features/absence-risk/backend/route';
 import notificationRoutes from '@/features/notification/backend/route';
+import attendanceBoardRoutes from '@/features/attendance-board/backend/route';
 
 const updateDisplayNameSchema = z.object({
   display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),
@@ -425,5 +426,9 @@ sharedRoutes.get('/vitals/:patientId', async (c) => {
     throw error;
   }
 });
+
+// ========== Attendance Board ==========
+
+sharedRoutes.route('/attendance-board', attendanceBoardRoutes);
 
 export default sharedRoutes;
