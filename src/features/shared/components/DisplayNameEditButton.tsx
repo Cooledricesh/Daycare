@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,8 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Pencil } from 'lucide-react';
+import { Pencil, User, Camera, Trash2 } from 'lucide-react';
 import { useUpdateDisplayName } from '../hooks/useUpdateDisplayName';
+import { useUploadAvatar, useDeleteAvatar } from '../hooks/usePatientAvatar';
 import { useToast } from '@/hooks/use-toast';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 
@@ -22,6 +23,7 @@ interface DisplayNameEditButtonProps {
   patientId: string;
   patientName: string;
   currentDisplayName: string | null;
+  currentAvatarUrl: string | null;
   variant?: 'icon' | 'text';
 }
 
@@ -29,63 +31,125 @@ export function DisplayNameEditButton({
   patientId,
   patientName,
   currentDisplayName,
+  currentAvatarUrl,
   variant = 'icon',
 }: DisplayNameEditButtonProps) {
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState(currentDisplayName || '');
-  const { mutate, isPending } = useUpdateDisplayName();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [wantsDelete, setWantsDelete] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { mutateAsync: updateName, isPending: isNamePending } = useUpdateDisplayName();
+  const { mutateAsync: uploadAvatar, isPending: isUploadPending } = useUploadAvatar();
+  const { mutateAsync: deleteAvatar, isPending: isDeletePending } = useDeleteAvatar();
+  const isPending = isNamePending || isUploadPending || isDeletePending;
+
   const { toast } = useToast();
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen) {
       setDisplayName(currentDisplayName || '');
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setWantsDelete(false);
+    } else if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
     }
     setOpen(isOpen);
   };
 
-  const handleSave = () => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: '파일 크기 초과',
+        description: '2MB 이하 파일만 업로드 가능합니다.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast({
+        title: '지원하지 않는 형식',
+        description: 'jpg, png, webp 파일만 가능합니다.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setWantsDelete(false);
+  };
+
+  const handleDeletePhoto = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setWantsDelete(true);
+  };
+
+  const handleSave = async () => {
     const trimmed = displayName.trim();
-    const value = trimmed === '' || trimmed === patientName ? null : trimmed;
+    const nameValue = trimmed === '' || trimmed === patientName ? null : trimmed;
 
-    mutate(
-      { patientId, displayName: value },
-      {
-        onSuccess: () => {
-          toast({
-            title: '표시명 변경 완료',
-            description: value
-              ? `"${patientName}" → "${value}" 로 변경되었습니다.`
-              : `표시명이 원래 이름으로 복원되었습니다.`,
-          });
-          setOpen(false);
-        },
-        onError: (error) => {
-          const message = extractApiErrorMessage(error, '표시명 변경에 실패했습니다.');
-          toast({ title: '변경 실패', description: message, variant: 'destructive' });
-        },
-      },
-    );
+    try {
+      await updateName({ patientId, displayName: nameValue });
+      toast({
+        title: '표시명 변경 완료',
+        description: nameValue
+          ? `"${patientName}" → "${nameValue}" 로 변경되었습니다.`
+          : `표시명이 원래 이름으로 복원되었습니다.`,
+      });
+    } catch (error) {
+      const message = extractApiErrorMessage(error, '표시명 변경에 실패했습니다.');
+      toast({ title: '변경 실패', description: message, variant: 'destructive' });
+      return;
+    }
+
+    if (selectedFile) {
+      try {
+        await uploadAvatar({ patientId, file: selectedFile });
+        toast({ title: '사진 업로드 완료' });
+      } catch (error) {
+        const message = extractApiErrorMessage(error, '사진 업로드에 실패했습니다.');
+        toast({ title: '사진 업로드 실패', description: message, variant: 'destructive' });
+      }
+    } else if (wantsDelete && currentAvatarUrl) {
+      try {
+        await deleteAvatar({ patientId });
+        toast({ title: '사진 삭제 완료' });
+      } catch (error) {
+        const message = extractApiErrorMessage(error, '사진 삭제에 실패했습니다.');
+        toast({ title: '사진 삭제 실패', description: message, variant: 'destructive' });
+      }
+    }
+
+    setOpen(false);
   };
 
-  const handleReset = () => {
-    mutate(
-      { patientId, displayName: null },
-      {
-        onSuccess: () => {
-          toast({
-            title: '표시명 초기화',
-            description: `원래 이름 "${patientName}" 으로 복원되었습니다.`,
-          });
-          setDisplayName('');
-          setOpen(false);
-        },
-        onError: (error) => {
-          const message = extractApiErrorMessage(error, '초기화에 실패했습니다.');
-          toast({ title: '초기화 실패', description: message, variant: 'destructive' });
-        },
-      },
-    );
+  const handleReset = async () => {
+    try {
+      await updateName({ patientId, displayName: null });
+      toast({
+        title: '표시명 초기화',
+        description: `원래 이름 "${patientName}" 으로 복원되었습니다.`,
+      });
+      setDisplayName('');
+      setOpen(false);
+    } catch (error) {
+      const message = extractApiErrorMessage(error, '초기화에 실패했습니다.');
+      toast({ title: '초기화 실패', description: message, variant: 'destructive' });
+    }
   };
+
+  const displayAvatarUrl = wantsDelete ? null : (previewUrl || currentAvatarUrl);
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -103,13 +167,54 @@ export function DisplayNameEditButton({
       </DialogTrigger>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>환자 표시명 변경</DialogTitle>
+          <DialogTitle>환자 프로필 편집</DialogTitle>
           <DialogDescription>
-            동명이인 구별을 위해 앱에서 보이는 이름을 변경합니다.
-            실제 환자 이름(병록)은 변경되지 않습니다.
+            프로필 사진과 표시명을 변경합니다.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/* 아바타 미리보기 + 업로드 */}
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+              {displayAvatarUrl ? (
+                <img src={displayAvatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-8 h-8 text-gray-400" />
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isPending}
+              >
+                <Camera className="h-3 w-3 mr-1" />
+                사진 변경
+              </Button>
+              {(currentAvatarUrl || previewUrl) && !wantsDelete && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-500 hover:text-red-600"
+                  onClick={handleDeletePhoto}
+                  disabled={isPending}
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  사진 삭제
+                </Button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+          </div>
           <div>
             <Label className="text-sm text-gray-500">실제 이름 (병록)</Label>
             <p className="text-sm font-medium mt-1">{patientName}</p>
@@ -126,7 +231,7 @@ export function DisplayNameEditButton({
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !isPending) {
-                  handleSave();
+                  void handleSave();
                 }
               }}
             />

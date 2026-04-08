@@ -114,6 +114,7 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
               patientId={patient.id}
               patientName={patient.name}
               currentDisplayName={patient.display_name}
+              currentAvatarUrl={patient.avatar_url}
             />
             {patient.is_consulted && (
               <Badge className="bg-green-100 text-green-700 text-xs">진찰 완료</Badge>
