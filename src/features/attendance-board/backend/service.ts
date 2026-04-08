@@ -6,6 +6,7 @@ import type {
   RoomGroup,
   AttendanceBoardResponse,
   StreakTier,
+  AttendanceStatus,
 } from './schema';
 import { AttendanceBoardError, AttendanceBoardErrorCode } from './error';
 import { getTodayString } from '@/lib/date';
@@ -244,22 +245,36 @@ export async function getAttendanceBoard(
   // 호실별 그룹핑
   const roomGroupsMap = new Map<string, BoardPatient[]>();
 
+  /** 상태 우선순위 (낮을수록 먼저 표시) */
+  const STATUS_PRIORITY: Record<AttendanceStatus, number> = {
+    attended_consulted: 0,
+    attended: 1,
+    absent: 2,
+    not_scheduled: 3,
+  };
+
   for (const patient of patients ?? []) {
     const roomPrefix = patient.room_number
       ? patient.room_number.toString().substring(0, 4)
       : 'unknown';
 
     const isScheduled = scheduledSet.has(patient.id);
-    if (!isScheduled && !attendanceMap.has(patient.id)) {
-      continue;
-    }
+    const isAttended = attendanceMap.has(patient.id);
+    const isConsulted = consultedSet.has(patient.id);
+
+    const status: AttendanceStatus =
+      !isScheduled && !isAttended ? 'not_scheduled' :
+      !isAttended ? 'absent' :
+      isConsulted ? 'attended_consulted' : 'attended';
+
+    const isNotScheduled = status === 'not_scheduled';
 
     const pScheduled = patientScheduledDates.get(patient.id) ?? new Set<string>();
     const pAttended = patientAttendanceDates.get(patient.id) ?? new Set<string>();
     const pConsulted = patientConsultationDates.get(patient.id) ?? new Set<string>();
 
-    const attendanceStreak = calculateConsecutiveAttendance(pScheduled, pAttended, holidayMap, date);
-    const consultationStreak = calculateConsecutiveConsultation(pScheduled, pAttended, pConsulted, holidayMap, date);
+    const attendanceStreak = isNotScheduled ? 0 : calculateConsecutiveAttendance(pScheduled, pAttended, holidayMap, date);
+    const consultationStreak = isNotScheduled ? 0 : calculateConsecutiveConsultation(pScheduled, pAttended, pConsulted, holidayMap, date);
 
     const boardPatient: BoardPatient = {
       id: patient.id,
@@ -267,10 +282,11 @@ export async function getAttendanceBoard(
       display_name: patient.display_name,
       gender: (patient.gender as 'M' | 'F' | null) ?? null,
       room_number: patient.room_number,
-      is_attended: attendanceMap.has(patient.id),
+      status,
+      is_attended: isAttended,
       attendance_time: attendanceMap.get(patient.id) ?? null,
       is_scheduled: isScheduled,
-      is_consulted: consultedSet.has(patient.id),
+      is_consulted: isConsulted,
       has_task: false,
       task_completed: false,
       attendance_streak: attendanceStreak,
@@ -285,15 +301,28 @@ export async function getAttendanceBoard(
 
   const rooms: RoomGroup[] = [];
   let totalAttended = 0;
+  let totalScheduled = 0;
+  let totalConsulted = 0;
+  let totalUnscheduledAttended = 0;
   let totalCount = 0;
 
   const sortedRoomPrefixes = Array.from(roomGroupsMap.keys()).sort();
 
   for (const roomPrefix of sortedRoomPrefixes) {
     const roomPatients = roomGroupsMap.get(roomPrefix) ?? [];
+
+    // 상태 우선순위 정렬
+    roomPatients.sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status]);
+
     const attendedCount = roomPatients.filter((p) => p.is_attended).length;
+    const scheduledCount = roomPatients.filter((p) => p.is_scheduled).length;
+    const consultedCount = roomPatients.filter((p) => p.is_consulted).length;
+    const unscheduledAttendedCount = roomPatients.filter((p) => p.is_attended && !p.is_scheduled).length;
 
     totalAttended += attendedCount;
+    totalScheduled += scheduledCount;
+    totalConsulted += consultedCount;
+    totalUnscheduledAttended += unscheduledAttendedCount;
     totalCount += roomPatients.length;
 
     rooms.push({
@@ -301,6 +330,9 @@ export async function getAttendanceBoard(
       coordinator_name: coordinatorMap.get(roomPrefix) ?? null,
       patients: roomPatients,
       attended_count: attendedCount,
+      scheduled_count: scheduledCount,
+      consulted_count: consultedCount,
+      unscheduled_attended_count: unscheduledAttendedCount,
       total_count: roomPatients.length,
     });
   }
@@ -309,6 +341,9 @@ export async function getAttendanceBoard(
     date,
     rooms,
     total_attended: totalAttended,
+    total_scheduled: totalScheduled,
+    total_consulted: totalConsulted,
+    total_unscheduled_attended: totalUnscheduledAttended,
     total_count: totalCount,
   };
 }

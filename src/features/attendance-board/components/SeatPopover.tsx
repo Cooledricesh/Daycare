@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/popover';
 import { PIXEL_THEME } from '../constants/pixel-palette';
 import { BOARD_CONFIG } from '../constants/board-config';
-import type { BoardPatient, StreakTier } from '../backend/schema';
+import type { AttendanceStatus, BoardPatient, StreakTier } from '../backend/schema';
 
 interface SeatPopoverProps {
   patient: BoardPatient;
@@ -30,7 +30,16 @@ const TIER_LABELS: Record<StreakTier, string> = {
   myth: '🌟 신화!',
 };
 
+const STATUS_DISPLAY: Record<AttendanceStatus, { icon: string; label: string }> = {
+  attended_consulted: { icon: '✅', label: '출석 + 진찰 완료' },
+  attended: { icon: '🟡', label: '출석 (진찰 대기)' },
+  absent: { icon: '❌', label: '미출석 (예정됨)' },
+  not_scheduled: { icon: '⬜', label: '오늘 예정 없음' },
+};
+
 export function SeatPopover({ patient, children }: SeatPopoverProps) {
+  const statusInfo = STATUS_DISPLAY[patient.status];
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -52,24 +61,10 @@ export function SeatPopover({ patient, children }: SeatPopoverProps) {
           </p>
 
           <div className="text-xs space-y-1" style={{ color: PIXEL_THEME.TEXT }}>
-            {patient.is_attended ? (
-              <p>
-                <span className="inline-block w-2 h-2 mr-1" style={{ backgroundColor: PIXEL_THEME.ATTENDED }} />
-                출석 {patient.attendance_time ? formatTime(patient.attendance_time) : ''}
-              </p>
-            ) : (
-              <p>
-                <span className="inline-block w-2 h-2 mr-1" style={{ backgroundColor: PIXEL_THEME.EMPTY_SEAT }} />
-                미출석
-              </p>
-            )}
-
-            {patient.is_consulted && (
-              <p>
-                <span className="inline-block w-2 h-2 mr-1" style={{ backgroundColor: '#4ade80' }} />
-                진찰 완료
-              </p>
-            )}
+            <p>
+              {statusInfo.icon} {statusInfo.label}
+              {patient.attendance_time && ` ${formatTime(patient.attendance_time)}`}
+            </p>
 
             {patient.has_task && (
               <p>

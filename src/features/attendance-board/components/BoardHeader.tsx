@@ -10,6 +10,9 @@ import { BOARD_CONFIG } from '../constants/board-config';
 interface BoardHeaderProps {
   date: string;
   totalAttended: number;
+  totalScheduled: number;
+  totalConsulted: number;
+  totalUnscheduledAttended: number;
   totalCount: number;
   isLoading: boolean;
   onDateChange: (date: string) => void;
@@ -19,6 +22,9 @@ interface BoardHeaderProps {
 export function BoardHeader({
   date,
   totalAttended,
+  totalScheduled,
+  totalConsulted,
+  totalUnscheduledAttended,
   totalCount,
   isLoading,
   onDateChange,
@@ -26,9 +32,13 @@ export function BoardHeader({
 }: BoardHeaderProps) {
   const dateObj = new Date(date + 'T00:00:00');
   const formattedDate = format(dateObj, 'yyyy년 M월 d일 (EEE)', { locale: ko });
-  const attendanceRate = totalCount > 0
-    ? Math.round((totalAttended / totalCount) * 100)
-    : 0;
+
+  const scheduledAttended = totalAttended - totalUnscheduledAttended;
+  const attendanceRate = totalScheduled > 0 ? Math.round((scheduledAttended / totalScheduled) * 100) : 0;
+  const consultationRate = totalAttended > 0 ? Math.round((totalConsulted / totalAttended) * 100) : 0;
+
+  const consultedBarPct = totalScheduled > 0 ? Math.round((totalConsulted / totalScheduled) * 100) : 0;
+  const waitingBarPct = totalScheduled > 0 ? Math.round(((totalAttended - totalConsulted) / totalScheduled) * 100) : 0;
 
   const handlePrevDay = () => {
     const prev = subDays(dateObj, 1);
@@ -55,7 +65,7 @@ export function BoardHeader({
         fontFamily: BOARD_CONFIG.PIXEL_FONT,
       }}
     >
-      {/* 상단: 날짜 네비게이션 */}
+      {/* 날짜 네비게이션 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button
@@ -86,10 +96,7 @@ export function BoardHeader({
             variant="ghost"
             size="sm"
             className="h-7 rounded-none text-[10px] px-2"
-            style={{
-              border: `1px solid ${PIXEL_THEME.BORDER}`,
-              color: PIXEL_THEME.TEXT,
-            }}
+            style={{ border: `1px solid ${PIXEL_THEME.BORDER}`, color: PIXEL_THEME.TEXT }}
             onClick={handleToday}
           >
             오늘
@@ -108,37 +115,63 @@ export function BoardHeader({
         </Button>
       </div>
 
-      {/* 하단: 전체 출석률 */}
-      <div className="flex items-center gap-3">
-        <span className="text-xs" style={{ color: PIXEL_THEME.TEXT }}>
-          전체 출석
-        </span>
-        <div className="flex-1 relative">
-          <div
-            className="w-full h-4"
-            style={{
-              backgroundColor: PIXEL_THEME.EMPTY_SEAT,
-              border: `2px solid ${PIXEL_THEME.BORDER}`,
-              borderRadius: 0,
-            }}
-          >
-            <div
-              className="h-full transition-all duration-700 ease-out"
-              style={{
-                width: `${attendanceRate}%`,
-                backgroundColor: PIXEL_THEME.ATTENDED,
-                imageRendering: 'pixelated',
-              }}
-            />
-          </div>
+      {/* 출석율 + 진찰율 */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: PIXEL_THEME.TEXT }}>
+            출석 <b>{scheduledAttended}/{totalScheduled}</b> ({attendanceRate}%)
+          </span>
         </div>
-        <span
-          className="text-xs font-bold min-w-[80px] text-right"
-          style={{ color: PIXEL_THEME.TEXT }}
-        >
-          {totalAttended}/{totalCount} ({attendanceRate}%)
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: PIXEL_THEME.TEXT }}>
+            진찰 <b>{totalConsulted}/{totalAttended}</b> ({consultationRate}%)
+          </span>
+        </div>
+        {totalUnscheduledAttended > 0 && (
+          <span className="text-[10px] font-bold" style={{ color: '#ef5350' }}>
+            ⚠ 비예정 +{totalUnscheduledAttended}명
+          </span>
+        )}
       </div>
+
+      {/* 3-segment 진행 바 */}
+      <div
+        className="w-full h-4 flex"
+        style={{
+          backgroundColor: PIXEL_THEME.EMPTY_SEAT,
+          border: `2px solid ${PIXEL_THEME.BORDER}`,
+          borderRadius: 0,
+        }}
+      >
+        <div
+          className="h-full transition-all duration-700 ease-out"
+          style={{ width: `${Math.min(consultedBarPct, 100)}%`, backgroundColor: PIXEL_THEME.ATTENDED }}
+        />
+        <div
+          className="h-full transition-all duration-700 ease-out"
+          style={{ width: `${Math.min(Math.max(waitingBarPct, 0), 100)}%`, backgroundColor: '#efb96b' }}
+        />
+      </div>
+
+      {/* 범례 */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <LegendItem color="#4ade80" label="진찰 완료" />
+        <LegendItem color="#efb96b" label="진찰 대기" />
+        <LegendItem color="#d4d0c8" label="미출석" />
+        <LegendItem color="#c0b8a8" label="예정 없음" />
+      </div>
+    </div>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span
+        className="inline-block w-2.5 h-2.5"
+        style={{ backgroundColor: color, border: '1px solid rgba(0,0,0,0.15)' }}
+      />
+      <span className="text-[10px]" style={{ color: '#5c4a3a' }}>{label}</span>
     </div>
   );
 }

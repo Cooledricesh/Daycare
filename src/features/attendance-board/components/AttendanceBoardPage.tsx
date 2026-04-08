@@ -39,6 +39,9 @@ export function AttendanceBoardPage() {
       <BoardHeader
         date={date}
         totalAttended={data?.total_attended ?? 0}
+        totalScheduled={data?.total_scheduled ?? 0}
+        totalConsulted={data?.total_consulted ?? 0}
+        totalUnscheduledAttended={data?.total_unscheduled_attended ?? 0}
         totalCount={data?.total_count ?? 0}
         isLoading={isLoading}
         onDateChange={setDate}
