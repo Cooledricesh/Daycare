@@ -37,13 +37,16 @@ export function PatientAvatar({
       )}
     >
       {showImage ? (
-        <img
-          src={imgSrc!}
-          alt=""
-          loading="lazy"
-          className="w-full h-full object-cover"
-          onError={() => setImgError(true)}
-        />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- 외부 Supabase Storage URL이라 next/image 불필요 */}
+          <img
+            src={imgSrc!}
+            alt=""
+            loading="lazy"
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        </>
       ) : (
         <User className={cn(sizeClasses.icon, iconColorClass)} />
       )}

@@ -225,6 +225,7 @@ export async function getMyPatients(
         id: p.id,
         name: p.name,
         display_name: p.display_name ?? null,
+        // TODO: Supabase .select() 문자열 리터럴은 타입을 좁히지 못함. .returns<T>() 패턴으로 전환 시 캐스트 제거 가능
         avatar_url: (p as unknown as { avatar_url: string | null }).avatar_url ?? null,
         gender: p.gender || null,
         is_attended: !!attendance,
@@ -298,6 +299,7 @@ export async function getPatientDetail(
     id: patient.id,
     name: patient.name,
     display_name: patient.display_name ?? null,
+    // TODO: Supabase .select() 문자열 리터럴은 타입을 좁히지 못함. .returns<T>() 패턴으로 전환 시 캐스트 제거 가능
     avatar_url: (patient as unknown as { avatar_url: string | null }).avatar_url ?? null,
     gender: patient.gender,
     attendance: {
