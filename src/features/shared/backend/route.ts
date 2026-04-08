@@ -30,7 +30,8 @@ import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-mon
 import absenceRiskRoutes from '@/features/absence-risk/backend/route';
 import notificationRoutes from '@/features/notification/backend/route';
 import attendanceBoardRoutes from '@/features/attendance-board/backend/route';
-import { uploadPatientAvatar, deletePatientAvatar, AvatarError } from './service';
+import { uploadPatientAvatar, deletePatientAvatar } from './service';
+import { AvatarError } from './error';
 
 const updateDisplayNameSchema = z.object({
   display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),

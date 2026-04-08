@@ -1,17 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import sharp from 'sharp';
+import {
+  AVATAR_ALLOWED_MIME_TYPES,
+  AVATAR_MAX_FILE_SIZE,
+  AVATAR_MAX_DIMENSION,
+  AVATAR_QUALITY,
+  AVATAR_BUCKET,
+  type AvatarAllowedMimeType,
+} from '../constants/avatar';
+import { AvatarError } from './error';
 
-const AVATAR_BUCKET = 'patient-avatars';
-const AVATAR_MAX_SIZE = 200;
-const AVATAR_QUALITY = 80;
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-
-type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
-
-function isAllowedMimeType(type: string): type is AllowedMimeType {
-  return (ALLOWED_MIME_TYPES as readonly string[]).includes(type);
+function isAllowedMimeType(type: string): type is AvatarAllowedMimeType {
+  return (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(type);
 }
 
 export async function uploadPatientAvatar(
@@ -23,13 +24,13 @@ export async function uploadPatientAvatar(
     throw new AvatarError('INVALID_FILE_TYPE', '지원하지 않는 파일 형식입니다. (jpg, png, webp만 가능)');
   }
 
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.size > AVATAR_MAX_FILE_SIZE) {
     throw new AvatarError('FILE_TOO_LARGE', '파일 크기가 2MB를 초과합니다.');
   }
 
   const arrayBuffer = await file.arrayBuffer();
   const resizedBuffer = await sharp(Buffer.from(arrayBuffer))
-    .resize(AVATAR_MAX_SIZE, AVATAR_MAX_SIZE, { fit: 'cover' })
+    .resize(AVATAR_MAX_DIMENSION, AVATAR_MAX_DIMENSION, { fit: 'cover' })
     .webp({ quality: AVATAR_QUALITY })
     .toBuffer();
 
@@ -83,12 +84,3 @@ export async function deletePatientAvatar(
   }
 }
 
-export class AvatarError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'AvatarError';
-  }
-}

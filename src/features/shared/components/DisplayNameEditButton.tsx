@@ -18,6 +18,7 @@ import { useUpdateDisplayName } from '../hooks/useUpdateDisplayName';
 import { useUploadAvatar, useDeleteAvatar } from '../hooks/usePatientAvatar';
 import { useToast } from '@/hooks/use-toast';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
+import { AVATAR_ALLOWED_MIME_TYPES, AVATAR_MAX_FILE_SIZE } from '../constants/avatar';
 
 interface DisplayNameEditButtonProps {
   patientId: string;
@@ -64,7 +65,7 @@ export function DisplayNameEditButton({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > AVATAR_MAX_FILE_SIZE) {
       toast({
         title: '파일 크기 초과',
         description: '2MB 이하 파일만 업로드 가능합니다.',
@@ -73,7 +74,7 @@ export function DisplayNameEditButton({
       return;
     }
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (!(AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)) {
       toast({
         title: '지원하지 않는 형식',
         description: 'jpg, png, webp 파일만 가능합니다.',
@@ -177,7 +178,10 @@ export function DisplayNameEditButton({
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
               {displayAvatarUrl ? (
-                <img src={displayAvatarUrl} alt="" className="w-full h-full object-cover" />
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 외부 Supabase Storage URL이라 next/image 불필요 */}
+                  <img src={displayAvatarUrl} alt="" className="w-full h-full object-cover" />
+                </>
               ) : (
                 <User className="w-8 h-8 text-gray-400" />
               )}
@@ -209,7 +213,7 @@ export function DisplayNameEditButton({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept={AVATAR_ALLOWED_MIME_TYPES.join(',')}
                 className="hidden"
                 onChange={handleFileSelect}
               />
