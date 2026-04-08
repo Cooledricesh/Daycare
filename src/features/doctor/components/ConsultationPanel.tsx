@@ -11,11 +11,11 @@ import {
   Stethoscope,
   MessageSquare,
   History,
-  User,
   CheckCircle2,
   Check,
   Pencil,
 } from 'lucide-react';
+import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
 import { useCreateConsultation } from '../hooks/useCreateConsultation';
 import { usePatientMessages } from '../hooks/usePatientMessages';
 import { usePatientHistory } from '../hooks/usePatientHistory';
@@ -162,9 +162,7 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
       {/* 환자 정보 헤더 */}
       <div className="flex items-start justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-            <User className="w-5 h-5 text-purple-600" />
-          </div>
+          <PatientAvatar avatarUrl={patient.avatar_url} size="lg" fallbackColorClass="bg-purple-100" iconColorClass="text-purple-600" />
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>

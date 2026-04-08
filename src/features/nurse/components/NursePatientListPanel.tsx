@@ -4,10 +4,12 @@ import { useMemo, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, RefreshCw, User, Check, Clock, AlertCircle, Bell } from 'lucide-react';
+import { Search, RefreshCw, Check, Clock, AlertCircle, Bell } from 'lucide-react';
 import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
+import { getPatientDisplayName } from '@/lib/patient';
+import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
 import type { NursePatientSummary } from '../backend/schema';
 
 type FilterTab = 'all' | 'scheduled' | 'completed';
@@ -180,12 +182,10 @@ export function NursePatientListPanel({
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <User className="w-3.5 h-3.5 text-gray-500" />
-                    </div>
+                    <PatientAvatar avatarUrl={patient.avatar_url} size="sm" fallbackColorClass="bg-gray-100" iconColorClass="text-gray-500" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-sm truncate">{patient.name}</span>
+                        <span className="font-medium text-sm truncate">{getPatientDisplayName(patient)}</span>
                         <span className="text-xs text-gray-400">
                           {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
                         </span>

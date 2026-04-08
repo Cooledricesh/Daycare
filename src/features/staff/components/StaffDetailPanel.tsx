@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { User } from 'lucide-react';
+import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -104,9 +105,7 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
     <div className="p-6 h-full">
       {/* 환자 정보 헤더 */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-          <User className="w-5 h-5 text-emerald-600" />
-        </div>
+        <PatientAvatar avatarUrl={patient.avatar_url} size="lg" fallbackColorClass="bg-emerald-100" iconColorClass="text-emerald-600" />
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>
