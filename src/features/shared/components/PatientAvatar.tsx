@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,8 +23,10 @@ export function PatientAvatar({
   iconColorClass,
 }: PatientAvatarProps) {
   const [imgError, setImgError] = useState(false);
+  const cacheBustRef = useRef(Date.now());
   const sizeClasses = SIZE_MAP[size];
   const showImage = avatarUrl && !imgError;
+  const imgSrc = avatarUrl ? `${avatarUrl}?t=${cacheBustRef.current}` : null;
 
   return (
     <div
@@ -36,7 +38,7 @@ export function PatientAvatar({
     >
       {showImage ? (
         <img
-          src={avatarUrl}
+          src={imgSrc!}
           alt=""
           loading="lazy"
           className="w-full h-full object-cover"

@@ -225,7 +225,7 @@ export async function getMyPatients(
         id: p.id,
         name: p.name,
         display_name: p.display_name ?? null,
-        avatar_url: (p as Pick<PatientRow, 'avatar_url'>).avatar_url ?? null,
+        avatar_url: (p as unknown as { avatar_url: string | null }).avatar_url ?? null,
         gender: p.gender || null,
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
@@ -298,7 +298,7 @@ export async function getPatientDetail(
     id: patient.id,
     name: patient.name,
     display_name: patient.display_name ?? null,
-    avatar_url: (patient as Pick<PatientRow, 'avatar_url'>).avatar_url ?? null,
+    avatar_url: (patient as unknown as { avatar_url: string | null }).avatar_url ?? null,
     gender: patient.gender,
     attendance: {
       is_attended: !!attendance,
