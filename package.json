@@ -53,6 +53,7 @@
     "react-use": "^17",
     "recharts": "^3.5.1",
     "server-only": "0.0.1",
+    "sharp": "^0.34.5",
     "ts-pattern": "^5",
     "zod": "^3",
     "zustand": "^4"
@@ -68,6 +69,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sharp": "^0.31.1",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.0.14",
     "baseline-browser-mapping": "^2.9.19",
