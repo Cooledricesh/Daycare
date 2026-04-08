@@ -30,6 +30,7 @@ import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-mon
 import absenceRiskRoutes from '@/features/absence-risk/backend/route';
 import notificationRoutes from '@/features/notification/backend/route';
 import attendanceBoardRoutes from '@/features/attendance-board/backend/route';
+import { uploadPatientAvatar, deletePatientAvatar, AvatarError } from './service';
 
 const updateDisplayNameSchema = z.object({
   display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),
@@ -76,6 +77,55 @@ sharedRoutes.patch('/patients/:id/display-name', async (c) => {
   }
 
   return respond(c, success({ patient: data }, 200));
+});
+
+// ========== Patient Avatar ==========
+
+/**
+ * POST /api/shared/patients/:id/avatar
+ * 환자 프로필 사진 업로드
+ */
+sharedRoutes.post('/patients/:id/avatar', async (c) => {
+  const supabase = c.get('supabase');
+  const patientId = c.req.param('id');
+
+  const formData = await c.req.formData();
+  const file = formData.get('file') as File | null;
+
+  if (!file) {
+    return respond(c, failure(400, 'FILE_REQUIRED', '파일을 첨부해주세요'));
+  }
+
+  try {
+    const result = await uploadPatientAvatar(supabase, patientId, file);
+    const cacheBustUrl = `${result.avatarUrl}?t=${Date.now()}`;
+    return respond(c, success({ avatar_url: cacheBustUrl }, 200));
+  } catch (err) {
+    if (err instanceof AvatarError) {
+      const status = err.code === 'INVALID_FILE_TYPE' || err.code === 'FILE_TOO_LARGE' ? 400 : 500;
+      return respond(c, failure(status, err.code, err.message));
+    }
+    throw err;
+  }
+});
+
+/**
+ * DELETE /api/shared/patients/:id/avatar
+ * 환자 프로필 사진 삭제
+ */
+sharedRoutes.delete('/patients/:id/avatar', async (c) => {
+  const supabase = c.get('supabase');
+  const patientId = c.req.param('id');
+
+  try {
+    await deletePatientAvatar(supabase, patientId);
+    return respond(c, success(null, 200));
+  } catch (err) {
+    if (err instanceof AvatarError) {
+      return respond(c, failure(500, err.code, err.message));
+    }
+    throw err;
+  }
 });
 
 // ========== Tasks & Messages Routes (전 역할 접근, 코디는 담당 환자만) ==========
