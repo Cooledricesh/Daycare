@@ -111,6 +111,7 @@ interface PatientWithCoordinator {
   id: string;
   name: string;
   display_name: string | null;
+  avatar_url: string | null;
   gender: Gender | null;
   room_number: string | null;
   coordinator: { name: string } | null;
@@ -507,6 +508,7 @@ export async function getWaitingPatients(
       id,
       name,
       display_name,
+      avatar_url,
       gender,
       room_number,
       coordinator:coordinator_id(name)
@@ -646,6 +648,7 @@ export async function getWaitingPatients(
     id: p.patients.id,
     name: p.patients.name,
     display_name: p.patients.display_name ?? null,
+    avatar_url: p.patients.avatar_url ?? null,
     gender: p.patients.gender,
     room_number: p.patients.room_number,
     coordinator_name: p.patients.coordinator?.name || null,

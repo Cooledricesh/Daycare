@@ -127,6 +127,7 @@ export interface WaitingPatient {
   id: string;
   name: string;
   display_name: string | null;
+  avatar_url: string | null;
   gender: 'M' | 'F' | null;
   room_number: string | null;
   coordinator_name: string | null;

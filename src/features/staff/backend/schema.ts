@@ -38,6 +38,7 @@ export type PatientSummary = {
   id: string;
   name: string;
   display_name: string | null;
+  avatar_url: string | null;
   gender: string | null;
   is_attended: boolean;
   attendance_time: string | null;
@@ -54,6 +55,7 @@ export type PatientDetail = {
   id: string;
   name: string;
   display_name: string | null;
+  avatar_url: string | null;
   gender: string | null;
   attendance: {
     is_attended: boolean;

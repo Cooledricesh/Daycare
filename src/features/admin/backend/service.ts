@@ -68,6 +68,7 @@ interface PatientWithJoins {
   id: string;
   name: string;
   display_name: string | null;
+  avatar_url: string | null;
   gender: PatientRow['gender'];
   room_number: string | null;
   patient_id_no: string | null;
@@ -143,6 +144,7 @@ export async function getPatients(
       id,
       name,
       display_name,
+      avatar_url,
       gender,
       room_number,
       patient_id_no,
@@ -186,6 +188,7 @@ export async function getPatients(
     id: p.id,
     name: p.name,
     display_name: p.display_name ?? null,
+    avatar_url: p.avatar_url ?? null,
     gender: p.gender,
     room_number: p.room_number,
     patient_id_no: p.patient_id_no,
@@ -218,6 +221,7 @@ export async function getPatientDetail(
       id,
       name,
       display_name,
+      avatar_url,
       gender,
       room_number,
       patient_id_no,
@@ -252,6 +256,7 @@ export async function getPatientDetail(
     id: patientData.id,
     name: patientData.name,
     display_name: patientData.display_name ?? null,
+    avatar_url: patientData.avatar_url ?? null,
     gender: patientData.gender,
     room_number: patientData.room_number,
     patient_id_no: patientData.patient_id_no,
@@ -340,6 +345,7 @@ export async function createPatient(
     id: patient.id,
     name: patient.name,
     display_name: patient.display_name ?? null,
+    avatar_url: patient.avatar_url ?? null,
     gender: patient.gender,
     room_number: patient.room_number,
     patient_id_no: patient.patient_id_no,

@@ -146,7 +146,7 @@ export async function getMyPatients(
     // 환자 목록 조회: show_all이면 전체, 아니면 담당만
     let patientsQuery = supabase
       .from('patients')
-      .select('id, name, display_name, gender')
+      .select('id, name, display_name, avatar_url, gender')
       .eq('status', 'active');
 
     if (!showAll) {
@@ -225,6 +225,7 @@ export async function getMyPatients(
         id: p.id,
         name: p.name,
         display_name: p.display_name ?? null,
+        avatar_url: (p as Pick<PatientRow, 'avatar_url'>).avatar_url ?? null,
         gender: p.gender || null,
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
@@ -264,7 +265,7 @@ export async function getPatientDetail(
     { data: recentConsultations },
   ] = await Promise.all([
     supabase.from('patients')
-      .select('id, name, display_name, gender, coordinator_id')
+      .select('id, name, display_name, avatar_url, gender, coordinator_id')
       .eq('id', params.patient_id)
       .single(),
     getPatientDayDetail(supabase, params.patient_id, date),
@@ -297,6 +298,7 @@ export async function getPatientDetail(
     id: patient.id,
     name: patient.name,
     display_name: patient.display_name ?? null,
+    avatar_url: (patient as Pick<PatientRow, 'avatar_url'>).avatar_url ?? null,
     gender: patient.gender,
     attendance: {
       is_attended: !!attendance,
