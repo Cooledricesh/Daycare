@@ -105,6 +105,7 @@ export interface Database {
                     id: string;
                     name: string;
                     display_name: string | null;
+                    avatar_url: string | null;
                     gender: Gender | null;
                     room_number: string | null;
                     patient_id_no: string | null;
@@ -119,6 +120,7 @@ export interface Database {
                     id?: string;
                     name: string;
                     display_name?: string | null;
+                    avatar_url?: string | null;
                     gender?: Gender | null;
                     room_number?: string | null;
                     patient_id_no?: string | null;
@@ -133,6 +135,7 @@ export interface Database {
                     id?: string;
                     name?: string;
                     display_name?: string | null;
+                    avatar_url?: string | null;
                     gender?: Gender | null;
                     room_number?: string | null;
                     patient_id_no?: string | null;
