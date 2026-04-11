@@ -31,7 +31,7 @@ export function useMultiMonthAttendanceCalendar(
         const response = await apiClient.get<CalendarData>(
           `/api/shared/patient/${patientId}/attendance-calendar?${params}`,
         );
-        return { year, month, data: response.data };
+        return response.data;
       },
       enabled: enabled && !!patientId,
       staleTime: 5 * 60 * 1000,
@@ -42,7 +42,9 @@ export function useMultiMonthAttendanceCalendar(
     isLoading: queries.some((q) => q.isLoading),
     isError: queries.some((q) => q.isError),
     months: queries
-      .map((q) => q.data)
-      .filter((d): d is { year: number; month: number; data: CalendarData } => !!d),
+      .map((q, idx): { year: number; month: number; data: CalendarData } | null =>
+        q.data ? { year: months[idx].year, month: months[idx].month, data: q.data } : null,
+      )
+      .filter((m): m is { year: number; month: number; data: CalendarData } => m !== null),
   };
 }
