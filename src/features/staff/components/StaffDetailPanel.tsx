@@ -18,6 +18,7 @@ import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { MessageForm } from './MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
+import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getTodayString } from '@/lib/date';
 import { getPatientDisplayName } from '@/lib/patient';
@@ -208,6 +209,9 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
 
           {/* 출석 캘린더 */}
           <AttendanceCalendar patientId={patient.id} birthDate={patient.birth_date} />
+
+          {/* 출석 히트맵 */}
+          <AttendanceHeatmap patientId={patient.id} />
         </div>
 
         {/* 우측: 히스토리 */}

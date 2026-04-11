@@ -20,6 +20,7 @@ import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { NurseMessageForm } from './NurseMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
+import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { getTodayString } from '@/lib/date';
 import type { NursePatientSummary } from '../backend/schema';
 
@@ -212,6 +213,9 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
 
           {/* 출석 캘린더 */}
           <AttendanceCalendar patientId={patient.id} birthDate={patient.birth_date} />
+
+          {/* 출석 히트맵 */}
+          <AttendanceHeatmap patientId={patient.id} />
         </div>
 
         {/* 우측: 히스토리 */}
