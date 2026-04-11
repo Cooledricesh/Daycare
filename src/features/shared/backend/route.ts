@@ -29,6 +29,8 @@ import { getPatientVitalsQuerySchema } from '@/features/vitals-monitoring/backen
 import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-monitoring/backend/service';
 import absenceRiskRoutes from '@/features/absence-risk/backend/route';
 import highlightsRoutes from '@/features/highlights/backend/route';
+import { getPatientTimeline } from '@/features/patient-timeline/backend/service';
+import { PatientTimelineError, PatientTimelineErrorCode } from '@/features/patient-timeline/backend/error';
 import notificationRoutes from '@/features/notification/backend/route';
 import attendanceBoardRoutes from '@/features/attendance-board/backend/route';
 import { uploadPatientAvatar, deletePatientAvatar } from './service';
@@ -416,6 +418,25 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
       .map((s) => s.date),
     consulted_dates: (consultations || []).map((con) => con.date),
   }, 200));
+});
+
+/**
+ * GET /api/shared/patient/:id/timeline
+ * 환자 타임라인 이벤트 (입원~오늘)
+ */
+sharedRoutes.get('/patient/:id/timeline', async (c) => {
+  const supabase = c.get('supabase');
+  const patientId = c.req.param('id');
+  try {
+    const result = await getPatientTimeline(supabase, patientId);
+    return respond(c, success(result, 200));
+  } catch (err) {
+    if (err instanceof PatientTimelineError) {
+      const status = err.code === PatientTimelineErrorCode.PATIENT_NOT_FOUND ? 404 : 500;
+      return respond(c, failure(status, err.code, err.message));
+    }
+    throw err;
+  }
 });
 
 // ========== Notifications ==========
