@@ -31,6 +31,7 @@ import { Loader2 } from 'lucide-react';
 const patientFormSchema = z.object({
   name: z.string().min(1, '이름을 입력해주세요').max(100),
   gender: z.enum(['M', 'F', '']).optional(),
+  birth_date: z.string().optional(),
   room_number: z.string().max(10).optional(),
   patient_id_no: z.string().max(20).optional(),
   coordinator_id: z.string().optional(),
@@ -74,6 +75,7 @@ export function PatientFormModal({
     defaultValues: {
       name: '',
       gender: '',
+      birth_date: '',
       room_number: '',
       patient_id_no: '',
       coordinator_id: '',
@@ -92,6 +94,7 @@ export function PatientFormModal({
       reset({
         name: patient.name,
         gender: patient.gender || '',
+        birth_date: patient.birth_date || '',
         room_number: patient.room_number || '',
         patient_id_no: patient.patient_id_no || '',
         coordinator_id: patient.coordinator_id || '',
@@ -106,6 +109,7 @@ export function PatientFormModal({
       reset({
         name: '',
         gender: '',
+        birth_date: '',
         room_number: '',
         patient_id_no: '',
         coordinator_id: '',
@@ -122,6 +126,7 @@ export function PatientFormModal({
       const payload = {
         name: data.name,
         gender: data.gender === '' ? undefined : data.gender,
+        birth_date: data.birth_date || null,
         room_number: data.room_number || undefined,
         patient_id_no: data.patient_id_no || undefined,
         coordinator_id: data.coordinator_id || undefined,
@@ -229,6 +234,18 @@ export function PatientFormModal({
                 </div>
               </div>
             </RadioGroup>
+          </div>
+
+          {/* 생년월일 */}
+          <div className="space-y-2">
+            <Label htmlFor="birth_date">생년월일</Label>
+            <Input
+              id="birth_date"
+              type="date"
+              {...register('birth_date')}
+              disabled={isLoading}
+            />
+            <p className="text-xs text-gray-400">선택 사항 — 생일 알림/표시에 사용됩니다</p>
           </div>
 
           {/* 주치의 */}
