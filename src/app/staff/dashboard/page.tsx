@@ -8,6 +8,7 @@ import { StaffPatientListPanel } from '@/features/staff/components/StaffPatientL
 import { StaffDetailPanel } from '@/features/staff/components/StaffDetailPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { KeyboardShortcutHelpModal } from '@/components/KeyboardShortcutHelpModal';
+import { TodayHighlightCard } from '@/features/highlights/components/TodayHighlightCard';
 import { getTodayString } from '@/lib/date';
 import { usePatientListNavigation } from '@/hooks/usePatientListNavigation';
 import { useToast } from '@/hooks/use-toast';
@@ -208,6 +209,9 @@ export default function StaffDashboardPage() {
 
   return (
     <>
+      <div className="px-4 pt-4">
+        <TodayHighlightCard patientLinkPrefix="/staff/patient" className="mb-4" />
+      </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}
         onBack={() => nav.setSelectedPatientId(null)}

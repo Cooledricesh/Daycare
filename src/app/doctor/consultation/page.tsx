@@ -6,6 +6,7 @@ import { PatientListPanel } from '@/features/doctor/components/PatientListPanel'
 import { ConsultationPanel } from '@/features/doctor/components/ConsultationPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { KeyboardShortcutHelpModal } from '@/components/KeyboardShortcutHelpModal';
+import { TodayHighlightCard } from '@/features/highlights/components/TodayHighlightCard';
 import { usePatientListNavigation } from '@/hooks/usePatientListNavigation';
 
 type FilterTab = 'all' | 'waiting' | 'completed';
@@ -27,6 +28,9 @@ export default function DoctorConsultationPage() {
 
   return (
     <>
+      <div className="px-4 pt-4">
+        <TodayHighlightCard patientLinkPrefix="/doctor/history" className="mb-4" />
+      </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}
         onBack={() => nav.setSelectedPatientId(null)}
