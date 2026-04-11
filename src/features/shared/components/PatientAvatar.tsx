@@ -23,6 +23,7 @@ export function PatientAvatar({
   iconColorClass,
 }: PatientAvatarProps) {
   const [imgError, setImgError] = useState(false);
+  // eslint-disable-next-line react-hooks/purity -- useRef 초기값으로만 사용되며 실제 렌더 출력에 영향 없음
   const cacheBustRef = useRef(Date.now());
   const sizeClasses = SIZE_MAP[size];
   const showImage = avatarUrl && !imgError;
