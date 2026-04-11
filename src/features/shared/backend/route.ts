@@ -28,6 +28,7 @@ import { comparePassword, hashPassword } from '@/lib/auth';
 import { getPatientVitalsQuerySchema } from '@/features/vitals-monitoring/backend/schema';
 import { getVitalsOverview, getPatientVitalsDetail } from '@/features/vitals-monitoring/backend/service';
 import absenceRiskRoutes from '@/features/absence-risk/backend/route';
+import highlightsRoutes from '@/features/highlights/backend/route';
 import notificationRoutes from '@/features/notification/backend/route';
 import attendanceBoardRoutes from '@/features/attendance-board/backend/route';
 import { uploadPatientAvatar, deletePatientAvatar } from './service';
@@ -424,6 +425,10 @@ sharedRoutes.route('/notifications', notificationRoutes);
 // ========== Absence Risk ==========
 
 sharedRoutes.route('/absence-risk', absenceRiskRoutes);
+
+// ========== Today's Highlights ==========
+
+sharedRoutes.route('/highlights', highlightsRoutes);
 
 // ========== Vitals Monitoring ==========
 
