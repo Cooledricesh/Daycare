@@ -202,7 +202,7 @@ function FlatItem({ consultation, onDelete }: { consultation: ConsultationRecord
   if (!hasContent(consultation)) return null;
   const showName = hasDoctorName(consultation.doctor_name);
   return (
-    <div className="py-2.5 border-b last:border-b-0">
+    <div className="py-2.5 border-b last:border-b-0" data-date={consultation.date}>
       <div className="text-sm">
         <span className="font-medium text-gray-900">{formatDate(consultation.date)}</span>
         {showName && <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>}
@@ -256,7 +256,7 @@ function TimelineDateGroup({
   const isToday = date === (todayDate || getTodayString());
 
   return (
-    <div className="py-2.5 border-b last:border-b-0">
+    <div className="py-2.5 border-b last:border-b-0" data-date={date}>
       <div className="text-sm">
         <span className="font-medium text-gray-900">{formatDate(date)}</span>
         {showName && <span className="text-gray-400 ml-1.5 text-xs">({consultation.doctor_name})</span>}
