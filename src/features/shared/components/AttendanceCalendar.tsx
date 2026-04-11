@@ -10,21 +10,24 @@ import {
   format,
   isSameMonth,
   isToday,
+  parseISO,
+  isValid,
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Cake } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DAY_NAMES_KO } from '@/lib/date';
 import { usePatientAttendanceCalendar } from '../hooks/usePatientAttendanceCalendar';
 
 interface AttendanceCalendarProps {
   patientId: string;
+  birthDate?: string | null;
   className?: string;
 }
 
-export function AttendanceCalendar({ patientId, className }: AttendanceCalendarProps) {
+export function AttendanceCalendar({ patientId, birthDate, className }: AttendanceCalendarProps) {
   const [viewDate, setViewDate] = useState(new Date());
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth() + 1;
@@ -47,6 +50,13 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
 
   const prevMonth = () => setViewDate(new Date(year, month - 2, 1));
   const nextMonth = () => setViewDate(new Date(year, month, 1));
+
+  const birthMonthDay = (() => {
+    if (!birthDate) return null;
+    const parsed = parseISO(birthDate);
+    if (!isValid(parsed)) return null;
+    return `${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  })();
 
   return (
     <Card className={className}>
@@ -103,7 +113,7 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
                   <div
                     key={dateStr}
                     className={cn(
-                      'h-7 flex items-center justify-center gap-0.5 text-[11px] rounded-md',
+                      'relative h-7 flex items-center justify-center gap-0.5 text-[11px] rounded-md',
                       !inMonth && 'text-gray-200',
                       inMonth && !attended && !scheduledAbsent && 'text-gray-700',
                       today && 'font-bold ring-1 ring-gray-300',
@@ -114,6 +124,9 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
                     <span className="leading-none">{format(day, 'd')}</span>
                     {attended && consulted && (
                       <span className="text-[9px] text-emerald-600 font-bold leading-none">✓</span>
+                    )}
+                    {birthMonthDay && dateStr.slice(5) === birthMonthDay && inMonth && (
+                      <Cake className="absolute top-0 right-0 w-2.5 h-2.5 text-pink-500" />
                     )}
                   </div>
                 );

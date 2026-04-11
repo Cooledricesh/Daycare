@@ -217,7 +217,7 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
           </Card>
 
           {/* 출석 캘린더 */}
-          <AttendanceCalendar patientId={patient.id} />
+          <AttendanceCalendar patientId={patient.id} birthDate={patient.birth_date} />
         </div>
 
         {/* 우측: 히스토리 */}
