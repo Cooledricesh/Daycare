@@ -70,6 +70,7 @@ interface PatientWithJoins {
   display_name: string | null;
   avatar_url: string | null;
   gender: PatientRow['gender'];
+  birth_date: string | null;
   room_number: string | null;
   patient_id_no: string | null;
   coordinator_id: string | null;
@@ -146,6 +147,7 @@ export async function getPatients(
       display_name,
       avatar_url,
       gender,
+      birth_date,
       room_number,
       patient_id_no,
       coordinator_id,
@@ -190,6 +192,7 @@ export async function getPatients(
     display_name: p.display_name ?? null,
     avatar_url: p.avatar_url ?? null,
     gender: p.gender,
+    birth_date: p.birth_date ?? null,
     room_number: p.room_number,
     patient_id_no: p.patient_id_no,
     coordinator_id: p.coordinator_id,
@@ -223,6 +226,7 @@ export async function getPatientDetail(
       display_name,
       avatar_url,
       gender,
+      birth_date,
       room_number,
       patient_id_no,
       coordinator_id,
@@ -258,6 +262,7 @@ export async function getPatientDetail(
     display_name: patientData.display_name ?? null,
     avatar_url: patientData.avatar_url ?? null,
     gender: patientData.gender,
+    birth_date: patientData.birth_date ?? null,
     room_number: patientData.room_number,
     patient_id_no: patientData.patient_id_no,
     coordinator_id: patientData.coordinator_id,
@@ -283,6 +288,7 @@ export async function createPatient(
     .insert({
       name: request.name,
       gender: request.gender || null,
+      birth_date: request.birth_date ?? null,
       room_number: request.room_number || null,
       patient_id_no: request.patient_id_no || null,
       coordinator_id: request.coordinator_id || null,
@@ -347,6 +353,7 @@ export async function createPatient(
     display_name: patient.display_name ?? null,
     avatar_url: patient.avatar_url ?? null,
     gender: patient.gender,
+    birth_date: patient.birth_date ?? null,
     room_number: patient.room_number,
     patient_id_no: patient.patient_id_no,
     coordinator_id: patient.coordinator_id,
@@ -370,6 +377,7 @@ export async function updatePatient(
   const updateData: PatientUpdate = {};
   if (request.name !== undefined) updateData.name = request.name;
   if (request.gender !== undefined) updateData.gender = request.gender || null;
+  if (request.birth_date !== undefined) updateData.birth_date = request.birth_date ?? null;
   if (request.room_number !== undefined) updateData.room_number = request.room_number || null;
   if (request.patient_id_no !== undefined) updateData.patient_id_no = request.patient_id_no || null;
   if (request.coordinator_id !== undefined) updateData.coordinator_id = request.coordinator_id || null;

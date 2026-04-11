@@ -107,6 +107,7 @@ export interface Database {
                     display_name: string | null;
                     avatar_url: string | null;
                     gender: Gender | null;
+                    birth_date: string | null;
                     room_number: string | null;
                     patient_id_no: string | null;
                     coordinator_id: string | null;
@@ -122,6 +123,7 @@ export interface Database {
                     display_name?: string | null;
                     avatar_url?: string | null;
                     gender?: Gender | null;
+                    birth_date?: string | null;
                     room_number?: string | null;
                     patient_id_no?: string | null;
                     coordinator_id?: string | null;
@@ -137,6 +139,7 @@ export interface Database {
                     display_name?: string | null;
                     avatar_url?: string | null;
                     gender?: Gender | null;
+                    birth_date?: string | null;
                     room_number?: string | null;
                     patient_id_no?: string | null;
                     coordinator_id?: string | null;

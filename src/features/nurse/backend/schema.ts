@@ -72,6 +72,7 @@ export type NursePatientSummary = {
   display_name: string | null;
   avatar_url: string | null;
   gender: string | null;
+  birth_date: string | null;
   coordinator_name: string | null;
   is_attended: boolean;
   attendance_time: string | null;

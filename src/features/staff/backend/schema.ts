@@ -40,6 +40,7 @@ export type PatientSummary = {
   display_name: string | null;
   avatar_url: string | null;
   gender: string | null;
+  birth_date: string | null;
   is_attended: boolean;
   attendance_time: string | null;
   is_scheduled: boolean;  // 오늘 출석 예정 여부 (scheduled_attendances 기준)
@@ -57,6 +58,7 @@ export type PatientDetail = {
   display_name: string | null;
   avatar_url: string | null;
   gender: string | null;
+  birth_date: string | null;
   attendance: {
     is_attended: boolean;
     checked_at: string | null;

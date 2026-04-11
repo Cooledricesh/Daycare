@@ -13,6 +13,7 @@ export const getPatientsQuerySchema = z.object({
 export const createPatientSchema = z.object({
   name: z.string().min(1, '이름을 입력해주세요').max(100, '이름은 100자 이하이어야 합니다'),
   gender: z.enum(['M', 'F']).optional(),
+  birth_date: z.string().nullable().optional(),
   room_number: z.string().max(10, '호실은 10자 이하이어야 합니다').optional().or(z.literal('')),
   patient_id_no: z.string().max(20, '병록번호는 20자 이하이어야 합니다').optional().or(z.literal('')),
   coordinator_id: z.string().uuid('올바른 담당 코디를 선택해주세요').optional().or(z.literal('')),
@@ -24,6 +25,7 @@ export const createPatientSchema = z.object({
 export const updatePatientSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   gender: z.enum(['M', 'F']).optional(),
+  birth_date: z.string().nullable().optional(),
   room_number: z.string().max(10).optional().or(z.literal('')),
   patient_id_no: z.string().max(20).optional().or(z.literal('')),
   coordinator_id: z.string().uuid().optional().or(z.literal('')),
@@ -189,6 +191,7 @@ export interface PatientWithCoordinator {
   display_name: string | null;
   avatar_url: string | null;
   gender: 'M' | 'F' | null;
+  birth_date: string | null;
   room_number: string | null;
   patient_id_no: string | null;
   coordinator_id: string | null;

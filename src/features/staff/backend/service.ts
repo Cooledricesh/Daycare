@@ -146,7 +146,7 @@ export async function getMyPatients(
     // 환자 목록 조회: show_all이면 전체, 아니면 담당만
     let patientsQuery = supabase
       .from('patients')
-      .select('id, name, display_name, avatar_url, gender')
+      .select('id, name, display_name, avatar_url, gender, birth_date')
       .eq('status', 'active');
 
     if (!showAll) {
@@ -228,6 +228,7 @@ export async function getMyPatients(
         // TODO: Supabase .select() 문자열 리터럴은 타입을 좁히지 못함. .returns<T>() 패턴으로 전환 시 캐스트 제거 가능
         avatar_url: (p as unknown as { avatar_url: string | null }).avatar_url ?? null,
         gender: p.gender || null,
+        birth_date: (p as unknown as { birth_date: string | null }).birth_date ?? null,
         is_attended: !!attendance,
         attendance_time: attendance?.checked_at || null,
         is_scheduled: scheduledSet.has(p.id),
@@ -266,7 +267,7 @@ export async function getPatientDetail(
     { data: recentConsultations },
   ] = await Promise.all([
     supabase.from('patients')
-      .select('id, name, display_name, avatar_url, gender, coordinator_id')
+      .select('id, name, display_name, avatar_url, gender, birth_date, coordinator_id')
       .eq('id', params.patient_id)
       .single(),
     getPatientDayDetail(supabase, params.patient_id, date),
@@ -302,6 +303,7 @@ export async function getPatientDetail(
     // TODO: Supabase .select() 문자열 리터럴은 타입을 좁히지 못함. .returns<T>() 패턴으로 전환 시 캐스트 제거 가능
     avatar_url: (patient as unknown as { avatar_url: string | null }).avatar_url ?? null,
     gender: patient.gender,
+    birth_date: (patient as unknown as { birth_date: string | null }).birth_date ?? null,
     attendance: {
       is_attended: !!attendance,
       checked_at: attendance?.checked_at || null,

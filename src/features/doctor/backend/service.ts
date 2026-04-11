@@ -56,6 +56,7 @@ interface PatientWithJoins {
   id: string;
   name: string;
   gender: Gender | null;
+  birth_date: string | null;
   room_number: string | null;
   coordinator: { name: string } | null;
   doctor: { name: string } | null;
@@ -113,6 +114,7 @@ interface PatientWithCoordinator {
   display_name: string | null;
   avatar_url: string | null;
   gender: Gender | null;
+  birth_date: string | null;
   room_number: string | null;
   coordinator: { name: string } | null;
 }
@@ -309,6 +311,7 @@ export async function getPatientHistory(
         id,
         name,
         gender,
+        birth_date,
         room_number,
         coordinator:coordinator_id(name),
         doctor:doctor_id(name)
@@ -366,6 +369,7 @@ export async function getPatientHistory(
       id: patient.id,
       name: patient.name,
       gender: patient.gender,
+      birth_date: patient.birth_date ?? null,
       room_number: patient.room_number,
       coordinator_name: patient.coordinator?.name || null,
       doctor_name: patient.doctor?.name || null,
@@ -510,6 +514,7 @@ export async function getWaitingPatients(
       display_name,
       avatar_url,
       gender,
+      birth_date,
       room_number,
       coordinator:coordinator_id(name)
     `)
@@ -650,6 +655,7 @@ export async function getWaitingPatients(
     display_name: p.patients.display_name ?? null,
     avatar_url: p.patients.avatar_url ?? null,
     gender: p.patients.gender,
+    birth_date: p.patients.birth_date ?? null,
     room_number: p.patients.room_number,
     coordinator_name: p.patients.coordinator?.name || null,
     checked_at: attendanceMap.get(p.patient_id) || null,

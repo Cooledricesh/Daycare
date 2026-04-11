@@ -18,6 +18,7 @@ interface NursePatientRow {
   display_name: string | null;
   avatar_url: string | null;
   gender: string | null;
+  birth_date: string | null;
   coordinator: { name: string } | null;
 }
 
@@ -59,7 +60,7 @@ export async function getNursePatients(
   // 1. 모든 활성 환자 조회
   const { data: patients, error: patientsError } = await supabase
     .from('patients')
-    .select('id, name, display_name, avatar_url, gender, coordinator:staff!patients_coordinator_id_fkey(name)')
+    .select('id, name, display_name, avatar_url, gender, birth_date, coordinator:staff!patients_coordinator_id_fkey(name)')
     .eq('status', 'active')
     .order('name')
     .returns<NursePatientRow[]>();
@@ -137,6 +138,7 @@ export async function getNursePatients(
       display_name: p.display_name ?? null,
       avatar_url: p.avatar_url ?? null,
       gender: p.gender || null,
+      birth_date: p.birth_date ?? null,
       coordinator_name: p.coordinator?.name || null,
       is_attended: !!attendance,
       attendance_time: attendance?.checked_at || null,

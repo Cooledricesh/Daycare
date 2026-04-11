@@ -47,6 +47,7 @@ export interface PatientBasicInfo {
   id: string;
   name: string;
   gender: 'M' | 'F' | null;
+  birth_date: string | null;
   room_number: string | null;
   coordinator_name: string | null;
   doctor_name: string | null;
@@ -129,6 +130,7 @@ export interface WaitingPatient {
   display_name: string | null;
   avatar_url: string | null;
   gender: 'M' | 'F' | null;
+  birth_date: string | null;
   room_number: string | null;
   coordinator_name: string | null;
   checked_at: string | null;  // null이면 아직 출석 안 함
