@@ -15,6 +15,8 @@ import { useNursePatientHistory } from '@/features/nurse/hooks/useNursePatientHi
 import { useCompleteTask } from '@/features/nurse/hooks/useCompleteTask';
 import { NurseMessageForm } from '@/features/nurse/components/NurseMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
+import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayString } from '@/lib/date';
 
@@ -190,6 +192,9 @@ export default function NursePatientDetailPage({ params }: PageProps) {
           <NurseMessageForm patientId={patientId} date={today} />
         </CardContent>
       </Card>
+
+      <AttendanceHeatmap patientId={patientId} className="mb-4" />
+      <PatientTimelineStrip patientId={patientId} className="mb-4" />
 
       {!showFullHistory ? (
         <Card>

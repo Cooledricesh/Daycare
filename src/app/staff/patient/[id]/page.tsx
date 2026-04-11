@@ -14,6 +14,8 @@ import { useStaffPatientHistory } from '@/features/staff/hooks/usePatientHistory
 import { TaskCompletionButton } from '@/features/staff/components/TaskCompletionButton';
 import { MessageForm } from '@/features/staff/components/MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
+import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { getTodayString } from '@/lib/date';
 
 type PageProps = {
@@ -155,6 +157,9 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
           <MessageForm patientId={patientId} date={today} />
         </CardContent>
       </Card>
+
+      <AttendanceHeatmap patientId={patientId} className="mb-4" />
+      <PatientTimelineStrip patientId={patientId} className="mb-4" />
 
       {/* 최근 기록 (기본: 간단 목록) / 전체 기록 (펼쳤을 때) */}
       {!showFullHistory ? (
