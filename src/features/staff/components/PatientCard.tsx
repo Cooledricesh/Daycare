@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bell, Check, Clock, User } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Bell, Cake, Check, Clock, User } from 'lucide-react';
+import { formatBirthDateShort, isBirthdayToday } from '@/lib/birthday';
 import type { PatientSummary } from '../backend/schema';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -32,7 +34,21 @@ export function PatientCard({ patient }: PatientCardProps) {
               <User className="w-4 h-4 text-emerald-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">{getPatientDisplayName(patient)}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-gray-900">{getPatientDisplayName(patient)}</h3>
+                {patient.birth_date && isBirthdayToday(patient.birth_date) && (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 gap-1">
+                    <Cake className="w-3 h-3" />
+                    오늘 생일
+                  </Badge>
+                )}
+              </div>
+              {patient.birth_date && !isBirthdayToday(patient.birth_date) && (
+                <p className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                  <Cake className="w-2.5 h-2.5" />
+                  {formatBirthDateShort(patient.birth_date)}
+                </p>
+              )}
               {patient.attendance_time && (
                 <p className="text-xs text-gray-500">
                   {format(new Date(patient.attendance_time), 'HH:mm', { locale: ko })} 출석
