@@ -103,7 +103,7 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
                   <div
                     key={dateStr}
                     className={cn(
-                      'aspect-square flex flex-col items-center justify-center text-[11px] rounded-md',
+                      'h-7 flex items-center justify-center gap-0.5 text-[11px] rounded-md',
                       !inMonth && 'text-gray-200',
                       inMonth && !attended && !scheduledAbsent && 'text-gray-700',
                       today && 'font-bold ring-1 ring-gray-300',
@@ -113,7 +113,7 @@ export function AttendanceCalendar({ patientId, className }: AttendanceCalendarP
                   >
                     <span className="leading-none">{format(day, 'd')}</span>
                     {attended && consulted && (
-                      <span className="text-[10px] text-emerald-600 font-bold leading-none mt-0.5">✓</span>
+                      <span className="text-[9px] text-emerald-600 font-bold leading-none">✓</span>
                     )}
                   </div>
                 );
