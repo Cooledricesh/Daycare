@@ -17,6 +17,7 @@ import { useUpdateMessage } from '../hooks/useUpdateMessage';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { MessageForm } from './MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
@@ -223,15 +224,18 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
               </CardContent>
             </Card>
           ) : historyData && (historyData.consultations.length > 0 || (historyData.messages && historyData.messages.length > 0)) ? (
-            <ConsultationHistory
-              consultations={historyData.consultations}
-              messages={historyData.messages}
-              currentUserId={user?.id}
-              currentUserRole={user?.role}
-              onDeleteMessage={handleDeleteMessage}
-              onEditMessage={handleEditMessage}
-              todayDate={today}
-            />
+            <>
+              <PatientTimelineStrip patientId={patient!.id} />
+              <ConsultationHistory
+                consultations={historyData.consultations}
+                messages={historyData.messages}
+                currentUserId={user?.id}
+                currentUserRole={user?.role}
+                onDeleteMessage={handleDeleteMessage}
+                onEditMessage={handleEditMessage}
+                todayDate={today}
+              />
+            </>
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">

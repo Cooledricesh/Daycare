@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { usePatientHistory } from '@/features/doctor/hooks/usePatientHistory';
 import { PatientHistoryCard } from '@/features/doctor/components/PatientHistoryCard';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
+import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { MessageHistory } from '@/features/doctor/components/MessageHistory';
 
 interface PageProps {
@@ -57,6 +58,8 @@ export default function DoctorHistoryPage({ params }: PageProps) {
 
       <div className="space-y-6">
         <PatientHistoryCard patient={history.patient} />
+
+        <PatientTimelineStrip patientId={history.patient.id} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ConsultationHistory consultations={history.consultations} />
