@@ -10,6 +10,7 @@
 - 모든 기능을 완전히 구현할 때까지 중단하지 않고 연속적으로 진행한다.
 - TypeScript type 오류, ESLint 오류, 빌드 오류가 없음을 보장한다.
 - 절대 하드코딩된 값을 사용하지 않는다. 모든 값은 상수, 환경변수, 또는 설정 파일에서 관리한다.
+- React Query에서 동일한 query key를 공유하는 훅이 여럿 있을 경우, 모든 훅의 `queryFn` return shape이 **정확히 일치**해야 한다. 메타데이터(year, month 등)가 필요하면 `queryFn` 바깥에서 input params를 직접 참조해 래핑하고, `queryFn` 내부에서 shape을 변경하지 않는다. (shape이 다르면 반드시 새 query key를 정의한다.)
 - **작업의 성격에 따라 적절한 커스텀 에이전트를 활용한다**:
   - `implementer`: 작성된 plan.md를 구현해야 할 때
   - `implement_checker`: spec, plan 문서에 명시된 모든 기능이 제대로 구현되었는지 확인할 때
