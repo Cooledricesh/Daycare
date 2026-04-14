@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bell, Cake, Check, Clock, User } from 'lucide-react';
-import { formatBirthDateShort, isBirthdayToday } from '@/lib/birthday';
+import { calculateKoreanAge, formatBirthDateShort, isBirthdayToday } from '@/lib/birthday';
 import type { PatientSummary } from '../backend/schema';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -17,6 +17,8 @@ type PatientCardProps = {
 };
 
 export function PatientCard({ patient }: PatientCardProps) {
+  const age = calculateKoreanAge(patient.birth_date);
+
   // 카드 왼쪽 테두리 색상 결정
   const getBorderColor = () => {
     if (patient.has_task && !patient.task_completed) return 'border-l-orange-500';
@@ -39,8 +41,11 @@ export function PatientCard({ patient }: PatientCardProps) {
                 {patient.birth_date && isBirthdayToday(patient.birth_date) && (
                   <Badge className="bg-amber-100 text-amber-700 border-amber-200 gap-1">
                     <Cake className="w-3 h-3" />
-                    오늘 생일
+                    오늘 생일{age !== null ? ` · 만 ${age}세` : ''}
                   </Badge>
+                )}
+                {age !== null && !isBirthdayToday(patient.birth_date) && (
+                  <span className="text-xs text-gray-500">만 {age}세</span>
                 )}
               </div>
               {patient.birth_date && !isBirthdayToday(patient.birth_date) && (

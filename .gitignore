@@ -75,3 +75,6 @@ next-env.d.ts
 playwright-report/
 test-results/
 .superpowers/
+
+# 환자 개인정보(PII) 포함 파일 커밋 금지
+patient_list*.xlsx
