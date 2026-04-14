@@ -21,6 +21,7 @@ import { PatientTimelineStrip } from '@/features/patient-timeline/components/Pat
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
+import { calculateKoreanAge } from '@/lib/birthday';
 import { getTodayString } from '@/lib/date';
 import { getPatientDisplayName } from '@/lib/patient';
 import type { PatientSummary } from '../backend/schema';
@@ -117,6 +118,11 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
               currentDisplayName={patient.display_name}
               currentAvatarUrl={patient.avatar_url}
             />
+            {calculateKoreanAge(patient.birth_date) !== null && (
+              <Badge variant="outline" className="text-xs">
+                만 {calculateKoreanAge(patient.birth_date)}세
+              </Badge>
+            )}
             {patient.is_consulted && (
               <Badge className="bg-green-100 text-green-700 text-xs">진찰 완료</Badge>
             )}

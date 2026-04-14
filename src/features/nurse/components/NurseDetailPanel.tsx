@@ -7,6 +7,7 @@ import { Stethoscope } from 'lucide-react';
 import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getPatientDisplayName } from '@/lib/patient';
+import { calculateKoreanAge } from '@/lib/birthday';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -121,6 +122,11 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
               currentDisplayName={patient.display_name}
               currentAvatarUrl={patient.avatar_url}
             />
+            {calculateKoreanAge(patient.birth_date) !== null && (
+              <Badge variant="outline" className="text-xs">
+                만 {calculateKoreanAge(patient.birth_date)}세
+              </Badge>
+            )}
             {patient.is_consulted && (
               <Badge className="bg-green-100 text-green-700 text-xs">진찰 완료</Badge>
             )}

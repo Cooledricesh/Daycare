@@ -9,6 +9,7 @@ import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
 import { getPatientDisplayName } from '@/lib/patient';
+import { calculateKoreanAge } from '@/lib/birthday';
 import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
 import type { NursePatientSummary } from '../backend/schema';
 
@@ -189,6 +190,11 @@ export function NursePatientListPanel({
                         <span className="text-xs text-gray-400">
                           {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
                         </span>
+                        {calculateKoreanAge(patient.birth_date) !== null && (
+                          <span className="text-xs text-gray-400">
+                            {calculateKoreanAge(patient.birth_date)}세
+                          </span>
+                        )}
                       </div>
                       {patient.coordinator_name && (
                         <span className="text-xs text-gray-400">
