@@ -172,6 +172,7 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
                 patientName={patient.name}
                 currentDisplayName={patient.display_name}
                 currentAvatarUrl={patient.avatar_url}
+                currentBirthDate={patient.birth_date}
               />
               {patient.gender && (
                 <Badge variant="outline" className="text-xs">

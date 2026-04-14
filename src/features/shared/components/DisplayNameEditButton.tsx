@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pencil, User, Camera, Trash2 } from 'lucide-react';
 import { useUpdateDisplayName } from '../hooks/useUpdateDisplayName';
+import { useUpdatePatientBirthDate } from '../hooks/useUpdatePatientBirthDate';
 import { useUploadAvatar, useDeleteAvatar } from '../hooks/usePatientAvatar';
 import { useToast } from '@/hooks/use-toast';
 import { extractApiErrorMessage } from '@/lib/remote/api-client';
@@ -25,6 +26,7 @@ interface DisplayNameEditButtonProps {
   patientName: string;
   currentDisplayName: string | null;
   currentAvatarUrl: string | null;
+  currentBirthDate?: string | null;
   variant?: 'icon' | 'text';
 }
 
@@ -33,25 +35,29 @@ export function DisplayNameEditButton({
   patientName,
   currentDisplayName,
   currentAvatarUrl,
+  currentBirthDate = null,
   variant = 'icon',
 }: DisplayNameEditButtonProps) {
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState(currentDisplayName || '');
+  const [birthDate, setBirthDate] = useState(currentBirthDate || '');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [wantsDelete, setWantsDelete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { mutateAsync: updateName, isPending: isNamePending } = useUpdateDisplayName();
+  const { mutateAsync: updateBirthDate, isPending: isBirthDatePending } = useUpdatePatientBirthDate();
   const { mutateAsync: uploadAvatar, isPending: isUploadPending } = useUploadAvatar();
   const { mutateAsync: deleteAvatar, isPending: isDeletePending } = useDeleteAvatar();
-  const isPending = isNamePending || isUploadPending || isDeletePending;
+  const isPending = isNamePending || isBirthDatePending || isUploadPending || isDeletePending;
 
   const { toast } = useToast();
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen) {
       setDisplayName(currentDisplayName || '');
+      setBirthDate(currentBirthDate || '');
       setSelectedFile(null);
       setPreviewUrl(null);
       setWantsDelete(false);
@@ -112,6 +118,22 @@ export function DisplayNameEditButton({
       const message = extractApiErrorMessage(error, '표시명 변경에 실패했습니다.');
       toast({ title: '변경 실패', description: message, variant: 'destructive' });
       return;
+    }
+
+    // 생년월일이 변경된 경우에만 업데이트
+    const birthValue = birthDate.trim() === '' ? null : birthDate.trim();
+    const originalBirthValue = currentBirthDate ?? null;
+    if (birthValue !== originalBirthValue) {
+      try {
+        await updateBirthDate({ patientId, birthDate: birthValue });
+        toast({
+          title: '생년월일 변경 완료',
+          description: birthValue ? `${birthValue} 로 저장되었습니다.` : '생년월일이 삭제되었습니다.',
+        });
+      } catch (error) {
+        const message = extractApiErrorMessage(error, '생년월일 변경에 실패했습니다.');
+        toast({ title: '생년월일 변경 실패', description: message, variant: 'destructive' });
+      }
     }
 
     if (selectedFile) {
@@ -241,6 +263,20 @@ export function DisplayNameEditButton({
             />
             <p className="text-xs text-gray-400 mt-1">
               비워두면 원래 이름으로 표시됩니다.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="birth-date">생년월일</Label>
+            <Input
+              id="birth-date"
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              className="mt-1"
+              max={new Date().toISOString().slice(0, 10)}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              비워두면 생일/나이 표시가 숨겨집니다.
             </p>
           </div>
         </div>

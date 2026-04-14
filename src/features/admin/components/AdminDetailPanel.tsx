@@ -125,6 +125,7 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
               patientName={patient.name}
               currentDisplayName={patient.display_name}
               currentAvatarUrl={patient.avatar_url}
+              currentBirthDate={patient.birth_date}
             />
             {calculateKoreanAge(patient.birth_date) !== null && (
               <Badge variant="outline" className="text-xs">

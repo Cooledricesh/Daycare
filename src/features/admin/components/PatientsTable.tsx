@@ -67,6 +67,7 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
                       patientName={patient.name}
                       currentDisplayName={patient.display_name}
                       currentAvatarUrl={patient.avatar_url}
+                      currentBirthDate={patient.birth_date ?? null}
                     />
                   </div>
                 </TableCell>

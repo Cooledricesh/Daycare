@@ -40,6 +40,13 @@ const updateDisplayNameSchema = z.object({
   display_name: z.string().max(100, '표시명은 100자 이하이어야 합니다').nullable(),
 });
 
+const updateBirthDateSchema = z.object({
+  birth_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/u, '생년월일은 YYYY-MM-DD 형식이어야 합니다')
+    .nullable(),
+});
+
 const sharedRoutes = new Hono<AppEnv>();
 
 // ========== Patient Display Name ==========
@@ -78,6 +85,42 @@ sharedRoutes.patch('/patients/:id/display-name', async (c) => {
       ? '표시명 컬럼이 아직 생성되지 않았습니다. 마이그레이션을 먼저 적용해주세요.'
       : '환자를 찾을 수 없습니다';
     return respond(c, failure(error?.message?.includes('display_name') ? 500 : 404, 'PATIENT_NOT_FOUND', msg));
+  }
+
+  return respond(c, success({ patient: data }, 200));
+});
+
+/**
+ * PATCH /api/shared/patients/:id/birth-date
+ * 환자 생년월일 변경 (모든 역할 허용)
+ */
+sharedRoutes.patch('/patients/:id/birth-date', async (c) => {
+  const supabase = c.get('supabase');
+  const user = c.get('user');
+  const patientId = c.req.param('id');
+
+  if (!user) {
+    return respond(c, failure(401, 'UNAUTHORIZED', '인증이 필요합니다'));
+  }
+
+  const body = await c.req.json();
+  const parseResult = updateBirthDateSchema.safeParse(body);
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, 'INVALID_REQUEST', parseResult.error.issues[0]?.message || '잘못된 요청입니다'));
+  }
+
+  const birthDate = parseResult.data.birth_date;
+
+  const { data, error } = await supabase
+    .from('patients')
+    .update({ birth_date: birthDate })
+    .eq('id', patientId)
+    .select('id, name, birth_date')
+    .single();
+
+  if (error || !data) {
+    return respond(c, failure(404, 'PATIENT_NOT_FOUND', '환자를 찾을 수 없습니다'));
   }
 
   return respond(c, success({ patient: data }, 200));
