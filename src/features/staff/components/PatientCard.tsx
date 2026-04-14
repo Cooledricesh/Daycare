@@ -67,7 +67,7 @@ export function PatientCard({ patient }: PatientCardProps) {
               </span>
             )}
           </div>
-          <Link href={`/staff/patient/${patient.id}`}>
+          <Link href={`/dashboard/staff/patient/${patient.id}`}>
             <Button variant="outline" size="sm" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50">
               상세
             </Button>

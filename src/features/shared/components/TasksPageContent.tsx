@@ -23,7 +23,7 @@ interface TasksPageContentProps {
   patientLinkPrefix?: string;
 }
 
-export function TasksPageContent({ patientLinkPrefix = '/doctor/history' }: TasksPageContentProps) {
+export function TasksPageContent({ patientLinkPrefix = '/dashboard/doctor/history' }: TasksPageContentProps) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [taskStatus, setTaskStatus] = useState<TaskStatusFilter>('all');
   const [messageStatus, setMessageStatus] = useState<MessageStatusFilter>('all');

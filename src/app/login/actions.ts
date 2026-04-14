@@ -10,13 +10,13 @@ const isDev = process.env.NODE_ENV === "development";
 function getRoleBasedRedirect(role: string): string {
     switch (role) {
         case "doctor":
-            return "/doctor/consultation";
+            return "/dashboard/doctor";
         case "coordinator":
-            return "/staff/dashboard";
+            return "/dashboard/staff";
         case "nurse":
-            return "/nurse/prescriptions";
+            return "/dashboard/nurse";
         case "admin":
-            return "/admin/dashboard";
+            return "/dashboard/admin";
         default:
             return "/";
     }

@@ -210,7 +210,7 @@ export default function StaffDashboardPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <TodayHighlightCard patientLinkPrefix="/staff/patient" className="mb-4" />
+        <TodayHighlightCard patientLinkPrefix="/dashboard/staff/patient" className="mb-4" />
       </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}

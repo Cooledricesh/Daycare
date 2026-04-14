@@ -196,7 +196,7 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
             </p>
           </div>
         </div>
-        <Link href={`/doctor/history/${patient.id}`}>
+        <Link href={`/dashboard/doctor/history/${patient.id}`}>
           <Button variant="outline" size="sm">
             <History className="w-4 h-4 mr-1" />
             전체 히스토리

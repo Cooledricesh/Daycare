@@ -28,7 +28,7 @@ export default function NursePrescriptionsPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <TodayHighlightCard patientLinkPrefix="/nurse/patient" className="mb-4" />
+        <TodayHighlightCard patientLinkPrefix="/dashboard/nurse/patient" className="mb-4" />
       </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}

@@ -7,9 +7,9 @@ export default function NurseTasksPage() {
   return (
     <div>
       <div className="px-4 pt-4">
-        <TodayHighlightCard patientLinkPrefix="/nurse/patient" className="mb-4" />
+        <TodayHighlightCard patientLinkPrefix="/dashboard/nurse/patient" className="mb-4" />
       </div>
-      <TasksPageContent patientLinkPrefix="/nurse/patient" />
+      <TasksPageContent patientLinkPrefix="/dashboard/nurse/patient" />
     </div>
   );
 }

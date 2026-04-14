@@ -1,41 +1,40 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useWaitingPatients } from '@/features/doctor/hooks/useWaitingPatients';
-import { PatientListPanel } from '@/features/doctor/components/PatientListPanel';
-import { ConsultationPanel } from '@/features/doctor/components/ConsultationPanel';
+import { useAdminPatients } from '@/features/admin/hooks/useDashboard';
+import { AdminPatientListPanel } from '@/features/admin/components/AdminPatientListPanel';
+import { AdminDetailPanel } from '@/features/admin/components/AdminDetailPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { KeyboardShortcutHelpModal } from '@/components/KeyboardShortcutHelpModal';
 import { TodayHighlightCard } from '@/features/highlights/components/TodayHighlightCard';
+import { getTodayString } from '@/lib/date';
 import { usePatientListNavigation } from '@/hooks/usePatientListNavigation';
+import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
-type FilterTab = 'all' | 'waiting' | 'completed';
+type FilterTab = 'all' | 'scheduled' | 'completed';
 
-const FILTER_TAB_KEYS: FilterTab[] = ['all', 'waiting', 'completed'];
-const NOTE_FOCUS_DELAY_MS = 100;
+const FILTER_TAB_KEYS: FilterTab[] = ['all', 'scheduled', 'completed'];
 
-export default function DoctorConsultationPage() {
-  const { data: patientsData, isLoading, refetch } = useWaitingPatients();
-  const patients = useMemo(() => patientsData || [], [patientsData]);
+export default function AdminDashboardPage() {
+  const today = getTodayString();
+  const { data, isLoading, refetch } = useAdminPatients({ date: today });
+  const patients = useMemo(() => data?.patients || [], [data?.patients]);
 
-  const nav = usePatientListNavigation({
+  const nav = usePatientListNavigation<NursePatientSummary, FilterTab>({
     patients,
     filterTabKeys: FILTER_TAB_KEYS,
-    onConfirmSelection: () => {
-      setTimeout(() => document.getElementById('note')?.focus(), NOTE_FOCUS_DELAY_MS);
-    },
   });
 
   return (
     <>
       <div className="px-4 pt-4">
-        <TodayHighlightCard patientLinkPrefix="/doctor/history" className="mb-4" />
+        <TodayHighlightCard patientLinkPrefix="/dashboard/staff/patient" className="mb-4" />
       </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}
         onBack={() => nav.setSelectedPatientId(null)}
         master={
-          <PatientListPanel
+          <AdminPatientListPanel
             patients={patients}
             isLoading={isLoading}
             selectedPatientId={nav.selectedItem?.id || null}
@@ -48,11 +47,7 @@ export default function DoctorConsultationPage() {
           />
         }
         detail={
-          <ConsultationPanel
-            patient={nav.selectedItem}
-            searchInputRef={nav.searchInputRef}
-            saveRef={nav.saveRef}
-          />
+          <AdminDetailPanel patient={nav.selectedItem} />
         }
       />
       <KeyboardShortcutHelpModal

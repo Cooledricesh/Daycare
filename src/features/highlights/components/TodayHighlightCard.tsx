@@ -9,7 +9,7 @@ import { useTodayHighlights } from '../hooks/useTodayHighlights';
 import type { HighlightPatient } from '../lib/dto';
 
 interface Props {
-  patientLinkPrefix: string; // 예: "/nurse/patient" 또는 "/staff/patient"
+  patientLinkPrefix: string; // 예: "/dashboard/nurse/patient" 또는 "/dashboard/staff/patient"
   className?: string;
 }
 

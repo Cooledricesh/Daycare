@@ -9,43 +9,68 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { usePatientDetail } from '@/features/staff/hooks/usePatientDetail';
-import { useStaffPatientHistory } from '@/features/staff/hooks/usePatientHistory';
-import { TaskCompletionButton } from '@/features/staff/components/TaskCompletionButton';
-import { MessageForm } from '@/features/staff/components/MessageForm';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useNursePatientDetail } from '@/features/nurse/hooks/useNursePatientDetail';
+import { useNursePatientHistory } from '@/features/nurse/hooks/useNursePatientHistory';
+import { useCompleteTask } from '@/features/nurse/hooks/useCompleteTask';
+import { NurseMessageForm } from '@/features/nurse/components/NurseMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
+import { useToast } from '@/hooks/use-toast';
 import { getTodayString } from '@/lib/date';
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
 
-export default function StaffPatientDetailPage({ params }: PageProps) {
+export default function NursePatientDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const patientId = resolvedParams.id;
   const today = getTodayString();
   const [showFullHistory, setShowFullHistory] = useState(false);
 
-  const { data, isLoading, error } = usePatientDetail({
+  const { data, isLoading, error } = useNursePatientDetail({
     patientId,
     date: today,
   });
 
-  const { data: historyData, isLoading: historyLoading } = useStaffPatientHistory({
+  const { data: historyData, isLoading: historyLoading } = useNursePatientHistory({
     patientId,
     months: 24,
     enabled: showFullHistory,
   });
 
+  const { mutate: completeTask, isPending: isCompleting } = useCompleteTask();
+  const { toast } = useToast();
+
   const patient = data?.patient;
+
+  const handleTaskComplete = (value: boolean | 'indeterminate') => {
+    if (value === true && patient?.consultation.consultation_id) {
+      completeTask(
+        { consultationId: patient.consultation.consultation_id },
+        {
+          onSuccess: () => {
+            toast({ title: '처리 완료', description: '지시사항이 처리 완료되었습니다.' });
+          },
+          onError: () => {
+            toast({ title: '처리 실패', description: '다시 시도해주세요.', variant: 'destructive' });
+          },
+        },
+      );
+    }
+  };
+
+  // 간호사 대상 지시사항 여부
+  const hasNurseTask = patient?.consultation.has_task &&
+    (patient?.consultation.task_target === 'nurse' || patient?.consultation.task_target === 'both');
 
   if (error) {
     return (
       <div className="text-center py-8">
         <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
-        <Link href="/staff/dashboard">
+        <Link href="/dashboard/nurse">
           <Button variant="outline" className="mt-4">
             돌아가기
           </Button>
@@ -65,7 +90,7 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
   return (
     <div>
       <div className="mb-6">
-        <Link href="/staff/dashboard">
+        <Link href="/dashboard/nurse">
           <Button variant="ghost" size="sm" className="mb-2">
             <ArrowLeft className="w-4 h-4 mr-2" />
             뒤로
@@ -88,7 +113,7 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
             <span className="text-gray-600">출석</span>
             <div className="flex items-center gap-2">
               <Badge variant={patient.attendance.is_attended ? 'default' : 'secondary'}>
-                {patient.attendance.is_attended ? '✓' : '✗'}
+                {patient.attendance.is_attended ? '출석' : '미출석'}
               </Badge>
               {patient.attendance.checked_at && (
                 <span className="text-sm text-gray-500">
@@ -103,7 +128,7 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
           <div className="flex items-center justify-between">
             <span className="text-gray-600">진찰</span>
             <Badge variant={patient.consultation.is_consulted ? 'default' : 'secondary'}>
-              {patient.consultation.is_consulted ? '✓' : '⏳'}
+              {patient.consultation.is_consulted ? '완료' : '대기'}
             </Badge>
           </div>
 
@@ -127,23 +152,33 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {patient.consultation.has_task && (
+      {hasNurseTask && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              지시사항
-            </CardTitle>
+            <CardTitle>간호 지시사항</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-gray-800">
               {patient.consultation.task_content || '-'}
             </p>
 
-            {patient.consultation.consultation_id && (
-              <TaskCompletionButton
-                consultationId={patient.consultation.consultation_id}
-                isCompleted={patient.consultation.is_task_completed}
-              />
+            {patient.consultation.consultation_id && !patient.consultation.is_task_completed && (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="nurse-task-detail"
+                  onCheckedChange={handleTaskComplete}
+                  disabled={isCompleting}
+                />
+                <label htmlFor="nurse-task-detail" className="text-sm font-medium leading-none">
+                  처리 완료
+                </label>
+              </div>
+            )}
+
+            {patient.consultation.is_task_completed && (
+              <Badge variant="secondary" className="bg-green-100 text-green-700">
+                처리 완료
+              </Badge>
             )}
           </CardContent>
         </Card>
@@ -154,14 +189,13 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
           <CardTitle>의사에게 전달사항</CardTitle>
         </CardHeader>
         <CardContent>
-          <MessageForm patientId={patientId} date={today} />
+          <NurseMessageForm patientId={patientId} date={today} />
         </CardContent>
       </Card>
 
       <AttendanceHeatmap patientId={patientId} className="mb-4" />
       <PatientTimelineStrip patientId={patientId} className="mb-4" />
 
-      {/* 최근 기록 (기본: 간단 목록) / 전체 기록 (펼쳤을 때) */}
       {!showFullHistory ? (
         <Card>
           <CardHeader>
