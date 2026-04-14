@@ -16,6 +16,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
+import { calculateKoreanAge } from '@/lib/birthday';
 import { useCreateConsultation } from '../hooks/useCreateConsultation';
 import { usePatientMessages } from '../hooks/usePatientMessages';
 import { usePatientHistory } from '../hooks/usePatientHistory';
@@ -175,6 +176,11 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
               {patient.gender && (
                 <Badge variant="outline" className="text-xs">
                   {patient.gender === 'M' ? '남' : '여'}
+                </Badge>
+              )}
+              {calculateKoreanAge(patient.birth_date) !== null && (
+                <Badge variant="outline" className="text-xs">
+                  만 {calculateKoreanAge(patient.birth_date)}세
                 </Badge>
               )}
               {patient.has_consultation && (

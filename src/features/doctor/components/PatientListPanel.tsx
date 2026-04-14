@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Search, RefreshCw, Check, Clock, AlertCircle, MessageSquare, Bell, CheckCircle } from 'lucide-react';
 import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
+import { calculateKoreanAge } from '@/lib/birthday';
 import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
@@ -192,6 +193,11 @@ export function PatientListPanel({
                         <span className="text-xs text-gray-400">
                           {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
                         </span>
+                        {calculateKoreanAge(patient.birth_date) !== null && (
+                          <span className="text-xs text-gray-400">
+                            {calculateKoreanAge(patient.birth_date)}세
+                          </span>
+                        )}
                       </div>
                       {patient.coordinator_name && (
                         <span className="text-xs text-gray-400">
