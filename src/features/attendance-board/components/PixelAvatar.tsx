@@ -8,10 +8,11 @@ interface PixelAvatarProps {
   name: string;
   gender: 'M' | 'F' | null;
   status: AttendanceStatus;
+  avatarUrl?: string | null;
   hasTask?: boolean;
 }
 
-export function PixelAvatar({ patientId, name, gender, status, hasTask }: PixelAvatarProps) {
+export function PixelAvatar({ patientId, name, gender, status, avatarUrl, hasTask }: PixelAvatarProps) {
   const color = getAvatarColor(patientId);
   const initial = name.charAt(0);
   const isMale = gender !== 'F';
@@ -21,8 +22,8 @@ export function PixelAvatar({ patientId, name, gender, status, hasTask }: PixelA
       return (
         <div className="relative w-10 h-12 flex items-center justify-center">
           {isMale
-            ? <MaleSeated color={color} initial={initial} />
-            : <FemaleSeated color={color} initial={initial} />
+            ? <MaleSeated color={color} initial={initial} patientId={patientId} avatarUrl={avatarUrl} />
+            : <FemaleSeated color={color} initial={initial} patientId={patientId} avatarUrl={avatarUrl} />
           }
           <TaskBadge hasTask={hasTask} />
         </div>
@@ -31,8 +32,8 @@ export function PixelAvatar({ patientId, name, gender, status, hasTask }: PixelA
       return (
         <div className="relative w-10 h-12 flex items-center justify-center">
           {isMale
-            ? <MaleStanding color={color} initial={initial} />
-            : <FemaleStanding color={color} initial={initial} />
+            ? <MaleStanding color={color} initial={initial} patientId={patientId} avatarUrl={avatarUrl} />
+            : <FemaleStanding color={color} initial={initial} patientId={patientId} avatarUrl={avatarUrl} />
           }
           <TaskBadge hasTask={hasTask} />
         </div>
@@ -62,8 +63,37 @@ function TaskBadge({ hasTask }: { hasTask?: boolean }) {
   );
 }
 
+/** 사진 얼굴 (avatar_url 있을 때) */
+function PhotoHead({ patientId, avatarUrl, borderColor = '#3a2a1a' }: {
+  patientId: string;
+  avatarUrl: string;
+  borderColor?: string;
+}) {
+  const clipId = `head-clip-${patientId}`;
+  return (
+    <>
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx="20" cy="14" r="12" />
+        </clipPath>
+      </defs>
+      <image
+        href={avatarUrl}
+        x="8"
+        y="2"
+        width="24"
+        height="24"
+        clipPath={`url(#${clipId})`}
+        preserveAspectRatio="xMidYMid slice"
+        style={{ imageRendering: 'auto' }}
+      />
+      <circle cx="20" cy="14" r="12" fill="none" stroke={borderColor} strokeWidth="1.5" />
+    </>
+  );
+}
+
 /** 남자 캐릭터 - 착석 (출석+진찰) */
-function MaleSeated({ color, initial }: { color: string; initial: string }) {
+function MaleSeated({ color, initial, patientId, avatarUrl }: { color: string; initial: string; patientId: string; avatarUrl?: string | null }) {
   return (
     <svg width="40" height="48" viewBox="0 0 40 48" style={{ imageRendering: 'pixelated' }}>
       {/* 책상 */}
@@ -77,34 +107,40 @@ function MaleSeated({ color, initial }: { color: string; initial: string }) {
       <rect x="14" y="27" width="12" height="6" rx="1" fill="white" stroke="#2c5a8a" strokeWidth="0.7" />
       <text x="20" y="32" textAnchor="middle" fontSize="5.5" fill="#2c5a8a" fontFamily="monospace" fontWeight="bold">{initial}</text>
 
-      {/* 머리 */}
-      <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
-      <path d="M10,14 L10,9 Q10,3 20,2 Q30,3 30,9 L30,14" fill="#3a2a1a" />
-      <path d="M12,13 L12,10 Q12,5 20,4 Q28,5 28,10 L28,13" fill="#fce4c0" />
-      <path d="M12,10 Q14,8 18,9 L12,10" fill="#3a2a1a" />
+      {avatarUrl ? (
+        <PhotoHead patientId={patientId} avatarUrl={avatarUrl} borderColor="#2c5a8a" />
+      ) : (
+        <>
+          {/* 머리 */}
+          <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
+          <path d="M10,14 L10,9 Q10,3 20,2 Q30,3 30,9 L30,14" fill="#3a2a1a" />
+          <path d="M12,13 L12,10 Q12,5 20,4 Q28,5 28,10 L28,13" fill="#fce4c0" />
+          <path d="M12,10 Q14,8 18,9 L12,10" fill="#3a2a1a" />
 
-      {/* 눈 */}
-      <ellipse cx="16" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
-      <circle cx="16.5" cy="13.2" r="0.7" fill="white" />
-      <ellipse cx="24" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
-      <circle cx="24.5" cy="13.2" r="0.7" fill="white" />
+          {/* 눈 */}
+          <ellipse cx="16" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
+          <circle cx="16.5" cy="13.2" r="0.7" fill="white" />
+          <ellipse cx="24" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
+          <circle cx="24.5" cy="13.2" r="0.7" fill="white" />
 
-      {/* 눈썹 */}
-      <line x1="14" y1="11" x2="18" y2="11.5" stroke="#3a2a1a" strokeWidth="0.8" />
-      <line x1="22" y1="11.5" x2="26" y2="11" stroke="#3a2a1a" strokeWidth="0.8" />
+          {/* 눈썹 */}
+          <line x1="14" y1="11" x2="18" y2="11.5" stroke="#3a2a1a" strokeWidth="0.8" />
+          <line x1="22" y1="11.5" x2="26" y2="11" stroke="#3a2a1a" strokeWidth="0.8" />
 
-      {/* 볼 */}
-      <ellipse cx="12" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
-      <ellipse cx="28" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
+          {/* 볼 */}
+          <ellipse cx="12" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
+          <ellipse cx="28" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
 
-      {/* 입 */}
-      <path d="M17,18 Q20,20 23,18" fill="none" stroke="#c07050" strokeWidth="0.8" />
+          {/* 입 */}
+          <path d="M17,18 Q20,20 23,18" fill="none" stroke="#c07050" strokeWidth="0.8" />
+        </>
+      )}
     </svg>
   );
 }
 
 /** 여자 캐릭터 - 착석 (출석+진찰) */
-function FemaleSeated({ color, initial }: { color: string; initial: string }) {
+function FemaleSeated({ color, initial, patientId, avatarUrl }: { color: string; initial: string; patientId: string; avatarUrl?: string | null }) {
   return (
     <svg width="40" height="48" viewBox="0 0 40 48" style={{ imageRendering: 'pixelated' }}>
       {/* 책상 */}
@@ -112,8 +148,10 @@ function FemaleSeated({ color, initial }: { color: string; initial: string }) {
       <rect x="5" y="36" width="30" height="7" fill="#c4a06c" />
       <rect x="24" y="37" width="8" height="4" fill="#e8e0d0" stroke="#a09080" strokeWidth="0.5" />
 
-      {/* 머리카락 */}
-      <path d="M7,12 Q6,4 20,1 Q34,4 33,12 L33,28 Q33,30 30,30 L30,22 L10,22 L10,30 Q7,30 7,28 Z" fill="#5a3018" />
+      {!avatarUrl && (
+        /* 머리카락 */
+        <path d="M7,12 Q6,4 20,1 Q34,4 33,12 L33,28 Q33,30 30,30 L30,22 L10,22 L10,30 Q7,30 7,28 Z" fill="#5a3018" />
+      )}
 
       {/* 몸통 - 분홍 블라우스 */}
       <rect x="9" y="22" width="22" height="14" rx="3" fill="#e88ca8" stroke="#c06080" strokeWidth="1.2" />
@@ -121,43 +159,49 @@ function FemaleSeated({ color, initial }: { color: string; initial: string }) {
       <rect x="14" y="27" width="12" height="6" rx="1" fill="white" stroke="#c06080" strokeWidth="0.7" />
       <text x="20" y="32" textAnchor="middle" fontSize="5.5" fill="#c06080" fontFamily="monospace" fontWeight="bold">{initial}</text>
 
-      {/* 머리 */}
-      <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
-      <path d="M10,14 L10,8 Q10,3 20,2 Q30,3 30,8 L30,14" fill="#5a3018" />
-      <path d="M12,13 Q12,6 20,5 Q28,6 28,13" fill="#fce4c0" />
-      <path d="M13,12 Q16,7 20,8 Q17,9 15,12" fill="#5a3018" />
-      <path d="M27,12 Q24,7 20,8 Q23,9 25,12" fill="#5a3018" />
-      <path d="M9,13 Q8,13 8,16 L8,22 Q8,23 9,23 L10,23 L10,14 Z" fill="#5a3018" />
-      <path d="M31,13 Q32,13 32,16 L32,22 Q32,23 31,23 L30,23 L30,14 Z" fill="#5a3018" />
+      {avatarUrl ? (
+        <PhotoHead patientId={patientId} avatarUrl={avatarUrl} borderColor="#c06080" />
+      ) : (
+        <>
+          {/* 머리 */}
+          <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
+          <path d="M10,14 L10,8 Q10,3 20,2 Q30,3 30,8 L30,14" fill="#5a3018" />
+          <path d="M12,13 Q12,6 20,5 Q28,6 28,13" fill="#fce4c0" />
+          <path d="M13,12 Q16,7 20,8 Q17,9 15,12" fill="#5a3018" />
+          <path d="M27,12 Q24,7 20,8 Q23,9 25,12" fill="#5a3018" />
+          <path d="M9,13 Q8,13 8,16 L8,22 Q8,23 9,23 L10,23 L10,14 Z" fill="#5a3018" />
+          <path d="M31,13 Q32,13 32,16 L32,22 Q32,23 31,23 L30,23 L30,14 Z" fill="#5a3018" />
 
-      {/* 리본 */}
-      <circle cx="28" cy="5" r="2.5" fill="#ff6b9d" stroke="#d44a7a" strokeWidth="0.7" />
-      <circle cx="28" cy="5" r="0.8" fill="#d44a7a" />
+          {/* 리본 */}
+          <circle cx="28" cy="5" r="2.5" fill="#ff6b9d" stroke="#d44a7a" strokeWidth="0.7" />
+          <circle cx="28" cy="5" r="0.8" fill="#d44a7a" />
 
-      {/* 눈 */}
-      <ellipse cx="16" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
-      <circle cx="16.8" cy="12.8" r="0.9" fill="white" />
-      <circle cx="15.5" cy="14" r="0.4" fill="white" />
-      <ellipse cx="24" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
-      <circle cx="24.8" cy="12.8" r="0.9" fill="white" />
-      <circle cx="23.5" cy="14" r="0.4" fill="white" />
+          {/* 눈 */}
+          <ellipse cx="16" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
+          <circle cx="16.8" cy="12.8" r="0.9" fill="white" />
+          <circle cx="15.5" cy="14" r="0.4" fill="white" />
+          <ellipse cx="24" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
+          <circle cx="24.8" cy="12.8" r="0.9" fill="white" />
+          <circle cx="23.5" cy="14" r="0.4" fill="white" />
 
-      {/* 속눈썹 */}
-      <line x1="13.5" y1="11.5" x2="14.5" y2="11" stroke="#2c2c2c" strokeWidth="0.5" />
-      <line x1="25.5" y1="11" x2="26.5" y2="11.5" stroke="#2c2c2c" strokeWidth="0.5" />
+          {/* 속눈썹 */}
+          <line x1="13.5" y1="11.5" x2="14.5" y2="11" stroke="#2c2c2c" strokeWidth="0.5" />
+          <line x1="25.5" y1="11" x2="26.5" y2="11.5" stroke="#2c2c2c" strokeWidth="0.5" />
 
-      {/* 볼 */}
-      <ellipse cx="12" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
-      <ellipse cx="28" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
+          {/* 볼 */}
+          <ellipse cx="12" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
+          <ellipse cx="28" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
 
-      {/* 입 */}
-      <path d="M18,18 Q20,19.5 22,18" fill="none" stroke="#e07060" strokeWidth="0.7" />
+          {/* 입 */}
+          <path d="M18,18 Q20,19.5 22,18" fill="none" stroke="#e07060" strokeWidth="0.7" />
+        </>
+      )}
     </svg>
   );
 }
 
 /** 남자 캐릭터 - 서있음 (출석만, 진찰 대기) */
-function MaleStanding({ color, initial }: { color: string; initial: string }) {
+function MaleStanding({ color, initial, patientId, avatarUrl }: { color: string; initial: string; patientId: string; avatarUrl?: string | null }) {
   return (
     <svg width="40" height="48" viewBox="0 0 40 48" style={{ imageRendering: 'pixelated' }}>
       {/* 바닥 그림자 */}
@@ -176,28 +220,34 @@ function MaleStanding({ color, initial }: { color: string; initial: string }) {
       <rect x="14" y="28" width="12" height="6" rx="1" fill="white" stroke="#2c5a8a" strokeWidth="0.7" />
       <text x="20" y="33" textAnchor="middle" fontSize="5.5" fill="#2c5a8a" fontFamily="monospace" fontWeight="bold">{initial}</text>
 
-      {/* 머리 */}
-      <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
-      <path d="M10,14 L10,9 Q10,3 20,2 Q30,3 30,9 L30,14" fill="#3a2a1a" />
-      <path d="M12,13 L12,10 Q12,5 20,4 Q28,5 28,10 L28,13" fill="#fce4c0" />
-      <path d="M12,10 Q14,8 18,9 L12,10" fill="#3a2a1a" />
+      {avatarUrl ? (
+        <PhotoHead patientId={patientId} avatarUrl={avatarUrl} borderColor="#2c5a8a" />
+      ) : (
+        <>
+          {/* 머리 */}
+          <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
+          <path d="M10,14 L10,9 Q10,3 20,2 Q30,3 30,9 L30,14" fill="#3a2a1a" />
+          <path d="M12,13 L12,10 Q12,5 20,4 Q28,5 28,10 L28,13" fill="#fce4c0" />
+          <path d="M12,10 Q14,8 18,9 L12,10" fill="#3a2a1a" />
 
-      {/* 눈 */}
-      <ellipse cx="16" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
-      <circle cx="16.5" cy="13.2" r="0.7" fill="white" />
-      <ellipse cx="24" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
-      <circle cx="24.5" cy="13.2" r="0.7" fill="white" />
+          {/* 눈 */}
+          <ellipse cx="16" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
+          <circle cx="16.5" cy="13.2" r="0.7" fill="white" />
+          <ellipse cx="24" cy="14" rx="1.8" ry="2" fill="#2c2c2c" />
+          <circle cx="24.5" cy="13.2" r="0.7" fill="white" />
 
-      {/* 눈썹 */}
-      <line x1="14" y1="11" x2="18" y2="11.5" stroke="#3a2a1a" strokeWidth="0.8" />
-      <line x1="22" y1="11.5" x2="26" y2="11" stroke="#3a2a1a" strokeWidth="0.8" />
+          {/* 눈썹 */}
+          <line x1="14" y1="11" x2="18" y2="11.5" stroke="#3a2a1a" strokeWidth="0.8" />
+          <line x1="22" y1="11.5" x2="26" y2="11" stroke="#3a2a1a" strokeWidth="0.8" />
 
-      {/* 볼 */}
-      <ellipse cx="12" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
-      <ellipse cx="28" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
+          {/* 볼 */}
+          <ellipse cx="12" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
+          <ellipse cx="28" cy="16" rx="1.5" ry="1" fill="#ffb0a0" opacity="0.4" />
 
-      {/* 입 - 약간 걱정 */}
-      <path d="M18,18 L22,18" fill="none" stroke="#c07050" strokeWidth="0.8" />
+          {/* 입 - 약간 걱정 */}
+          <path d="M18,18 L22,18" fill="none" stroke="#c07050" strokeWidth="0.8" />
+        </>
+      )}
 
       {/* ? 말풍선 */}
       <rect x="29" y="2" width="10" height="9" rx="2" fill="white" stroke="#5c4a3a" strokeWidth="0.8" />
@@ -209,7 +259,7 @@ function MaleStanding({ color, initial }: { color: string; initial: string }) {
 }
 
 /** 여자 캐릭터 - 서있음 (출석만, 진찰 대기) */
-function FemaleStanding({ color, initial }: { color: string; initial: string }) {
+function FemaleStanding({ color, initial, patientId, avatarUrl }: { color: string; initial: string; patientId: string; avatarUrl?: string | null }) {
   return (
     <svg width="40" height="48" viewBox="0 0 40 48" style={{ imageRendering: 'pixelated' }}>
       {/* 바닥 그림자 */}
@@ -222,8 +272,10 @@ function FemaleStanding({ color, initial }: { color: string; initial: string }) 
       <rect x="13" y="43" width="7" height="3" rx="1" fill="#8a5a6a" stroke="#6a3a4a" strokeWidth="0.7" />
       <rect x="20" y="43" width="7" height="3" rx="1" fill="#8a5a6a" stroke="#6a3a4a" strokeWidth="0.7" />
 
-      {/* 머리카락 (어깨까지) */}
-      <path d="M7,12 Q6,4 20,1 Q34,4 33,12 L33,30 Q33,32 30,32 L30,22 L10,22 L10,32 Q7,32 7,30 Z" fill="#5a3018" />
+      {!avatarUrl && (
+        /* 머리카락 (어깨까지) */
+        <path d="M7,12 Q6,4 20,1 Q34,4 33,12 L33,30 Q33,32 30,32 L30,22 L10,22 L10,32 Q7,32 7,30 Z" fill="#5a3018" />
+      )}
 
       {/* 몸통 - 분홍 블라우스 */}
       <rect x="9" y="22" width="22" height="16" rx="3" fill="#e88ca8" stroke="#c06080" strokeWidth="1.2" />
@@ -231,37 +283,43 @@ function FemaleStanding({ color, initial }: { color: string; initial: string }) 
       <rect x="14" y="28" width="12" height="6" rx="1" fill="white" stroke="#c06080" strokeWidth="0.7" />
       <text x="20" y="33" textAnchor="middle" fontSize="5.5" fill="#c06080" fontFamily="monospace" fontWeight="bold">{initial}</text>
 
-      {/* 머리 */}
-      <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
-      <path d="M10,14 L10,8 Q10,3 20,2 Q30,3 30,8 L30,14" fill="#5a3018" />
-      <path d="M12,13 Q12,6 20,5 Q28,6 28,13" fill="#fce4c0" />
-      <path d="M13,12 Q16,7 20,8 Q17,9 15,12" fill="#5a3018" />
-      <path d="M27,12 Q24,7 20,8 Q23,9 25,12" fill="#5a3018" />
-      <path d="M9,13 Q8,13 8,16 L8,22 Q8,23 9,23 L10,23 L10,14 Z" fill="#5a3018" />
-      <path d="M31,13 Q32,13 32,16 L32,22 Q32,23 31,23 L30,23 L30,14 Z" fill="#5a3018" />
+      {avatarUrl ? (
+        <PhotoHead patientId={patientId} avatarUrl={avatarUrl} borderColor="#c06080" />
+      ) : (
+        <>
+          {/* 머리 */}
+          <circle cx="20" cy="14" r="10" fill="#fce4c0" stroke="#d4a06c" strokeWidth="1.2" />
+          <path d="M10,14 L10,8 Q10,3 20,2 Q30,3 30,8 L30,14" fill="#5a3018" />
+          <path d="M12,13 Q12,6 20,5 Q28,6 28,13" fill="#fce4c0" />
+          <path d="M13,12 Q16,7 20,8 Q17,9 15,12" fill="#5a3018" />
+          <path d="M27,12 Q24,7 20,8 Q23,9 25,12" fill="#5a3018" />
+          <path d="M9,13 Q8,13 8,16 L8,22 Q8,23 9,23 L10,23 L10,14 Z" fill="#5a3018" />
+          <path d="M31,13 Q32,13 32,16 L32,22 Q32,23 31,23 L30,23 L30,14 Z" fill="#5a3018" />
 
-      {/* 리본 */}
-      <circle cx="28" cy="5" r="2.5" fill="#ff6b9d" stroke="#d44a7a" strokeWidth="0.7" />
-      <circle cx="28" cy="5" r="0.8" fill="#d44a7a" />
+          {/* 리본 */}
+          <circle cx="28" cy="5" r="2.5" fill="#ff6b9d" stroke="#d44a7a" strokeWidth="0.7" />
+          <circle cx="28" cy="5" r="0.8" fill="#d44a7a" />
 
-      {/* 눈 */}
-      <ellipse cx="16" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
-      <circle cx="16.8" cy="12.8" r="0.9" fill="white" />
-      <circle cx="15.5" cy="14" r="0.4" fill="white" />
-      <ellipse cx="24" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
-      <circle cx="24.8" cy="12.8" r="0.9" fill="white" />
-      <circle cx="23.5" cy="14" r="0.4" fill="white" />
+          {/* 눈 */}
+          <ellipse cx="16" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
+          <circle cx="16.8" cy="12.8" r="0.9" fill="white" />
+          <circle cx="15.5" cy="14" r="0.4" fill="white" />
+          <ellipse cx="24" cy="13.5" rx="2" ry="2.3" fill="#2c2c2c" />
+          <circle cx="24.8" cy="12.8" r="0.9" fill="white" />
+          <circle cx="23.5" cy="14" r="0.4" fill="white" />
 
-      {/* 속눈썹 */}
-      <line x1="13.5" y1="11.5" x2="14.5" y2="11" stroke="#2c2c2c" strokeWidth="0.5" />
-      <line x1="25.5" y1="11" x2="26.5" y2="11.5" stroke="#2c2c2c" strokeWidth="0.5" />
+          {/* 속눈썹 */}
+          <line x1="13.5" y1="11.5" x2="14.5" y2="11" stroke="#2c2c2c" strokeWidth="0.5" />
+          <line x1="25.5" y1="11" x2="26.5" y2="11.5" stroke="#2c2c2c" strokeWidth="0.5" />
 
-      {/* 볼 */}
-      <ellipse cx="12" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
-      <ellipse cx="28" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
+          {/* 볼 */}
+          <ellipse cx="12" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
+          <ellipse cx="28" cy="16" rx="2" ry="1.2" fill="#ffb0a0" opacity="0.5" />
 
-      {/* 입 - 약간 걱정 */}
-      <path d="M18,18 L22,18" fill="none" stroke="#e07060" strokeWidth="0.7" />
+          {/* 입 - 약간 걱정 */}
+          <path d="M18,18 L22,18" fill="none" stroke="#e07060" strokeWidth="0.7" />
+        </>
+      )}
 
       {/* ? 말풍선 */}
       <rect x="29" y="2" width="10" height="9" rx="2" fill="white" stroke="#5c4a3a" strokeWidth="0.8" />

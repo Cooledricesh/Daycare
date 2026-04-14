@@ -17,6 +17,7 @@ export type BoardPatient = {
   name: string;
   display_name: string | null;
   gender: 'M' | 'F' | null;
+  avatar_url: string | null;
   room_number: string | null;
   status: AttendanceStatus;
   is_attended: boolean;

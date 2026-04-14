@@ -79,6 +79,7 @@ export function SeatCell({ patient }: SeatCellProps) {
               name={patient.name}
               gender={patient.gender}
               status={patient.status}
+              avatarUrl={patient.avatar_url}
               hasTask={patient.has_task && !patient.task_completed}
             />
           </StreakEffect>

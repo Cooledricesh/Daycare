@@ -146,7 +146,7 @@ export async function getAttendanceBoard(
   ] = await Promise.all([
     supabase
       .from('patients')
-      .select('id, name, display_name, gender, room_number')
+      .select('id, name, display_name, gender, avatar_url, room_number')
       .eq('status', 'active'),
     supabase
       .from('attendances')
@@ -281,6 +281,7 @@ export async function getAttendanceBoard(
       name: patient.display_name || patient.name,
       display_name: patient.display_name,
       gender: (patient.gender as 'M' | 'F' | null) ?? null,
+      avatar_url: patient.avatar_url ?? null,
       room_number: patient.room_number,
       status,
       is_attended: isAttended,
