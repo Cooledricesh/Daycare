@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 import type {
   GetAttendanceBoardParams,
@@ -17,6 +17,28 @@ import { format, subDays, parseISO } from 'date-fns';
 interface RoomMappingWithCoordinator {
   room_prefix: string;
   coordinator: { name: string } | null;
+}
+
+/**
+ * Supabase PostgREST는 기본 1000행 서버 캡이 걸려있다.
+ * 60일치 attendances/scheduled_attendances 등 대량 데이터는 반드시 페이지네이션이 필요.
+ */
+const PAGE_SIZE = 1000;
+
+type RangeableQuery<T> = {
+  range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>;
+};
+
+async function fetchAllPaginated<T>(buildQuery: () => RangeableQuery<T>): Promise<T[]> {
+  const all: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return all;
 }
 
 /** 스트릭 수 → 등급 */
@@ -185,10 +207,10 @@ export async function getAttendanceBoard(
     { data: scheduled, error: scheduledError },
     { data: consultations, error: consultationsError },
     { data: roomMappings, error: roomMappingsError },
-    { data: allAttendances },
-    { data: allConsultations },
-    { data: allScheduled },
-    { data: allPatterns },
+    allAttendances,
+    allConsultations,
+    allScheduled,
+    allPatterns,
     holidayMap,
   ] = await Promise.all([
     supabase
@@ -213,26 +235,38 @@ export async function getAttendanceBoard(
       .select('room_prefix, coordinator:staff!coordinator_id(name)')
       .eq('is_active', true)
       .returns<RoomMappingWithCoordinator[]>(),
-    // 스트릭 계산용 과거 출석 데이터
-    supabase
-      .from('attendances')
-      .select('patient_id, date')
-      .gte('date', streakStartDate)
-      .lte('date', date),
-    supabase
-      .from('consultations')
-      .select('patient_id, date')
-      .gte('date', streakStartDate)
-      .lte('date', date),
-    supabase
-      .from('scheduled_attendances')
-      .select('patient_id, date, is_cancelled')
-      .gte('date', streakStartDate)
-      .lte('date', date),
-    supabase
-      .from('scheduled_patterns')
-      .select('patient_id, day_of_week')
-      .eq('is_active', true),
+    // 스트릭 계산용 과거 출석 데이터 (60일치라 1000행 서버캡을 넘어갈 수 있어 전체 페이지 fetch)
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase
+        .from('attendances')
+        .select('patient_id, date')
+        .gte('date', streakStartDate)
+        .lte('date', date)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase
+        .from('consultations')
+        .select('patient_id, date')
+        .gte('date', streakStartDate)
+        .lte('date', date)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; date: string; is_cancelled: boolean }>(() =>
+      supabase
+        .from('scheduled_attendances')
+        .select('patient_id, date, is_cancelled')
+        .gte('date', streakStartDate)
+        .lte('date', date)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; day_of_week: number }>(() =>
+      supabase
+        .from('scheduled_patterns')
+        .select('patient_id, day_of_week')
+        .eq('is_active', true)
+        .order('id'),
+    ),
     getHolidayDatesMap(supabase, streakStartDate, date),
   ]);
 
