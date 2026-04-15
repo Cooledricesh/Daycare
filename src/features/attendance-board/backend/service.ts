@@ -30,12 +30,35 @@ function getStreakTier(streak: number): StreakTier {
 }
 
 /**
+ * 해당 날짜가 환자에게 "예정"된 날인지 판단
+ * - scheduled_attendances(is_cancelled=false) 재료화 row가 있으면 예정
+ * - 없어도 scheduled_patterns 요일 매칭이면 예정 (history backfill)
+ * - is_cancelled=true 재료화 row가 있으면 취소로 처리 → !예정
+ * - 환자 등록일 이전은 예정 아님
+ */
+function isScheduledOnDate(
+  dateStr: string,
+  dow: number,
+  scheduledMaterialized: Set<string>,
+  cancelledMaterialized: Set<string>,
+  patternDows: Set<number>,
+  patientCreatedDate: string,
+): boolean {
+  if (dateStr < patientCreatedDate) return false;
+  if (cancelledMaterialized.has(dateStr)) return false;
+  return scheduledMaterialized.has(dateStr) || patternDows.has(dow);
+}
+
+/**
  * 연속 출석 일수 계산 (오늘 포함, 역순)
  * - 주말/공휴일: 예정+출석이면 카운트, 예정이 아니면 스킵 (스트릭 안 끊김)
  */
 function calculateConsecutiveAttendance(
-  scheduledDates: Set<string>,
+  scheduledMaterialized: Set<string>,
+  cancelledMaterialized: Set<string>,
+  patternDows: Set<number>,
   attendedDates: Set<string>,
+  patientCreatedDate: string,
   holidayMap: Map<string, string>,
   endDate: string,
 ): number {
@@ -44,16 +67,23 @@ function calculateConsecutiveAttendance(
 
   for (let i = 0; i < 365; i++) {
     const dateStr = format(cursor, 'yyyy-MM-dd');
+    if (dateStr < patientCreatedDate) break;
+
     const isHolidayOrWeekend = isWeekend(dateStr) || holidayMap.has(dateStr);
-    const isScheduled = scheduledDates.has(dateStr);
+    const isScheduled = isScheduledOnDate(
+      dateStr,
+      cursor.getDay(),
+      scheduledMaterialized,
+      cancelledMaterialized,
+      patternDows,
+      patientCreatedDate,
+    );
     const isAttended = attendedDates.has(dateStr);
 
     if (isHolidayOrWeekend) {
       if (isScheduled && isAttended) {
-        // 주말/공휴일이지만 예정+출석 → 카운트
         count++;
       }
-      // 예정 아니거나 미출석 → 스킵 (스트릭 안 끊김)
       cursor = subDays(cursor, 1);
       continue;
     }
@@ -80,9 +110,12 @@ function calculateConsecutiveAttendance(
  * - 평일: 출석+진찰 모두 필요
  */
 function calculateConsecutiveConsultation(
-  scheduledDates: Set<string>,
+  scheduledMaterialized: Set<string>,
+  cancelledMaterialized: Set<string>,
+  patternDows: Set<number>,
   attendedDates: Set<string>,
   consultedDates: Set<string>,
+  patientCreatedDate: string,
   holidayMap: Map<string, string>,
   endDate: string,
 ): number {
@@ -91,16 +124,23 @@ function calculateConsecutiveConsultation(
 
   for (let i = 0; i < 365; i++) {
     const dateStr = format(cursor, 'yyyy-MM-dd');
+    if (dateStr < patientCreatedDate) break;
+
     const isHolidayOrWeekend = isWeekend(dateStr) || holidayMap.has(dateStr);
-    const isScheduled = scheduledDates.has(dateStr);
+    const isScheduled = isScheduledOnDate(
+      dateStr,
+      cursor.getDay(),
+      scheduledMaterialized,
+      cancelledMaterialized,
+      patternDows,
+      patientCreatedDate,
+    );
     const isAttended = attendedDates.has(dateStr);
 
     if (isHolidayOrWeekend) {
       if (isScheduled && isAttended) {
-        // 주말/공휴일에 예정+출석이면 진찰 없어도 스트릭 카운트
         count++;
       }
-      // 아니면 스킵 (스트릭 안 끊김)
       cursor = subDays(cursor, 1);
       continue;
     }
@@ -110,7 +150,6 @@ function calculateConsecutiveConsultation(
       continue;
     }
 
-    // 평일: 출석+진찰 모두 필요
     if (!isAttended || !consultedDates.has(dateStr)) {
       break;
     }
@@ -142,11 +181,12 @@ export async function getAttendanceBoard(
     { data: allAttendances },
     { data: allConsultations },
     { data: allScheduled },
+    { data: allPatterns },
     holidayMap,
   ] = await Promise.all([
     supabase
       .from('patients')
-      .select('id, name, display_name, gender, avatar_url, room_number')
+      .select('id, name, display_name, gender, avatar_url, room_number, created_at')
       .eq('status', 'active'),
     supabase
       .from('attendances')
@@ -179,10 +219,15 @@ export async function getAttendanceBoard(
       .lte('date', date),
     supabase
       .from('scheduled_attendances')
-      .select('patient_id, date')
-      .eq('is_cancelled', false)
+      .select('patient_id, date, is_cancelled')
       .gte('date', streakStartDate)
       .lte('date', date),
+    supabase
+      .from('scheduled_patterns')
+      .select('patient_id, day_of_week, patients!inner(status)')
+      .eq('is_active', true)
+      .eq('patients.status', 'active')
+      .returns<{ patient_id: string; day_of_week: number }[]>(),
     getHolidayDatesMap(supabase, streakStartDate, date),
   ]);
 
@@ -215,6 +260,8 @@ export async function getAttendanceBoard(
   const patientAttendanceDates = new Map<string, Set<string>>();
   const patientConsultationDates = new Map<string, Set<string>>();
   const patientScheduledDates = new Map<string, Set<string>>();
+  const patientCancelledDates = new Map<string, Set<string>>();
+  const patientPatternDows = new Map<string, Set<number>>();
 
   for (const a of allAttendances ?? []) {
     const set = patientAttendanceDates.get(a.patient_id) ?? new Set();
@@ -229,9 +276,16 @@ export async function getAttendanceBoard(
   }
 
   for (const s of allScheduled ?? []) {
-    const set = patientScheduledDates.get(s.patient_id) ?? new Set();
+    const target = s.is_cancelled ? patientCancelledDates : patientScheduledDates;
+    const set = target.get(s.patient_id) ?? new Set<string>();
     set.add(s.date);
-    patientScheduledDates.set(s.patient_id, set);
+    target.set(s.patient_id, set);
+  }
+
+  for (const p of allPatterns ?? []) {
+    const set = patientPatternDows.get(p.patient_id) ?? new Set<number>();
+    set.add(p.day_of_week);
+    patientPatternDows.set(p.patient_id, set);
   }
 
   // 코디네이터 맵
@@ -270,11 +324,18 @@ export async function getAttendanceBoard(
     const isNotScheduled = status === 'not_scheduled';
 
     const pScheduled = patientScheduledDates.get(patient.id) ?? new Set<string>();
+    const pCancelled = patientCancelledDates.get(patient.id) ?? new Set<string>();
     const pAttended = patientAttendanceDates.get(patient.id) ?? new Set<string>();
     const pConsulted = patientConsultationDates.get(patient.id) ?? new Set<string>();
+    const pPatternDows = patientPatternDows.get(patient.id) ?? new Set<number>();
+    const patientCreatedDate = (patient.created_at ?? '').slice(0, 10);
 
-    const attendanceStreak = isNotScheduled ? 0 : calculateConsecutiveAttendance(pScheduled, pAttended, holidayMap, date);
-    const consultationStreak = isNotScheduled ? 0 : calculateConsecutiveConsultation(pScheduled, pAttended, pConsulted, holidayMap, date);
+    const attendanceStreak = isNotScheduled
+      ? 0
+      : calculateConsecutiveAttendance(pScheduled, pCancelled, pPatternDows, pAttended, patientCreatedDate, holidayMap, date);
+    const consultationStreak = isNotScheduled
+      ? 0
+      : calculateConsecutiveConsultation(pScheduled, pCancelled, pPatternDows, pAttended, pConsulted, patientCreatedDate, holidayMap, date);
 
     const boardPatient: BoardPatient = {
       id: patient.id,
