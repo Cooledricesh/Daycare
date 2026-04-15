@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { format, subDays } from 'date-fns';
 import { isBirthdayToday } from '@/lib/birthday';
 import type { Database } from '@/lib/supabase/types';
+import { fetchAllPaginated } from '@/lib/supabase-pagination';
 import type { HighlightPatient, TodayHighlightsResponse } from './schema';
 import { HighlightsError, HighlightsErrorCode } from './error';
 
@@ -50,22 +51,32 @@ export async function computeTodayHighlights(
 
   const activePatients = (patients || []) as unknown as PatientRow[];
 
-  const [{ data: attRows }, { data: schRows }, { data: consRows }] = await Promise.all([
-    supabase
-      .from('attendances')
-      .select('patient_id, date')
-      .gte('date', fourteenDaysAgo)
-      .lte('date', todayStr),
-    supabase
-      .from('scheduled_attendances')
-      .select('patient_id, date, is_cancelled')
-      .gte('date', fourteenDaysAgo)
-      .lte('date', todayStr),
-    supabase
-      .from('consultations')
-      .select('patient_id, date')
-      .gte('date', fourteenDaysAgo)
-      .lte('date', todayStr),
+  // 14일 범위도 환자 수(275명) × 날짜로 1000행 서버캡을 넘길 수 있어 페이지네이션 필수
+  const [attRows, schRows, consRows] = await Promise.all([
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase
+        .from('attendances')
+        .select('patient_id, date')
+        .gte('date', fourteenDaysAgo)
+        .lte('date', todayStr)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; date: string; is_cancelled: boolean }>(() =>
+      supabase
+        .from('scheduled_attendances')
+        .select('patient_id, date, is_cancelled')
+        .gte('date', fourteenDaysAgo)
+        .lte('date', todayStr)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase
+        .from('consultations')
+        .select('patient_id, date')
+        .gte('date', fourteenDaysAgo)
+        .lte('date', todayStr)
+        .order('id'),
+    ),
   ]);
 
   const attendanceMap = new Map<string, Set<string>>();
@@ -73,17 +84,17 @@ export async function computeTodayHighlights(
   const consultationTodaySet = new Set<string>();
   const attendanceTodaySet = new Set<string>();
 
-  for (const row of (attRows as { patient_id: string; date: string }[] | null) || []) {
+  for (const row of attRows) {
     if (!attendanceMap.has(row.patient_id)) attendanceMap.set(row.patient_id, new Set());
     attendanceMap.get(row.patient_id)!.add(row.date);
     if (row.date === todayStr) attendanceTodaySet.add(row.patient_id);
   }
-  for (const row of (schRows as { patient_id: string; date: string; is_cancelled: boolean }[] | null) || []) {
+  for (const row of schRows) {
     if (row.is_cancelled) continue;
     if (!scheduledMap.has(row.patient_id)) scheduledMap.set(row.patient_id, new Set());
     scheduledMap.get(row.patient_id)!.add(row.date);
   }
-  for (const row of (consRows as { patient_id: string; date: string }[] | null) || []) {
+  for (const row of consRows) {
     if (row.date === todayStr) consultationTodaySet.add(row.patient_id);
   }
 

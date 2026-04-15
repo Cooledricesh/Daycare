@@ -1,5 +1,6 @@
-import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
+import { fetchAllPaginated } from '@/lib/supabase-pagination';
 import type {
   GetAttendanceBoardParams,
   BoardPatient,
@@ -19,27 +20,6 @@ interface RoomMappingWithCoordinator {
   coordinator: { name: string } | null;
 }
 
-/**
- * Supabase PostgREST는 기본 1000행 서버 캡이 걸려있다.
- * 60일치 attendances/scheduled_attendances 등 대량 데이터는 반드시 페이지네이션이 필요.
- */
-const PAGE_SIZE = 1000;
-
-type RangeableQuery<T> = {
-  range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>;
-};
-
-async function fetchAllPaginated<T>(buildQuery: () => RangeableQuery<T>): Promise<T[]> {
-  const all: T[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    if (data.length < PAGE_SIZE) break;
-  }
-  return all;
-}
 
 /** 스트릭 수 → 등급 */
 function getStreakTier(streak: number): StreakTier {

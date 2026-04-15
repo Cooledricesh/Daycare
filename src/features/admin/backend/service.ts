@@ -5,6 +5,7 @@ import { formatScheduleDays, getTodayString, getYesterdayString, DAY_NAMES_KO } 
 import { AdminError, AdminErrorCode } from './error';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 import { isWeekend as isWeekendUtil, getHolidayDatesMap as getHolidayDatesMapUtil } from '@/lib/business-days';
+import { fetchAllPaginated } from '@/lib/supabase-pagination';
 import { eachDayOfInterval, parseISO } from 'date-fns';
 import type {
   GetPatientsQuery,
@@ -1648,12 +1649,13 @@ export async function getCoordinatorWorkload(
   supabase: SupabaseClient<Database>,
   query: GetCoordinatorWorkloadQuery,
 ): Promise<CoordinatorWorkloadSummary> {
+  // scheduled_attendances/attendances/consultations는 환자 수×기간일수로 1000행 서버캡을 쉽게 초과하므로 페이지네이션 필수
   const [
     { data: coordinators },
     { data: patients },
-    { data: scheduledRows },
-    { data: attendanceRows },
-    { data: consultationRows },
+    scheduledRows,
+    attendanceRows,
+    consultationRows,
     holidayMap,
   ] = await Promise.all([
     supabase.from('staff')
@@ -1663,19 +1665,28 @@ export async function getCoordinatorWorkload(
     supabase.from('patients')
       .select('id, coordinator_id')
       .eq('status', 'active'),
-    supabase.from('scheduled_attendances')
-      .select('patient_id, date')
-      .gte('date', query.start_date)
-      .lte('date', query.end_date)
-      .eq('is_cancelled', false),
-    supabase.from('attendances')
-      .select('patient_id, date')
-      .gte('date', query.start_date)
-      .lte('date', query.end_date),
-    supabase.from('consultations')
-      .select('patient_id, date')
-      .gte('date', query.start_date)
-      .lte('date', query.end_date),
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase.from('scheduled_attendances')
+        .select('patient_id, date')
+        .gte('date', query.start_date)
+        .lte('date', query.end_date)
+        .eq('is_cancelled', false)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase.from('attendances')
+        .select('patient_id, date')
+        .gte('date', query.start_date)
+        .lte('date', query.end_date)
+        .order('id'),
+    ),
+    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
+      supabase.from('consultations')
+        .select('patient_id, date')
+        .gte('date', query.start_date)
+        .lte('date', query.end_date)
+        .order('id'),
+    ),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
   ]);
 
