@@ -231,10 +231,8 @@ export async function getAttendanceBoard(
       .lte('date', date),
     supabase
       .from('scheduled_patterns')
-      .select('patient_id, day_of_week, patients!inner(status)')
-      .eq('is_active', true)
-      .eq('patients.status', 'active')
-      .returns<{ patient_id: string; day_of_week: number }[]>(),
+      .select('patient_id, day_of_week')
+      .eq('is_active', true),
     getHolidayDatesMap(supabase, streakStartDate, date),
   ]);
 
