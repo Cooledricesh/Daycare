@@ -106,29 +106,37 @@ export async function computeTodayHighlights(
 
   const recent3Days = [0, 1, 2].map((offset) => format(subDays(now, offset), 'yyyy-MM-dd'));
 
+  // 진찰이 KST 12시에 끝나므로 그 이전에는 결석/진찰누락을 단정할 수 없다.
+  // 정오 이전엔 해당 카드들을 비워서 false positive를 차단하고, 정오 이후에만 판정한다.
+  // KST = UTC+9 이므로 KST 정오 = UTC 03:00.
+  const kstHour = (now.getUTCHours() + 9) % 24;
+  const isPastNoonKst = kstHour >= 12;
+
   for (const p of activePatients) {
     const scheduled = scheduledMap.get(p.id) || new Set<string>();
     const attended = attendanceMap.get(p.id) || new Set<string>();
 
-    const recentScheduled = recent3Days.filter((d) => scheduled.has(d));
-    const recentAttended = recent3Days.filter((d) => attended.has(d));
-    if (recentScheduled.length >= 3 && recentAttended.length === 0) {
-      threeDayAbsence.push(toHighlightPatient(p, '3일 연속 결석'));
-    }
+    if (isPastNoonKst) {
+      const recentScheduled = recent3Days.filter((d) => scheduled.has(d));
+      const recentAttended = recent3Days.filter((d) => attended.has(d));
+      if (recentScheduled.length >= 3 && recentAttended.length === 0) {
+        threeDayAbsence.push(toHighlightPatient(p, '3일 연속 결석'));
+      }
 
-    const scheduledCount = scheduled.size;
-    const attendedCount = attended.size;
-    if (
-      scheduledCount >= 5 &&
-      attendedCount / scheduledCount >= 0.9 &&
-      scheduled.has(todayStr) &&
-      !attended.has(todayStr)
-    ) {
-      suddenAbsence.push(toHighlightPatient(p, '평소 개근자'));
-    }
+      const scheduledCount = scheduled.size;
+      const attendedCount = attended.size;
+      if (
+        scheduledCount >= 5 &&
+        attendedCount / scheduledCount >= 0.9 &&
+        scheduled.has(todayStr) &&
+        !attended.has(todayStr)
+      ) {
+        suddenAbsence.push(toHighlightPatient(p, '평소 개근자'));
+      }
 
-    if (attendanceTodaySet.has(p.id) && !consultationTodaySet.has(p.id)) {
-      examMissed.push(toHighlightPatient(p));
+      if (attendanceTodaySet.has(p.id) && !consultationTodaySet.has(p.id)) {
+        examMissed.push(toHighlightPatient(p));
+      }
     }
 
     if (isBirthdayToday(p.birth_date, now)) {
