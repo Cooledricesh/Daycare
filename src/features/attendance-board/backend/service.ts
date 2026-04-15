@@ -51,7 +51,13 @@ function isScheduledOnDate(
 
 /**
  * 연속 출석 일수 계산 (오늘 포함, 역순)
- * - 주말/공휴일: 예정+출석이면 카운트, 예정이 아니면 스킵 (스트릭 안 끊김)
+ * 규칙:
+ * - 출석 기록이 있으면 무조건 카운트 (요일 무관, 재료화 테이블 유무 무관)
+ * - 주말/공휴일에 미출석이면 스킵 (스트릭 안 끊김)
+ * - 평일에 미출석이면서 "예정된 날"이면 break (결석 = 스트릭 종료)
+ *   * 예정 판정: materialized / scheduled_patterns 요일 / cancelled 여부 종합
+ * - 평일에 미출석이고 예정도 아니면 스킵 (쉬는 요일은 스트릭 안 끊김)
+ * - 환자 등록일 이전 날짜는 더 이상 돌지 않음
  */
 function calculateConsecutiveAttendance(
   scheduledMaterialized: Set<string>,
@@ -67,9 +73,22 @@ function calculateConsecutiveAttendance(
 
   for (let i = 0; i < 365; i++) {
     const dateStr = format(cursor, 'yyyy-MM-dd');
-    if (dateStr < patientCreatedDate) break;
+    if (patientCreatedDate && dateStr < patientCreatedDate) break;
+
+    const isAttended = attendedDates.has(dateStr);
+
+    if (isAttended) {
+      count++;
+      cursor = subDays(cursor, 1);
+      continue;
+    }
 
     const isHolidayOrWeekend = isWeekend(dateStr) || holidayMap.has(dateStr);
+    if (isHolidayOrWeekend) {
+      cursor = subDays(cursor, 1);
+      continue;
+    }
+
     const isScheduled = isScheduledOnDate(
       dateStr,
       cursor.getDay(),
@@ -78,26 +97,11 @@ function calculateConsecutiveAttendance(
       patternDows,
       patientCreatedDate,
     );
-    const isAttended = attendedDates.has(dateStr);
 
-    if (isHolidayOrWeekend) {
-      if (isScheduled && isAttended) {
-        count++;
-      }
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    if (!isScheduled) {
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    if (!isAttended) {
+    if (isScheduled) {
       break;
     }
 
-    count++;
     cursor = subDays(cursor, 1);
   }
 
@@ -106,8 +110,12 @@ function calculateConsecutiveAttendance(
 
 /**
  * 연속 진찰 일수 계산
- * - 주말/공휴일: 진찰 일정이 없으므로 출석만 했으면 스트릭 유지+카운트
- * - 평일: 출석+진찰 모두 필요
+ * 규칙:
+ * - 주말/공휴일: 출석만 했어도 카운트 (진찰 의무 없음). 미출석이면 스킵.
+ * - 평일 출석+진찰 → 카운트
+ * - 평일 출석했으나 진찰 없음 → break (진찰 스트릭 종료)
+ * - 평일 미출석 + 예정된 날 → break (결석으로 진찰 스트릭 종료)
+ * - 평일 미출석 + 예정 아닌 날 → 스킵
  */
 function calculateConsecutiveConsultation(
   scheduledMaterialized: Set<string>,
@@ -124,9 +132,26 @@ function calculateConsecutiveConsultation(
 
   for (let i = 0; i < 365; i++) {
     const dateStr = format(cursor, 'yyyy-MM-dd');
-    if (dateStr < patientCreatedDate) break;
+    if (patientCreatedDate && dateStr < patientCreatedDate) break;
 
+    const isAttended = attendedDates.has(dateStr);
     const isHolidayOrWeekend = isWeekend(dateStr) || holidayMap.has(dateStr);
+
+    if (isHolidayOrWeekend) {
+      if (isAttended) count++;
+      cursor = subDays(cursor, 1);
+      continue;
+    }
+
+    // 평일
+    if (isAttended) {
+      if (!consultedDates.has(dateStr)) break;
+      count++;
+      cursor = subDays(cursor, 1);
+      continue;
+    }
+
+    // 평일 미출석
     const isScheduled = isScheduledOnDate(
       dateStr,
       cursor.getDay(),
@@ -135,26 +160,8 @@ function calculateConsecutiveConsultation(
       patternDows,
       patientCreatedDate,
     );
-    const isAttended = attendedDates.has(dateStr);
+    if (isScheduled) break;
 
-    if (isHolidayOrWeekend) {
-      if (isScheduled && isAttended) {
-        count++;
-      }
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    if (!isScheduled) {
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    if (!isAttended || !consultedDates.has(dateStr)) {
-      break;
-    }
-
-    count++;
     cursor = subDays(cursor, 1);
   }
 
