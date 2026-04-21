@@ -17,3 +17,26 @@ export type CareschedulerInjection = z.infer<typeof CareschedulerInjectionSchema
 export type CareschedulerInjectionsResponse = z.infer<
   typeof CareschedulerInjectionsResponseSchema
 >;
+
+export const CareschedulerUpcomingItemSchema = z.object({
+  patient_number: z.string(),
+  patient_name: z.string(),
+  item_name: z.string(),
+  interval_weeks: z.number().int().positive(),
+  last_executed_date: z.string().nullable(),
+  next_due_date: z.string(),
+});
+
+export const CareschedulerUpcomingResponseSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  count: z.number().int().nonnegative(),
+  items: z.array(CareschedulerUpcomingItemSchema),
+});
+
+export type CareschedulerUpcomingItem = z.infer<
+  typeof CareschedulerUpcomingItemSchema
+>;
+export type CareschedulerUpcomingResponse = z.infer<
+  typeof CareschedulerUpcomingResponseSchema
+>;

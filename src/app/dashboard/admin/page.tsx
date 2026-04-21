@@ -7,6 +7,7 @@ import { AdminDetailPanel } from '@/features/admin/components/AdminDetailPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { KeyboardShortcutHelpModal } from '@/components/KeyboardShortcutHelpModal';
 import { TodayHighlightCard } from '@/features/highlights/components/TodayHighlightCard';
+import { UpcomingInjectionsCard } from '@/features/injections/components/UpcomingInjectionsCard';
 import { getTodayString } from '@/lib/date';
 import { usePatientListNavigation } from '@/hooks/usePatientListNavigation';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
@@ -28,7 +29,10 @@ export default function AdminDashboardPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <TodayHighlightCard patientLinkPrefix="/dashboard/staff/patient" className="mb-4" />
+        <div className="grid gap-4 md:grid-cols-2 mb-4">
+          <TodayHighlightCard patientLinkPrefix="/dashboard/staff/patient" />
+          <UpcomingInjectionsCard patientLinkPrefix="/dashboard/staff/patient" />
+        </div>
       </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}

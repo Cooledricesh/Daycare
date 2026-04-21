@@ -7,6 +7,7 @@ import { NurseDetailPanel } from '@/features/nurse/components/NurseDetailPanel';
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout';
 import { KeyboardShortcutHelpModal } from '@/components/KeyboardShortcutHelpModal';
 import { TodayHighlightCard } from '@/features/highlights/components/TodayHighlightCard';
+import { UpcomingInjectionsCard } from '@/features/injections/components/UpcomingInjectionsCard';
 import { getTodayString } from '@/lib/date';
 import { usePatientListNavigation } from '@/hooks/usePatientListNavigation';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
@@ -28,7 +29,10 @@ export default function NursePrescriptionsPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <TodayHighlightCard patientLinkPrefix="/dashboard/nurse/patient" className="mb-4" />
+        <div className="grid gap-4 md:grid-cols-2 mb-4">
+          <TodayHighlightCard patientLinkPrefix="/dashboard/nurse/patient" />
+          <UpcomingInjectionsCard patientLinkPrefix="/dashboard/nurse/patient" />
+        </div>
       </div>
       <MasterDetailLayout
         hasSelection={nav.selectedItem !== null}
