@@ -30,7 +30,7 @@ export default function DoctorConsultationPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <div className="grid gap-4 md:grid-cols-2 mb-4">
+        <div className="grid gap-4 md:grid-cols-2 mb-4 items-start">
           <TodayHighlightCard patientLinkPrefix="/dashboard/doctor/history" />
           <UpcomingInjectionsCard patientLinkPrefix="/dashboard/doctor/history" />
         </div>

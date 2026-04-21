@@ -29,7 +29,7 @@ export default function NursePrescriptionsPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <div className="grid gap-4 md:grid-cols-2 mb-4">
+        <div className="grid gap-4 md:grid-cols-2 mb-4 items-start">
           <TodayHighlightCard patientLinkPrefix="/dashboard/nurse/patient" />
           <UpcomingInjectionsCard patientLinkPrefix="/dashboard/nurse/patient" />
         </div>

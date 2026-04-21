@@ -211,7 +211,7 @@ export default function StaffDashboardPage() {
   return (
     <>
       <div className="px-4 pt-4">
-        <div className="grid gap-4 md:grid-cols-2 mb-4">
+        <div className="grid gap-4 md:grid-cols-2 mb-4 items-start">
           <TodayHighlightCard patientLinkPrefix="/dashboard/staff/patient" />
           <UpcomingInjectionsCard patientLinkPrefix="/dashboard/staff/patient" />
         </div>

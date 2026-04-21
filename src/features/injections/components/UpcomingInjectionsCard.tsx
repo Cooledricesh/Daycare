@@ -11,7 +11,7 @@ import { useUpcomingInjections } from '../hooks/useUpcomingInjections';
 import type { UpcomingInjectionItem } from '../lib/dto';
 
 const DEFAULT_DAYS = 7;
-const MAX_VISIBLE_ITEMS = 10;
+const MAX_VISIBLE_ITEMS = 3;
 
 type Props = {
   patientLinkPrefix: string;
