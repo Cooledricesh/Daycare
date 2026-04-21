@@ -13,6 +13,7 @@ import {
   RefreshCw,
   KeyRound,
   Stethoscope,
+  Syringe,
   type LucideIcon,
 } from 'lucide-react';
 import { type UserRole } from '@/types/api';
@@ -21,12 +22,23 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  external?: boolean;
 }
 
 interface RoleConfig {
   navItems: NavItem[];
   title: string;
 }
+
+const CARESCHEDULER_WEB_URL =
+  process.env.NEXT_PUBLIC_CARESCHEDULER_WEB_URL ?? 'https://careschedulerp.vercel.app';
+
+const careschedulerNavItem: NavItem = {
+  href: CARESCHEDULER_WEB_URL,
+  label: 'Carescheduler',
+  icon: Syringe,
+  external: true,
+};
 
 export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   admin: {
@@ -44,6 +56,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       { href: '/shared/attendance-board', label: '출석 보드', icon: Gamepad2 },
       { href: '/shared/absence-risk', label: '결석 관리', icon: UserX },
       { href: '/shared/vitals', label: '활력징후', icon: HeartPulse },
+      careschedulerNavItem,
       { href: '/shared/change-password', label: '비밀번호 변경', icon: KeyRound },
     ],
   },
@@ -56,6 +69,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       { href: '/shared/absence-risk', label: '결석 관리', icon: UserX },
       { href: '/shared/vitals', label: '활력징후', icon: HeartPulse },
       { href: '/shared/stats', label: '통계', icon: BarChart3 },
+      careschedulerNavItem,
       { href: '/shared/change-password', label: '비밀번호 변경', icon: KeyRound },
     ],
   },
@@ -68,6 +82,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       { href: '/shared/absence-risk', label: '결석 관리', icon: UserX },
       { href: '/shared/vitals', label: '활력징후', icon: HeartPulse },
       { href: '/shared/stats', label: '통계', icon: BarChart3 },
+      careschedulerNavItem,
       { href: '/shared/change-password', label: '비밀번호 변경', icon: KeyRound },
     ],
   },
@@ -81,6 +96,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       { href: '/shared/absence-risk', label: '결석 관리', icon: UserX },
       { href: '/shared/vitals', label: '활력징후', icon: HeartPulse },
       { href: '/shared/stats', label: '통계', icon: BarChart3 },
+      careschedulerNavItem,
       { href: '/shared/change-password', label: '비밀번호 변경', icon: KeyRound },
     ],
   },

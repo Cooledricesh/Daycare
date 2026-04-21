@@ -33,6 +33,7 @@ import { getPatientTimeline } from '@/features/patient-timeline/backend/service'
 import { PatientTimelineError, PatientTimelineErrorCode } from '@/features/patient-timeline/backend/error';
 import notificationRoutes from '@/features/notification/backend/route';
 import attendanceBoardRoutes from '@/features/attendance-board/backend/route';
+import injectionsRoutes from '@/features/injections/backend/route';
 import { uploadPatientAvatar, deletePatientAvatar } from './service';
 import { AvatarError } from './error';
 
@@ -550,5 +551,9 @@ sharedRoutes.get('/vitals/:patientId', async (c) => {
 // ========== Attendance Board ==========
 
 sharedRoutes.route('/attendance-board', attendanceBoardRoutes);
+
+// ========== Injections (Carescheduler 연동) ==========
+
+sharedRoutes.route('/injections', injectionsRoutes);
 
 export default sharedRoutes;

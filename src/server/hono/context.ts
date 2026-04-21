@@ -8,6 +8,10 @@ export type AppConfig = {
     url: string;
     serviceRoleKey: string;
   };
+  carescheduler: {
+    apiUrl: string;
+    apiKey: string;
+  };
 };
 
 export type JWTPayload = {

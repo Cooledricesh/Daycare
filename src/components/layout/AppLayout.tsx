@@ -71,19 +71,32 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
         <nav className="p-4 space-y-1 flex-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const isActive = !item.external && (pathname === item.href || pathname.startsWith(item.href + '/'));
+
+            const className = cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+              isActive
+                ? `${colors.activeBg} ${colors.activeText}`
+                : 'text-gray-700 hover:bg-gray-100'
+            );
+
+            if (item.external) {
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={className}
+                >
+                  <Icon className="h-5 w-5" />
+                  {item.label}
+                </a>
+              );
+            }
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? `${colors.activeBg} ${colors.activeText}`
-                    : 'text-gray-700 hover:bg-gray-100'
-                )}
-              >
+              <Link key={item.href} href={item.href} className={className}>
                 <Icon className="h-5 w-5" />
                 {item.label}
               </Link>
@@ -144,19 +157,32 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
         <div className="flex items-center justify-around h-14 px-2">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const isActive = !item.external && (pathname === item.href || pathname.startsWith(item.href + '/'));
+
+            const className = cn(
+              'flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors',
+              isActive
+                ? `${colors.activeText}`
+                : 'text-gray-400'
+            );
+
+            if (item.external) {
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={className}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="truncate max-w-[72px]">{item.label}</span>
+                </a>
+              );
+            }
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  isActive
-                    ? `${colors.activeText}`
-                    : 'text-gray-400'
-                )}
-              >
+              <Link key={item.href} href={item.href} className={className}>
                 <Icon className={cn('h-5 w-5', isActive && colors.activeText)} />
                 <span className="truncate max-w-[72px]">{item.label}</span>
               </Link>

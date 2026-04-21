@@ -4,6 +4,8 @@ import type { AppConfig } from '@/server/hono/context';
 const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  CARESCHEDULER_API_URL: z.string().url(),
+  CARESCHEDULER_API_KEY: z.string().min(1),
 });
 
 let cachedConfig: AppConfig | null = null;
@@ -16,6 +18,8 @@ export const getAppConfig = (): AppConfig => {
   const parsed = envSchema.safeParse({
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    CARESCHEDULER_API_URL: process.env.CARESCHEDULER_API_URL,
+    CARESCHEDULER_API_KEY: process.env.CARESCHEDULER_API_KEY,
   });
 
   if (!parsed.success) {
@@ -29,6 +33,10 @@ export const getAppConfig = (): AppConfig => {
     supabase: {
       url: parsed.data.NEXT_PUBLIC_SUPABASE_URL,
       serviceRoleKey: parsed.data.SUPABASE_SERVICE_ROLE_KEY,
+    },
+    carescheduler: {
+      apiUrl: parsed.data.CARESCHEDULER_API_URL,
+      apiKey: parsed.data.CARESCHEDULER_API_KEY,
     },
   } satisfies AppConfig;
 

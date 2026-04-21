@@ -16,6 +16,7 @@ import { MessageForm } from '@/features/staff/components/MessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
+import { PatientInjectionsCard } from '@/features/injections/components/PatientInjectionsCard';
 import { getTodayString } from '@/lib/date';
 
 type PageProps = {
@@ -157,6 +158,8 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
           <MessageForm patientId={patientId} date={today} />
         </CardContent>
       </Card>
+
+      <PatientInjectionsCard patientId={patientId} className="mb-4" />
 
       <AttendanceHeatmap patientId={patientId} className="mb-4" />
       <PatientTimelineStrip patientId={patientId} className="mb-4" />
