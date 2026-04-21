@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Syringe, ChevronRight } from 'lucide-react';
+import { Syringe } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,6 @@ import { useUpcomingInjections } from '../hooks/useUpcomingInjections';
 import type { UpcomingInjectionItem } from '../lib/dto';
 
 const DEFAULT_DAYS = 7;
-const MAX_VISIBLE_ITEMS = 3;
 
 type Props = {
   patientLinkPrefix: string;
@@ -33,52 +32,39 @@ function daysUntil(dateStr: string): number | null {
   return Math.round((parsed.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function urgencyBadge(dateStr: string) {
+function dueSuffix(dateStr: string): string {
   const days = daysUntil(dateStr);
-  if (days === null) return null;
-  if (days < 0) {
-    return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">지남 {Math.abs(days)}일</Badge>;
-  }
-  if (days === 0) {
-    return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">오늘</Badge>;
-  }
-  if (days <= 2) {
-    return <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50">D-{days}</Badge>;
-  }
-  return <Badge variant="secondary">D-{days}</Badge>;
+  if (days === null) return dueLabel(dateStr);
+  if (days < 0) return `지남 ${Math.abs(days)}일`;
+  if (days === 0) return '오늘';
+  if (days === 1) return '내일';
+  return `D-${days}`;
 }
 
-function Row({
+function InjectionBadge({
   item,
   patientLinkPrefix,
 }: {
   item: UpcomingInjectionItem;
   patientLinkPrefix: string;
 }) {
-  const rowContent = (
-    <div className="flex items-center gap-2 py-1.5 px-1 rounded hover:bg-gray-50 transition-colors">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-sm truncate">{item.patient_name}</span>
-          {urgencyBadge(item.next_due_date)}
-        </div>
-        <div className="text-xs text-gray-500 truncate">
-          {dueLabel(item.next_due_date)} · {item.item_name}
-        </div>
-      </div>
-      {item.patient_id && <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
-    </div>
+  const tooltip = `${item.item_name} · ${dueLabel(item.next_due_date)}`;
+
+  const badge = (
+    <Badge
+      variant="outline"
+      className="cursor-pointer hover:bg-gray-50 text-purple-600 border-current"
+      title={tooltip}
+    >
+      {item.patient_name}
+      <span className="ml-1 text-[10px] opacity-60">{dueSuffix(item.next_due_date)}</span>
+    </Badge>
   );
 
   if (item.patient_id) {
-    return (
-      <Link href={`${patientLinkPrefix}/${item.patient_id}`} className="block">
-        {rowContent}
-      </Link>
-    );
+    return <Link href={`${patientLinkPrefix}/${item.patient_id}`}>{badge}</Link>;
   }
-
-  return <div>{rowContent}</div>;
+  return <span>{badge}</span>;
 }
 
 export function UpcomingInjectionsCard({ patientLinkPrefix, days = DEFAULT_DAYS, className }: Props) {
@@ -109,19 +95,14 @@ export function UpcomingInjectionsCard({ patientLinkPrefix, days = DEFAULT_DAYS,
             다가오는 {days}일 내 예정된 주사제가 없습니다.
           </p>
         ) : (
-          <div className="space-y-0.5">
-            {data.items.slice(0, MAX_VISIBLE_ITEMS).map((item, index) => (
-              <Row
+          <div className="flex flex-wrap gap-1">
+            {data.items.map((item, index) => (
+              <InjectionBadge
                 key={`${item.patient_id_no}-${item.item_name}-${index}`}
                 item={item}
                 patientLinkPrefix={patientLinkPrefix}
               />
             ))}
-            {data.items.length > MAX_VISIBLE_ITEMS && (
-              <p className="text-[11px] text-gray-400 pt-1">
-                + {data.items.length - MAX_VISIBLE_ITEMS}건 더
-              </p>
-            )}
           </div>
         )}
       </CardContent>
