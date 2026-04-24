@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/cron/monthly-report-generate",
+      "schedule": "30 15 1 * *"
+    }
+  ]
+}

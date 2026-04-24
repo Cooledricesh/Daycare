@@ -14,6 +14,7 @@ import {
   KeyRound,
   Stethoscope,
   Syringe,
+  FileBarChart,
   type LucideIcon,
 } from 'lucide-react';
 import { type UserRole } from '@/types/api';
@@ -51,6 +52,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       { href: '/dashboard/admin/schedule', label: '스케줄 관리', icon: Calendar },
       { href: '/dashboard/admin/tasks', label: '처리 필요 항목', icon: ClipboardList },
       { href: '/dashboard/admin/stats', label: '통계', icon: BarChart3 },
+      { href: '/dashboard/admin/monthly-report', label: '월간 리포트', icon: FileBarChart },
       { href: '/dashboard/admin/sync', label: '데이터 동기화', icon: RefreshCw },
       { href: '/dashboard/admin/settings/room-mapping', label: '호실 매핑', icon: Settings },
       { href: '/shared/attendance-board', label: '출석 보드', icon: Gamepad2 },

@@ -12,6 +12,7 @@ import staffRoutes from '@/features/staff/backend/route';
 import nurseRoutes from '@/features/nurse/backend/route';
 import doctorRoutes from '@/features/doctor/backend/route';
 import sharedRoutes from '@/features/shared/backend/route';
+import monthlyReportRoutes from '@/features/monthly-report/backend/route';
 
 let singletonApp: Hono<AppEnv> | null = null;
 
@@ -54,6 +55,7 @@ export const createHonoApp = () => {
   // Feature routes
   app.route('/api/patients', patientRoutes);
   app.route('/api/admin', adminRoutes);
+  app.route('/api/admin/monthly-reports', monthlyReportRoutes);
   app.route('/api/staff', staffRoutes);
   app.route('/api/nurse', nurseRoutes);
   app.route('/api/doctor', doctorRoutes);
