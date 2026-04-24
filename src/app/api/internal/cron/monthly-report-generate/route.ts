@@ -26,8 +26,8 @@ function getKstYesterdayInfo(): { year: number; month: number } {
 /**
  * POST /api/internal/cron/monthly-report-generate
  *
- * Vercel Cron 스케줄: 30 15 1 * * (UTC) = KST 2일 00:30
- * 함수 내부: KST 기준 어제가 속한 달의 리포트 생성
+ * Vercel Cron 스케줄: 0 1 1 * * (UTC) = KST 1일 10:00
+ * 함수 내부: KST 기준 어제가 속한 달(=전월)의 리포트 생성
  * - 이미 존재하면 skip (generated_by='cron')
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {

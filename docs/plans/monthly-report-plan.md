@@ -204,7 +204,7 @@ supabase/migrations/
 - [ ] `.env.example`에 `CRON_SECRET` 추가
 - [ ] `vercel.json` 생성 (spec §5.1)
   ```json
-  { "crons": [{ "path": "/api/internal/cron/monthly-report-generate", "schedule": "30 15 1 * *" }] }
+  { "crons": [{ "path": "/api/internal/cron/monthly-report-generate", "schedule": "0 1 1 * *" }] }
   ```
 
 ### Phase 5: 프론트엔드 (P0)
