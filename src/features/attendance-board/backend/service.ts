@@ -211,8 +211,9 @@ export async function getAttendanceBoard(
       .select('patient_id')
       .eq('date', date),
     supabase
-      .from('room_coordinator_mapping')
+      .from('room_coordinator_assignments')
       .select('room_prefix, coordinator:staff!coordinator_id(name)')
+      .eq('role', 'primary')
       .eq('is_active', true)
       .returns<RoomMappingWithCoordinator[]>(),
     // 스트릭 계산용 과거 출석 데이터 (60일치라 1000행 서버캡을 넘어갈 수 있어 전체 페이지 fetch)

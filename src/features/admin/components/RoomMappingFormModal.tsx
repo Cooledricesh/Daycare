@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   useCreateRoomMapping,
   useUpdateRoomMapping,
@@ -30,12 +30,34 @@ import {
 import { useStaff } from '../hooks/useStaff';
 import type { RoomMappingItem } from '../backend/schema';
 
-const roomMappingSchema = z.object({
-  room_prefix: z.string().min(1, '호실 번호를 입력해주세요').max(10),
-  coordinator_id: z.string().nullable(),
-  description: z.string().max(100).optional(),
-  is_active: z.boolean(),
+const ROLE_LABELS: Record<'primary' | 'backup' | 'co', string> = {
+  primary: '주담당',
+  backup: '백업',
+  co: '공동',
+};
+
+const assignmentSchema = z.object({
+  coordinator_id: z.string().uuid('코디네이터를 선택해주세요'),
+  role: z.enum(['primary', 'backup', 'co']),
 });
+
+const roomMappingSchema = z
+  .object({
+    room_prefix: z.string().min(1, '호실 번호를 입력해주세요').max(10),
+    assignments: z
+      .array(assignmentSchema)
+      .min(1, '최소 1명의 코디네이터를 지정해주세요')
+      .refine(
+        (arr) => arr.filter((a) => a.role === 'primary').length === 1,
+        { message: '주담당(primary) 은 정확히 1명이어야 합니다' },
+      )
+      .refine(
+        (arr) => new Set(arr.map((a) => a.coordinator_id)).size === arr.length,
+        { message: '동일한 코디네이터가 중복 지정되었습니다' },
+      ),
+    description: z.string().max(100).optional(),
+    is_active: z.boolean(),
+  });
 
 type RoomMappingData = z.infer<typeof roomMappingSchema>;
 
@@ -55,7 +77,6 @@ export function RoomMappingFormModal({
   const createMapping = useCreateRoomMapping();
   const updateMapping = useUpdateRoomMapping();
 
-  // 코디네이터 목록 가져오기
   const { data: staffData } = useStaff({ role: 'coordinator', status: 'active' });
   const coordinators = staffData?.data || [];
 
@@ -63,54 +84,109 @@ export function RoomMappingFormModal({
     resolver: zodResolver(roomMappingSchema),
     defaultValues: {
       room_prefix: '',
-      coordinator_id: null,
+      assignments: [{ coordinator_id: '', role: 'primary' }],
       description: '',
       is_active: true,
     },
   });
 
-  const coordinatorId = useWatch({ control: form.control, name: 'coordinator_id' });
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: 'assignments',
+  });
+
   const isActive = useWatch({ control: form.control, name: 'is_active' });
+  const assignmentsWatch = useWatch({ control: form.control, name: 'assignments' });
 
   useEffect(() => {
     if (mode === 'edit' && mapping) {
+      const existing = mapping.assignments.length > 0
+        ? mapping.assignments.map((a) => ({
+            coordinator_id: a.coordinator_id,
+            role: a.role,
+          }))
+        : mapping.coordinator_id
+          ? [{ coordinator_id: mapping.coordinator_id, role: 'primary' as const }]
+          : [{ coordinator_id: '', role: 'primary' as const }];
+
       form.reset({
         room_prefix: mapping.room_prefix,
-        coordinator_id: mapping.coordinator_id,
+        assignments: existing,
         description: mapping.description || '',
         is_active: mapping.is_active,
       });
     } else {
       form.reset({
         room_prefix: '',
-        coordinator_id: null,
+        assignments: [{ coordinator_id: '', role: 'primary' }],
         description: '',
         is_active: true,
       });
     }
   }, [mode, mapping, form]);
 
+  const setRole = (index: number, role: 'primary' | 'backup' | 'co') => {
+    // primary 단일성 보장: 새로 primary 로 바꾸면 다른 행은 backup 으로 강등
+    if (role === 'primary') {
+      fields.forEach((_, i) => {
+        if (i !== index) {
+          const cur = form.getValues(`assignments.${i}.role`);
+          if (cur === 'primary') {
+            form.setValue(`assignments.${i}.role`, 'backup');
+          }
+        }
+      });
+    }
+    form.setValue(`assignments.${index}.role`, role);
+  };
+
+  const addAssignmentRow = () => {
+    append({ coordinator_id: '', role: 'backup' });
+  };
+
   const onSubmit = async (data: RoomMappingData) => {
+    // 빈 coordinator_id 제거 — 사용자가 행만 추가하고 선택 안 한 경우 방어
+    const cleanedAssignments = data.assignments.filter((a) => a.coordinator_id);
+    if (cleanedAssignments.length === 0) {
+      form.setError('assignments', {
+        message: '최소 1명의 코디네이터를 지정해주세요',
+      });
+      return;
+    }
+    if (cleanedAssignments.filter((a) => a.role === 'primary').length !== 1) {
+      form.setError('assignments', {
+        message: '주담당(primary) 은 정확히 1명이어야 합니다',
+      });
+      return;
+    }
+
+    const assignmentsPayload = cleanedAssignments.map((a, idx) => ({
+      coordinator_id: a.coordinator_id,
+      role: a.role,
+      display_order: idx,
+    }));
+
     try {
       if (mode === 'create') {
         await createMapping.mutateAsync({
           room_prefix: data.room_prefix,
-          coordinator_id: data.coordinator_id,
+          assignments: assignmentsPayload,
           description: data.description,
         });
       } else if (mapping) {
         await updateMapping.mutateAsync({
           roomPrefix: mapping.room_prefix,
           data: {
-            coordinator_id: data.coordinator_id,
+            assignments: assignmentsPayload,
             description: data.description,
             is_active: data.is_active,
           },
         });
       }
       onClose();
-    } catch (error: any) {
-      const errorCode = error.response?.data?.error?.code;
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: { code?: string } } } };
+      const errorCode = err.response?.data?.error?.code;
       if (errorCode === 'ROOM_MAPPING_ALREADY_EXISTS') {
         form.setError('room_prefix', {
           message: '이미 존재하는 호실입니다. 수정 버튼을 사용해 주세요.',
@@ -123,9 +199,14 @@ export function RoomMappingFormModal({
 
   const isLoading = createMapping.isPending || updateMapping.isPending;
 
+  // 이미 선택된 coordinator id 집합 — 같은 행은 자기 자신 허용
+  const selectedIds = new Set(
+    (assignmentsWatch ?? []).map((a) => a?.coordinator_id).filter(Boolean) as string[],
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {mode === 'create' ? '호실 매핑 추가' : '호실 매핑 수정'}
@@ -149,28 +230,107 @@ export function RoomMappingFormModal({
             )}
           </div>
 
-          {/* 담당 코디네이터 */}
+          {/* 담당 코디네이터 (다중) */}
           <div className="space-y-2">
-            <Label>담당 코디네이터</Label>
-            <Select
-              value={coordinatorId || '__none__'}
-              onValueChange={(value) =>
-                form.setValue('coordinator_id', value === '__none__' ? null : value)
-              }
-              disabled={isLoading}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="코디네이터 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">미지정</SelectItem>
-                {coordinators.map((coordinator) => (
-                  <SelectItem key={coordinator.id} value={coordinator.id}>
-                    {coordinator.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between">
+              <Label>담당 코디네이터 *</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={addAssignmentRow}
+                disabled={isLoading}
+              >
+                <Plus className="h-4 w-4 mr-1" /> 코디 추가
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {fields.map((field, index) => {
+                const currentId = assignmentsWatch?.[index]?.coordinator_id ?? '';
+                const currentRole = assignmentsWatch?.[index]?.role ?? 'primary';
+                return (
+                  <div key={field.id} className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <Select
+                        value={currentId || '__none__'}
+                        onValueChange={(value) =>
+                          form.setValue(
+                            `assignments.${index}.coordinator_id`,
+                            value === '__none__' ? '' : value,
+                          )
+                        }
+                        disabled={isLoading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="코디네이터 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">미지정</SelectItem>
+                          {coordinators.map((coordinator) => {
+                            const disabled =
+                              selectedIds.has(coordinator.id) &&
+                              coordinator.id !== currentId;
+                            return (
+                              <SelectItem
+                                key={coordinator.id}
+                                value={coordinator.id}
+                                disabled={disabled}
+                              >
+                                {coordinator.name}
+                                {disabled ? ' (중복)' : ''}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="w-28">
+                      <Select
+                        value={currentRole}
+                        onValueChange={(value) =>
+                          setRole(index, value as 'primary' | 'backup' | 'co')
+                        }
+                        disabled={isLoading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {ROLE_LABELS[r]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => remove(index)}
+                      disabled={isLoading || fields.length === 1}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {form.formState.errors.assignments && (
+              <p className="text-sm text-red-600">
+                {form.formState.errors.assignments.message ||
+                  form.formState.errors.assignments.root?.message}
+              </p>
+            )}
+            <p className="text-xs text-gray-500">
+              주담당(primary) 1명 필수. 백업/공동 코디는 추가로 지정할 수 있습니다.
+            </p>
           </div>
 
           {/* 설명 */}

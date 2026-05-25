@@ -97,15 +97,39 @@ export const cancelScheduleSchema = z.object({
 
 // ========== Room Mapping API Schemas ==========
 
+const ASSIGNMENT_ROLES = ['primary', 'backup', 'co'] as const;
+
+export const roomCoordinatorAssignmentInputSchema = z.object({
+  coordinator_id: z.string().uuid('올바른 코디네이터를 선택해주세요'),
+  role: z.enum(ASSIGNMENT_ROLES).default('primary'),
+  display_order: z.number().int().min(0).default(0),
+});
+
+const assignmentsArraySchema = z
+  .array(roomCoordinatorAssignmentInputSchema)
+  .min(1, '최소 1명의 코디네이터를 지정해주세요')
+  .refine(
+    (arr) => arr.filter((a) => a.role === 'primary').length === 1,
+    'primary 코디네이터는 정확히 1명이어야 합니다',
+  )
+  .refine(
+    (arr) => new Set(arr.map((a) => a.coordinator_id)).size === arr.length,
+    '동일 코디네이터가 중복 지정되었습니다',
+  );
+
 export const updateRoomMappingSchema = z.object({
+  // Legacy 단일 필드 — 호환용 (UI는 assignments 사용 권장)
   coordinator_id: z.string().uuid().nullable().optional(),
+  assignments: assignmentsArraySchema.optional(),
   description: z.string().max(100).optional(),
   is_active: z.boolean().optional(),
 });
 
 export const createRoomMappingSchema = z.object({
   room_prefix: z.string().min(1, '호실 번호를 입력해주세요').max(10),
+  // Legacy 단일 필드 — 호환용
   coordinator_id: z.string().uuid().nullable().optional(),
+  assignments: assignmentsArraySchema.optional(),
   description: z.string().max(100).optional(),
 });
 
@@ -325,17 +349,30 @@ export interface BatchOperationResult {
 
 // ========== Room Mapping Types ==========
 
+export interface RoomCoordinatorAssignmentItem {
+  id: string;
+  coordinator_id: string;
+  coordinator_name: string | null;
+  role: 'primary' | 'backup' | 'co';
+  display_order: number;
+}
+
 export interface RoomMappingItem {
   id: string;
   room_prefix: string;
-  coordinator_id: string | null;
-  coordinator_name: string | null;
+  coordinator_id: string | null;       // primary 캐시
+  coordinator_name: string | null;     // primary 이름
+  assignments: RoomCoordinatorAssignmentItem[];
   description: string | null;
   is_active: boolean;
   patient_count: number;
   created_at: string;
   updated_at: string;
 }
+
+export type RoomCoordinatorAssignmentInput = z.infer<
+  typeof roomCoordinatorAssignmentInputSchema
+>;
 
 // ========== Coordinator Workload Schemas ==========
 

@@ -35,6 +35,8 @@ import type {
   UpdateRoomMappingRequest,
   CreateRoomMappingRequest,
   RoomMappingItem,
+  RoomCoordinatorAssignmentItem,
+  RoomCoordinatorAssignmentInput,
   GetSyncLogsQuery,
   SyncLogItem,
   CreateHolidayRequest,
@@ -56,6 +58,8 @@ type ScheduledAttendanceRow = Database['public']['Tables']['scheduled_attendance
 type DailyStatsRow = Database['public']['Tables']['daily_stats']['Row'];
 type HolidayRow = Database['public']['Tables']['holidays']['Row'];
 type RoomMappingRow = Database['public']['Tables']['room_coordinator_mapping']['Row'];
+type RoomAssignmentRow = Database['public']['Tables']['room_coordinator_assignments']['Row'];
+type RoomAssignmentInsert = Database['public']['Tables']['room_coordinator_assignments']['Insert'];
 type SyncLogRow = Database['public']['Tables']['sync_logs']['Row'];
 type ConsultationRow = Database['public']['Tables']['consultations']['Row'];
 type AttendanceRow = Database['public']['Tables']['attendances']['Row'];
@@ -1386,31 +1390,145 @@ export async function getDailyStats(
   }));
 }
 
-// ========== Room Mapping Service ==========
+// ========== Room Mapping Service (N:N via room_coordinator_assignments) ==========
 
-export async function getRoomMappings(
+interface AssignmentWithCoordinator {
+  id: string;
+  room_prefix: string;
+  coordinator_id: string;
+  role: 'primary' | 'backup' | 'co';
+  display_order: number;
+  is_active: boolean;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  coordinator: { id: string; name: string } | null;
+}
+
+/**
+ * 입력 시 assignments 우선, 없으면 legacy coordinator_id 단일값을 primary로 승격.
+ * 둘 다 없거나 비어 있으면 null 반환 (의미: 매핑 변경 안 함).
+ */
+function normalizeAssignments(
+  input: { assignments?: RoomCoordinatorAssignmentInput[]; coordinator_id?: string | null },
+): RoomCoordinatorAssignmentInput[] | null {
+  if (input.assignments && input.assignments.length > 0) {
+    return input.assignments;
+  }
+  if (input.coordinator_id) {
+    return [
+      {
+        coordinator_id: input.coordinator_id,
+        role: 'primary' as const,
+        display_order: 0,
+      },
+    ];
+  }
+  return null;
+}
+
+function pickPrimary(
+  assignments: AssignmentWithCoordinator[],
+): AssignmentWithCoordinator | null {
+  return assignments.find((a) => a.role === 'primary' && a.is_active) ?? null;
+}
+
+function toAssignmentItem(a: AssignmentWithCoordinator): RoomCoordinatorAssignmentItem {
+  return {
+    id: a.id,
+    coordinator_id: a.coordinator_id,
+    coordinator_name: a.coordinator?.name ?? null,
+    role: a.role,
+    display_order: a.display_order,
+  };
+}
+
+/**
+ * 호실의 active primary 코디 ID 기준으로 patients.coordinator_id 캐시 동기화.
+ * room_number 가 room_prefix 와 정확히 일치하는 active 환자만 갱신.
+ */
+async function syncPatientCoordinatorCache(
   supabase: SupabaseClient<Database>,
-): Promise<RoomMappingItem[]> {
-  // 매핑 데이터와 환자 목록을 병렬 조회
-  const [{ data: mappings, error }, { data: patients }] = await Promise.all([
-    supabase.from('room_coordinator_mapping')
-      .select(`
-        id,
-        room_prefix,
-        coordinator_id,
-        description,
-        is_active,
-        created_at,
-        updated_at,
-        coordinator:staff!coordinator_id(id, name)
-      `)
-      .returns<RoomMappingWithCoordinator[]>()
-      .order('room_prefix'),
-    supabase
-      .from('patients')
-      .select('room_number')
-      .eq('status', 'active'),
-  ]);
+  roomPrefix: string,
+): Promise<void> {
+  const { data: primary } = await supabase
+    .from('room_coordinator_assignments')
+    .select('coordinator_id')
+    .eq('room_prefix', roomPrefix)
+    .eq('role', 'primary')
+    .eq('is_active', true)
+    .maybeSingle();
+
+  await supabase
+    .from('patients')
+    .update({ coordinator_id: primary?.coordinator_id ?? null })
+    .eq('room_number', roomPrefix)
+    .eq('status', 'active');
+}
+
+/**
+ * 호실의 모든 assignment 를 입력대로 교체 (delete-then-insert).
+ * is_active 는 호실 전체 활성/비활성과 분리되며, 입력 assignment 는 전부 active 로 기록.
+ */
+async function replaceAssignmentsForRoom(
+  supabase: SupabaseClient<Database>,
+  roomPrefix: string,
+  assignments: RoomCoordinatorAssignmentInput[],
+): Promise<void> {
+  // 1) 기존 row 전부 삭제
+  const { error: delErr } = await supabase
+    .from('room_coordinator_assignments')
+    .delete()
+    .eq('room_prefix', roomPrefix);
+  if (delErr) {
+    throw new AdminError(
+      AdminErrorCode.ROOM_MAPPING_CREATE_FAILED,
+      `호실 매핑 갱신 실패: ${delErr.message}`,
+    );
+  }
+
+  // 2) 새 row insert
+  const rows: RoomAssignmentInsert[] = assignments.map((a, idx) => ({
+    room_prefix: roomPrefix,
+    coordinator_id: a.coordinator_id,
+    role: a.role,
+    display_order: a.display_order ?? idx,
+    is_active: true,
+  }));
+  const { error: insErr } = await supabase
+    .from('room_coordinator_assignments')
+    .insert(rows);
+  if (insErr) {
+    throw new AdminError(
+      AdminErrorCode.ROOM_MAPPING_CREATE_FAILED,
+      `호실 매핑 저장 실패: ${insErr.message}`,
+    );
+  }
+}
+
+async function loadRoomMappingItem(
+  supabase: SupabaseClient<Database>,
+  roomPrefix: string,
+  fallbackDescription: string | null,
+  isActive: boolean,
+): Promise<RoomMappingItem> {
+  const { data: rows, error } = await supabase
+    .from('room_coordinator_assignments')
+    .select(`
+      id,
+      room_prefix,
+      coordinator_id,
+      role,
+      display_order,
+      is_active,
+      description,
+      created_at,
+      updated_at,
+      coordinator:staff!coordinator_id(id, name)
+    `)
+    .eq('room_prefix', roomPrefix)
+    .order('display_order')
+    .returns<AssignmentWithCoordinator[]>();
 
   if (error) {
     throw new AdminError(
@@ -1419,126 +1537,156 @@ export async function getRoomMappings(
     );
   }
 
-  // 각 호실별 환자 수 계산
-  const mappingRows = mappings ?? [];
-  const roomPrefixes = mappingRows.map((m) => m.room_prefix);
-  const patientCounts: Record<string, number> = {};
+  const assignments = rows ?? [];
+  const primary = pickPrimary(assignments);
+  const oldest = assignments.reduce<AssignmentWithCoordinator | null>(
+    (acc, cur) => (acc && acc.created_at <= cur.created_at ? acc : cur),
+    null,
+  );
 
-  if (roomPrefixes.length > 0) {
-    (patients || []).forEach((p) => {
-      if (p.room_number) {
-        const prefix = p.room_number.toString().substring(0, 4);
-        if (roomPrefixes.includes(prefix)) {
-          patientCounts[prefix] = (patientCounts[prefix] || 0) + 1;
-        }
-      }
-    });
-  }
-
-  return mappingRows.map((m) => ({
-    id: m.id,
-    room_prefix: m.room_prefix,
-    coordinator_id: m.coordinator_id,
-    coordinator_name: m.coordinator?.name || null,
-    description: m.description,
-    is_active: m.is_active,
-    patient_count: patientCounts[m.room_prefix] || 0,
-    created_at: m.created_at,
-    updated_at: m.updated_at,
-  }));
+  return {
+    id: primary?.id ?? oldest?.id ?? roomPrefix,
+    room_prefix: roomPrefix,
+    coordinator_id: primary?.coordinator_id ?? null,
+    coordinator_name: primary?.coordinator?.name ?? null,
+    assignments: assignments.map(toAssignmentItem),
+    description: fallbackDescription,
+    is_active: isActive,
+    patient_count: 0,
+    created_at: oldest?.created_at ?? new Date().toISOString(),
+    updated_at: assignments.reduce(
+      (acc, cur) => (acc > cur.updated_at ? acc : cur.updated_at),
+      '',
+    ) || new Date().toISOString(),
+  };
 }
 
-export async function updateRoomMapping(
+export async function getRoomMappings(
   supabase: SupabaseClient<Database>,
-  roomPrefix: string,
-  request: UpdateRoomMappingRequest,
-): Promise<RoomMappingItem> {
-  const updateData: RoomMappingUpdate = {};
-  if (request.coordinator_id !== undefined) {
-    updateData.coordinator_id = request.coordinator_id || null;
-  }
-  if (request.description !== undefined) {
-    updateData.description = request.description || null;
-  }
-  if (request.is_active !== undefined) {
-    updateData.is_active = request.is_active;
-  }
+): Promise<RoomMappingItem[]> {
+  // assignments + legacy mapping (description / is_active 소스) + 환자 수 병렬 조회
+  const [
+    { data: assignments, error: assignErr },
+    { data: legacyMappings },
+    { data: patients },
+  ] = await Promise.all([
+    supabase
+      .from('room_coordinator_assignments')
+      .select(`
+        id,
+        room_prefix,
+        coordinator_id,
+        role,
+        display_order,
+        is_active,
+        description,
+        created_at,
+        updated_at,
+        coordinator:staff!coordinator_id(id, name)
+      `)
+      .order('room_prefix')
+      .order('display_order')
+      .returns<AssignmentWithCoordinator[]>(),
+    supabase
+      .from('room_coordinator_mapping')
+      .select('id, room_prefix, description, is_active, created_at, updated_at'),
+    supabase
+      .from('patients')
+      .select('room_number')
+      .eq('status', 'active'),
+  ]);
 
-  const { data, error } = await supabase
-    .from('room_coordinator_mapping')
-    .update(updateData)
-    .eq('room_prefix', roomPrefix)
-    .select(`
-      id,
-      room_prefix,
-      coordinator_id,
-      description,
-      is_active,
-      created_at,
-      updated_at,
-      coordinator:staff!coordinator_id(id, name)
-    `)
-    .returns<RoomMappingWithCoordinator[]>()
-    .single();
-
-  if (error || !data) {
+  if (assignErr) {
     throw new AdminError(
-      AdminErrorCode.STAFF_UPDATE_FAILED,
-      `호실 매핑 수정 실패: ${error?.message}`,
+      AdminErrorCode.STAFF_CREATE_FAILED,
+      `호실 매핑 조회 실패: ${assignErr.message}`,
     );
   }
 
-  // 하이브리드 방식: coordinator_id가 변경되면 해당 호실 환자들 일괄 업데이트
-  if (request.coordinator_id !== undefined) {
-    const newCoordinatorId = request.coordinator_id || null;
-    await supabase
-      .from('patients')
-      .update({ coordinator_id: newCoordinatorId })
-      .eq('room_number', roomPrefix)
-      .eq('status', 'active');
-    // 에러는 무시 (환자가 없을 수도 있음)
+  // room_prefix 별로 group
+  const grouped = new Map<string, AssignmentWithCoordinator[]>();
+  for (const row of assignments ?? []) {
+    const list = grouped.get(row.room_prefix);
+    if (list) list.push(row);
+    else grouped.set(row.room_prefix, [row]);
   }
 
-  return {
-    id: data.id,
-    room_prefix: data.room_prefix,
-    coordinator_id: data.coordinator_id,
-    coordinator_name: data.coordinator?.name || null,
-    description: data.description,
-    is_active: data.is_active,
-    patient_count: 0,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
-  };
+  const legacyByPrefix = new Map<
+    string,
+    { id: string; description: string | null; is_active: boolean; created_at: string; updated_at: string }
+  >();
+  for (const m of legacyMappings ?? []) {
+    legacyByPrefix.set(m.room_prefix, {
+      id: m.id,
+      description: m.description,
+      is_active: m.is_active,
+      created_at: m.created_at,
+      updated_at: m.updated_at,
+    });
+  }
+
+  // legacy 에만 있는 호실(assignment 없음)도 노출 — 코디 미지정 상태
+  const allPrefixes = new Set<string>([
+    ...grouped.keys(),
+    ...legacyByPrefix.keys(),
+  ]);
+
+  // 환자 수 집계
+  const patientCounts: Record<string, number> = {};
+  for (const p of patients ?? []) {
+    if (!p.room_number) continue;
+    const prefix = p.room_number.toString().substring(0, 4);
+    if (allPrefixes.has(prefix)) {
+      patientCounts[prefix] = (patientCounts[prefix] ?? 0) + 1;
+    }
+  }
+
+  const items: RoomMappingItem[] = [];
+  for (const prefix of Array.from(allPrefixes).sort()) {
+    const rows = grouped.get(prefix) ?? [];
+    const legacy = legacyByPrefix.get(prefix);
+    const primary = pickPrimary(rows);
+    const oldest = rows.reduce<AssignmentWithCoordinator | null>(
+      (acc, cur) => (acc && acc.created_at <= cur.created_at ? acc : cur),
+      null,
+    );
+    items.push({
+      id: legacy?.id ?? primary?.id ?? oldest?.id ?? prefix,
+      room_prefix: prefix,
+      coordinator_id: primary?.coordinator_id ?? null,
+      coordinator_name: primary?.coordinator?.name ?? null,
+      assignments: rows.map(toAssignmentItem),
+      description: legacy?.description ?? null,
+      is_active: legacy?.is_active ?? true,
+      patient_count: patientCounts[prefix] ?? 0,
+      created_at: legacy?.created_at ?? oldest?.created_at ?? new Date().toISOString(),
+      updated_at: legacy?.updated_at ?? new Date().toISOString(),
+    });
+  }
+
+  return items;
 }
 
 export async function createRoomMapping(
   supabase: SupabaseClient<Database>,
   request: CreateRoomMappingRequest,
 ): Promise<RoomMappingItem> {
-  const { data, error } = await supabase
+  const assignments = normalizeAssignments(request);
+
+  // legacy 테이블 row 생성 — description/is_active 저장처 + UNIQUE(room_prefix) 로 중복 방지
+  const { data: legacy, error: legacyErr } = await supabase
     .from('room_coordinator_mapping')
     .insert({
       room_prefix: request.room_prefix,
-      coordinator_id: request.coordinator_id || null,
+      coordinator_id: assignments?.find((a) => a.role === 'primary')?.coordinator_id ?? null,
       description: request.description || null,
       is_active: true,
     })
-    .select(`
-      id,
-      room_prefix,
-      coordinator_id,
-      description,
-      is_active,
-      created_at,
-      updated_at,
-      coordinator:staff!coordinator_id(id, name)
-    `)
-    .returns<RoomMappingWithCoordinator[]>()
+    .select('id, room_prefix, description, is_active, created_at, updated_at')
     .single();
 
-  if (error) {
-    if (error.code === '23505') {
+  if (legacyErr || !legacy) {
+    if (legacyErr?.code === '23505') {
       throw new AdminError(
         AdminErrorCode.ROOM_MAPPING_ALREADY_EXISTS,
         '이미 존재하는 호실입니다. 수정 버튼을 사용해 주세요.',
@@ -1546,37 +1694,101 @@ export async function createRoomMapping(
     }
     throw new AdminError(
       AdminErrorCode.ROOM_MAPPING_CREATE_FAILED,
-      `호실 매핑 생성 실패: ${error.message}`,
+      `호실 매핑 생성 실패: ${legacyErr?.message}`,
     );
   }
 
-  // 하이브리드 방식: 새 매핑 추가 시 해당 호실 환자들 coordinator_id 업데이트
-  if (request.coordinator_id) {
-    await supabase
-      .from('patients')
-      .update({ coordinator_id: request.coordinator_id })
-      .eq('room_number', request.room_prefix)
-      .eq('status', 'active');
-    // 에러는 무시 (환자가 없을 수도 있음)
+  if (assignments && assignments.length > 0) {
+    await replaceAssignmentsForRoom(supabase, request.room_prefix, assignments);
+    await syncPatientCoordinatorCache(supabase, request.room_prefix);
   }
 
-  return {
-    id: data.id,
-    room_prefix: data.room_prefix,
-    coordinator_id: data.coordinator_id,
-    coordinator_name: data.coordinator?.name || null,
-    description: data.description,
-    is_active: data.is_active,
-    patient_count: 0,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
-  };
+  const item = await loadRoomMappingItem(
+    supabase,
+    request.room_prefix,
+    legacy.description,
+    legacy.is_active,
+  );
+  return item;
+}
+
+export async function updateRoomMapping(
+  supabase: SupabaseClient<Database>,
+  roomPrefix: string,
+  request: UpdateRoomMappingRequest,
+): Promise<RoomMappingItem> {
+  // 1) legacy 메타데이터 (description / is_active / primary 캐시 컬럼) 갱신
+  const legacyUpdate: RoomMappingUpdate = {};
+  const assignments = normalizeAssignments(request);
+  if (assignments) {
+    legacyUpdate.coordinator_id =
+      assignments.find((a) => a.role === 'primary')?.coordinator_id ?? null;
+  } else if (request.coordinator_id !== undefined) {
+    // assignments 미제공 + 명시적 null → primary 해제
+    legacyUpdate.coordinator_id = request.coordinator_id;
+  }
+  if (request.description !== undefined) {
+    legacyUpdate.description = request.description || null;
+  }
+  if (request.is_active !== undefined) {
+    legacyUpdate.is_active = request.is_active;
+  }
+
+  let legacyRow: { id: string; description: string | null; is_active: boolean; created_at: string; updated_at: string } | null = null;
+  if (Object.keys(legacyUpdate).length > 0) {
+    const { data, error } = await supabase
+      .from('room_coordinator_mapping')
+      .update(legacyUpdate)
+      .eq('room_prefix', roomPrefix)
+      .select('id, room_prefix, description, is_active, created_at, updated_at')
+      .single();
+    if (error || !data) {
+      throw new AdminError(
+        AdminErrorCode.STAFF_UPDATE_FAILED,
+        `호실 매핑 수정 실패: ${error?.message}`,
+      );
+    }
+    legacyRow = data;
+  } else {
+    const { data } = await supabase
+      .from('room_coordinator_mapping')
+      .select('id, room_prefix, description, is_active, created_at, updated_at')
+      .eq('room_prefix', roomPrefix)
+      .maybeSingle();
+    legacyRow = data ?? null;
+  }
+
+  // 2) assignments 교체 (제공된 경우만)
+  if (assignments) {
+    await replaceAssignmentsForRoom(supabase, roomPrefix, assignments);
+    await syncPatientCoordinatorCache(supabase, roomPrefix);
+  } else if (request.coordinator_id === null) {
+    // 명시적 null → assignments 전부 비활성/삭제
+    await supabase
+      .from('room_coordinator_assignments')
+      .delete()
+      .eq('room_prefix', roomPrefix);
+    await syncPatientCoordinatorCache(supabase, roomPrefix);
+  }
+
+  return loadRoomMappingItem(
+    supabase,
+    roomPrefix,
+    legacyRow?.description ?? null,
+    legacyRow?.is_active ?? request.is_active ?? true,
+  );
 }
 
 export async function deleteRoomMapping(
   supabase: SupabaseClient<Database>,
   roomPrefix: string,
 ): Promise<{ success: boolean }> {
+  // assignments → legacy → patients 캐시 순으로 정리
+  await supabase
+    .from('room_coordinator_assignments')
+    .delete()
+    .eq('room_prefix', roomPrefix);
+
   const { error } = await supabase
     .from('room_coordinator_mapping')
     .delete()
@@ -1588,6 +1800,8 @@ export async function deleteRoomMapping(
       `호실 매핑 삭제 실패: ${error.message}`,
     );
   }
+
+  await syncPatientCoordinatorCache(supabase, roomPrefix);
 
   return { success: true };
 }

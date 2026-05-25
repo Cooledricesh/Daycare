@@ -114,12 +114,13 @@ export class PatientSyncService {
   }
 
   /**
-   * 호실-담당자 매핑 조회
+   * 호실-담당자 매핑 조회 (primary 코디만 — Excel sync 는 backup/co 건드리지 않음)
    */
   private async getRoomMappings(): Promise<Map<string, string | null>> {
     const { data, error } = await this.supabase
-      .from('room_coordinator_mapping')
+      .from('room_coordinator_assignments')
       .select('room_prefix, coordinator_id')
+      .eq('role', 'primary')
       .eq('is_active', true);
 
     if (error) throw error;

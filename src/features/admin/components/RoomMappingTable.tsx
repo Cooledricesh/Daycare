@@ -19,6 +19,18 @@ interface RoomMappingTableProps {
   onDelete: (mapping: RoomMappingItem) => void;
 }
 
+const ROLE_LABELS: Record<'primary' | 'backup' | 'co', string> = {
+  primary: '주',
+  backup: '백업',
+  co: '공동',
+};
+
+const ROLE_VARIANT: Record<'primary' | 'backup' | 'co', 'default' | 'secondary' | 'outline'> = {
+  primary: 'default',
+  backup: 'secondary',
+  co: 'outline',
+};
+
 export function RoomMappingTable({
   mappings,
   onEdit,
@@ -51,10 +63,23 @@ export function RoomMappingTable({
                   {mapping.room_prefix}
                 </TableCell>
                 <TableCell>
-                  {mapping.coordinator_name ? (
-                    <span className="text-gray-900">{mapping.coordinator_name}</span>
-                  ) : (
+                  {mapping.assignments.length === 0 ? (
                     <span className="text-gray-400">미지정</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {mapping.assignments.map((a) => (
+                        <Badge
+                          key={a.id}
+                          variant={ROLE_VARIANT[a.role]}
+                          className="font-normal"
+                        >
+                          {a.coordinator_name ?? '알 수 없음'}
+                          <span className="ml-1 text-[10px] opacity-70">
+                            {ROLE_LABELS[a.role]}
+                          </span>
+                        </Badge>
+                      ))}
+                    </div>
                   )}
                 </TableCell>
                 <TableCell className="text-gray-600">

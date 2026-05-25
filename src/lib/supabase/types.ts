@@ -436,6 +436,42 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            room_coordinator_assignments: {
+                Row: {
+                    id: string;
+                    room_prefix: string;
+                    coordinator_id: string;
+                    role: 'primary' | 'backup' | 'co';
+                    display_order: number;
+                    is_active: boolean;
+                    description: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    room_prefix: string;
+                    coordinator_id: string;
+                    role?: 'primary' | 'backup' | 'co';
+                    display_order?: number;
+                    is_active?: boolean;
+                    description?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    room_prefix?: string;
+                    coordinator_id?: string;
+                    role?: 'primary' | 'backup' | 'co';
+                    display_order?: number;
+                    is_active?: boolean;
+                    description?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
             sync_logs: {
                 Row: {
                     id: string;
