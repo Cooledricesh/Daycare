@@ -80,6 +80,86 @@ interface MessageWithPatient {
 }
 
 /**
+ * 코디네이터가 접근 가능한 모든 호실 prefix 조회.
+ * room_coordinator_assignments 의 active row 기준 — primary/backup/co 모두 포함.
+ */
+async function getAccessibleRoomPrefixes(
+  supabase: SupabaseClient<Database>,
+  coordinatorId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('room_coordinator_assignments')
+    .select('room_prefix')
+    .eq('coordinator_id', coordinatorId)
+    .eq('is_active', true);
+
+  if (error) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `담당 호실 조회에 실패했습니다: ${error.message}`,
+    );
+  }
+
+  // 중복 제거 (동일 코디가 같은 호실에 여러 role 지정될 일은 없지만 방어)
+  return Array.from(new Set((data ?? []).map((r) => r.room_prefix)));
+}
+
+/**
+ * 코디네이터가 담당하는 환자 ID 목록 조회.
+ * primary (patients.coordinator_id 캐시) ∪ assignment (backup/co 포함) 의 합집합.
+ */
+async function getAccessiblePatientIds(
+  supabase: SupabaseClient<Database>,
+  coordinatorId: string,
+): Promise<string[]> {
+  const prefixes = await getAccessibleRoomPrefixes(supabase, coordinatorId);
+
+  // primary 캐시 매칭
+  const primaryQuery = supabase
+    .from('patients')
+    .select('id')
+    .eq('coordinator_id', coordinatorId)
+    .eq('status', 'active');
+
+  // assignment 호실 매칭 — room_number LIKE prefix%
+  const assignmentQuery = prefixes.length > 0
+    ? supabase
+        .from('patients')
+        .select('id')
+        .eq('status', 'active')
+        .or(prefixes.map((p) => `room_number.like.${p}%`).join(','))
+    : null;
+
+  const [
+    { data: primaryRows, error: primaryErr },
+    assignmentRes,
+  ] = await Promise.all([
+    primaryQuery,
+    assignmentQuery
+      ? assignmentQuery
+      : Promise.resolve({ data: [] as { id: string }[], error: null }),
+  ]);
+
+  if (primaryErr) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `담당 환자 조회에 실패했습니다: ${primaryErr.message}`,
+    );
+  }
+  if (assignmentRes.error) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `담당 환자 조회에 실패했습니다: ${assignmentRes.error.message}`,
+    );
+  }
+
+  const ids = new Set<string>();
+  for (const r of primaryRows ?? []) ids.add(r.id);
+  for (const r of assignmentRes.data ?? []) ids.add(r.id);
+  return Array.from(ids);
+}
+
+/**
  * 담당 환자 목록 조회
  */
 export async function getMyPatients(
@@ -94,63 +174,19 @@ export async function getMyPatients(
   // 오늘 스케줄이 없으면 패턴에서 자동 생성
   await ensureScheduleGenerated(supabase, date);
 
-  // show_all=true이면 RPC 스킵하고 직접 전체 환자 조회
-  if (!showAll) {
-    const { data, error } = await (supabase.rpc as (fn: string, params: Record<string, string>) => ReturnType<typeof supabase.rpc>)(
-      'get_coordinator_patients',
-      { p_coordinator_id: coordinatorId, p_date: date },
-    );
-
-    if (!error && data) {
-      const rpcPatients = data as PatientSummary[];
-      const rpcPatientIds = rpcPatients.map((p) => p.id);
-
-      if (rpcPatientIds.length === 0) {
-        return rpcPatients;
-      }
-
-      // RPC 결과에 is_scheduled, is_coordinator_checked 정보를 추가
-      const [
-        { data: scheduledAttendances },
-        { data: rpcConsultations },
-      ] = await Promise.all([
-        supabase.from('scheduled_attendances')
-          .select('patient_id')
-          .eq('date', date)
-          .eq('is_cancelled', false)
-          .in('patient_id', rpcPatientIds),
-        supabase.from('consultations')
-          .select('patient_id, checked_by_coordinator')
-          .eq('date', date)
-          .in('patient_id', rpcPatientIds),
-      ]);
-
-      const scheduledSet = new Set<string>(
-        (scheduledAttendances || []).map((s) => s.patient_id),
-      );
-      const coordinatorCheckedSet = new Set<string>(
-        (rpcConsultations || [])
-          .filter((c) => c.checked_by_coordinator)
-          .map((c) => c.patient_id),
-      );
-
-      return rpcPatients.map((p) => ({
-        ...p,
-        is_scheduled: scheduledSet.has(p.id),
-        is_coordinator_checked: coordinatorCheckedSet.has(p.id),
-      }));
-    }
-  }
-
   {
-    // 환자 목록 조회: show_all이면 전체, 아니면 담당만
+    // 환자 목록 조회: show_all 이면 전체, 아니면 담당(N:N) 합집합
     let patientsQuery = supabase
       .from('patients')
       .select('id, name, display_name, avatar_url, gender, birth_date')
       .eq('status', 'active');
 
     if (!showAll) {
-      patientsQuery = patientsQuery.eq('coordinator_id', coordinatorId);
+      const accessibleIds = await getAccessiblePatientIds(supabase, coordinatorId);
+      if (accessibleIds.length === 0) {
+        return [];
+      }
+      patientsQuery = patientsQuery.in('id', accessibleIds);
     }
 
     const { data: patients, error: patientsError } = await patientsQuery;
@@ -402,11 +438,16 @@ export async function getMyPatientsSchedulePatterns(
   supabase: SupabaseClient<Database>,
   coordinatorId: string,
 ): Promise<MyPatientSchedulePattern[]> {
-  // 담당 환자 목록 조회
+  // 담당 환자(N:N) 합집합 ID 조회
+  const accessibleIds = await getAccessiblePatientIds(supabase, coordinatorId);
+  if (accessibleIds.length === 0) {
+    return [];
+  }
+
   const { data: patients, error: patientsError } = await supabase
     .from('patients')
     .select('id, name')
-    .eq('coordinator_id', coordinatorId)
+    .in('id', accessibleIds)
     .eq('status', 'active')
     .order('name');
 
@@ -454,10 +495,10 @@ export async function updateMyPatientSchedulePattern(
   patientId: string,
   request: UpdateSchedulePatternRequest,
 ): Promise<{ success: boolean }> {
-  // 담당 환자인지 확인
+  // 담당 환자인지 확인 (N:N 권한 — primary/backup/co 누구든 허용)
   const { data: patient, error: patientError } = await supabase
     .from('patients')
-    .select('id, coordinator_id')
+    .select('id, coordinator_id, room_number, status')
     .eq('id', patientId)
     .single();
 
@@ -468,7 +509,16 @@ export async function updateMyPatientSchedulePattern(
     );
   }
 
-  if (patient.coordinator_id !== coordinatorId) {
+  const isPrimary = patient.coordinator_id === coordinatorId;
+  let isAssignmentMatch = false;
+  if (!isPrimary && patient.room_number) {
+    const prefixes = await getAccessibleRoomPrefixes(supabase, coordinatorId);
+    isAssignmentMatch = prefixes.some((p) =>
+      patient.room_number?.startsWith(p),
+    );
+  }
+
+  if (!isPrimary && !isAssignmentMatch) {
     throw new StaffError(
       StaffErrorCode.UNAUTHORIZED,
       '담당 환자가 아닙니다',

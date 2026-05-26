@@ -1445,7 +1445,7 @@ function toAssignmentItem(a: AssignmentWithCoordinator): RoomCoordinatorAssignme
 
 /**
  * 호실의 active primary 코디 ID 기준으로 patients.coordinator_id 캐시 동기화.
- * room_number 가 room_prefix 와 정확히 일치하는 active 환자만 갱신.
+ * room_number 가 room_prefix 로 시작하는 active 환자 전부 갱신 (LIKE 매칭).
  */
 async function syncPatientCoordinatorCache(
   supabase: SupabaseClient<Database>,
@@ -1462,7 +1462,7 @@ async function syncPatientCoordinatorCache(
   await supabase
     .from('patients')
     .update({ coordinator_id: primary?.coordinator_id ?? null })
-    .eq('room_number', roomPrefix)
+    .like('room_number', `${roomPrefix}%`)
     .eq('status', 'active');
 }
 
