@@ -3,6 +3,7 @@ export const injectionsKeys = {
   patient: {
     all: ['injections', 'patient'] as const,
     detail: (patientId: string) => ['injections', 'patient', patientId] as const,
+    history: (patientId: string) => ['injections', 'patient', patientId, 'history'] as const,
   },
   upcoming: {
     all: ['injections', 'upcoming'] as const,

@@ -23,6 +23,7 @@ import { usePatientHistory } from '../hooks/usePatientHistory';
 import { useToast } from '@/hooks/use-toast';
 import { ConsultationHistory } from './ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
+import { PatientInjectionHistoryCard } from '@/features/injections/components/PatientInjectionHistoryCard';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getTodayString } from '@/lib/date';
 import { getPatientDisplayName } from '@/lib/patient';
@@ -328,6 +329,9 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
 
           {/* 출석 캘린더 */}
           <AttendanceCalendar patientId={patient.id} birthDate={patient.birth_date} />
+
+          {/* 주사제 이력 */}
+          <PatientInjectionHistoryCard patientId={patient.id} className="mt-4" />
         </div>
 
         {/* 우측: 최근 히스토리 */}
