@@ -1,6 +1,7 @@
 'use client';
 
 import type { StreakTier } from '../backend/schema';
+import { STREAK_TIER_META } from '@/features/shared/lib/streak-tier';
 
 interface StreakEffectProps {
   tier: StreakTier;
@@ -118,7 +119,7 @@ const PARTICLE_CONFIG: Partial<Record<StreakTier, { emoji: string; count: number
 
 /** 스트릭 카운터 뱃지 */
 function StreakBadge({ tier, streak }: { tier: StreakTier; streak: number }) {
-  const colors = BADGE_COLORS[tier];
+  const colors = tier === 'none' ? undefined : STREAK_TIER_META[tier];
   if (!colors) return null;
 
   return (
@@ -138,14 +139,6 @@ function StreakBadge({ tier, streak }: { tier: StreakTier; streak: number }) {
     </div>
   );
 }
-
-const BADGE_COLORS: Partial<Record<StreakTier, { bg: string; border: string; text: string; icon: string }>> = {
-  fire: { bg: '#fff3e0', border: '#e65100', text: '#e65100', icon: '🔥' },
-  lightning: { bg: '#fff8e1', border: '#f9a825', text: '#f57f17', icon: '⚡' },
-  diamond: { bg: '#e3f2fd', border: '#1565c0', text: '#0d47a1', icon: '💎' },
-  crown: { bg: '#fff8e1', border: '#ff8f00', text: '#e65100', icon: '👑' },
-  myth: { bg: 'linear-gradient(90deg, #fce4ec, #e8eaf6, #e0f7fa)', border: '#7b1fa2', text: '#4a148c', icon: '🌟' },
-};
 
 /** 진찰 스트릭 하트 이펙트 */
 function HeartEffect({ large }: { large: boolean }) {
