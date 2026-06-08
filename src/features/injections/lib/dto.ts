@@ -3,8 +3,13 @@ export {
   PatientInjectionsResponseSchema,
   UpcomingInjectionItemSchema,
   UpcomingInjectionsResponseSchema,
+  InjectionHistoryEntrySchema,
+  InjectionHistoryItemSchema,
+  PatientInjectionHistoryResponseSchema,
   type PatientInjection,
   type PatientInjectionsResponse,
   type UpcomingInjectionItem,
   type UpcomingInjectionsResponse,
+  type InjectionHistoryItem,
+  type PatientInjectionHistoryResponse,
 } from '../backend/schema';
