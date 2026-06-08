@@ -12,6 +12,7 @@ import { getTodayString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
 import { getStreaksMap, type PatientStreaks } from '@/features/shared/backend/streak';
 import { getStreakTier } from '@/features/shared/lib/streak-tier';
+import type { StreaksResponse } from './streaks-schema';
 
 interface RoomMappingWithCoordinator {
   room_prefix: string;
@@ -204,4 +205,35 @@ export async function getAttendanceBoard(
     total_unscheduled_attended: totalUnscheduledAttended,
     total_count: totalCount,
   };
+}
+
+/**
+ * 전 활성 환자의 raw 스트릭 맵을 반환 (대시보드 뱃지용).
+ * 출석보드와 달리 not_scheduled 보정 없이 실제 연속일수를 그대로 노출.
+ */
+export async function getStreaksForActivePatients(
+  supabase: SupabaseClient<Database>,
+  date: string,
+): Promise<StreaksResponse> {
+  const { data: patients, error } = await supabase
+    .from('patients')
+    .select('id, created_at')
+    .eq('status', 'active');
+
+  if (error) {
+    throw new AttendanceBoardError(
+      AttendanceBoardErrorCode.FETCH_FAILED,
+      `스트릭 환자 조회 실패: ${error.message}`,
+    );
+  }
+
+  const map = await getStreaksMap(
+    supabase,
+    date,
+    (patients ?? []).map((p) => ({ id: p.id, created_at: p.created_at })),
+  );
+
+  const streaks: StreaksResponse['streaks'] = {};
+  for (const [id, s] of map) streaks[id] = s;
+  return { date, streaks };
 }
