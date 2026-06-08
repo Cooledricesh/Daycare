@@ -11,6 +11,8 @@ import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
 import { getPatientDisplayName } from '@/lib/patient';
+import { useStreaks } from '@/features/attendance-board/hooks/useStreaks';
+import { StreakBadge } from '@/features/shared/components/StreakBadge';
 import type { WaitingPatient } from '../backend/schema';
 
 type FilterTab = 'all' | 'waiting' | 'completed';
@@ -45,6 +47,7 @@ export function PatientListPanel({
   onFilteredPatientsChange,
 }: PatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
+  const { data: streaksData } = useStreaks();
 
   const counts = useMemo(() => {
     const waiting = patients.filter(p => p.is_scheduled).length;
@@ -198,6 +201,7 @@ export function PatientListPanel({
                             {calculateKoreanAge(patient.birth_date)}세
                           </span>
                         )}
+                        <StreakBadge streak={streaksData?.streaks?.[patient.id]?.attendance_streak ?? 0} />
                       </div>
                       {patient.coordinator_name && (
                         <span className="text-xs text-gray-400">

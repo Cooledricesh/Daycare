@@ -9,6 +9,8 @@ import { matchesChosung } from '@/lib/chosung';
 import { useKoreanSearchInput } from '@/hooks/useKoreanSearchInput';
 import { cn } from '@/lib/utils';
 import { getPatientDisplayName } from '@/lib/patient';
+import { useStreaks } from '@/features/attendance-board/hooks/useStreaks';
+import { StreakBadge } from '@/features/shared/components/StreakBadge';
 import { calculateKoreanAge } from '@/lib/birthday';
 import { PatientAvatar } from '@/features/shared/components/PatientAvatar';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
@@ -45,6 +47,7 @@ export function AdminPatientListPanel({
   onFilteredPatientsChange,
 }: AdminPatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
+  const { data: streaksData } = useStreaks();
 
   const counts = useMemo(() => {
     const scheduled = patients.filter(p => p.is_scheduled).length;
@@ -191,6 +194,7 @@ export function AdminPatientListPanel({
                             {calculateKoreanAge(patient.birth_date)}세
                           </span>
                         )}
+                        <StreakBadge streak={streaksData?.streaks?.[patient.id]?.attendance_streak ?? 0} />
                       </div>
                       {patient.coordinator_name && (
                         <span className="text-xs text-gray-400">
