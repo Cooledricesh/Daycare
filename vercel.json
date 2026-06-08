@@ -3,6 +3,10 @@
     {
       "path": "/api/internal/cron/monthly-report-generate",
       "schedule": "0 1 1 * *"
+    },
+    {
+      "path": "/api/internal/cron/holidays-sync",
+      "schedule": "0 0 1 * *"
     }
   ]
 }
