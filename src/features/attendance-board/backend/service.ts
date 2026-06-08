@@ -1,173 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
-import { fetchAllPaginated } from '@/lib/supabase-pagination';
 import type {
   GetAttendanceBoardParams,
   BoardPatient,
   RoomGroup,
   AttendanceBoardResponse,
-  StreakTier,
   AttendanceStatus,
 } from './schema';
 import { AttendanceBoardError, AttendanceBoardErrorCode } from './error';
 import { getTodayString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
-import { isWeekend, getHolidayDatesMap } from '@/lib/business-days';
-import { format, subDays, parseISO } from 'date-fns';
+import { getStreaksMap, type PatientStreaks } from '@/features/shared/backend/streak';
+import { getStreakTier } from '@/features/shared/lib/streak-tier';
 
 interface RoomMappingWithCoordinator {
   room_prefix: string;
   coordinator: { name: string } | null;
-}
-
-
-/** 스트릭 수 → 등급 */
-function getStreakTier(streak: number): StreakTier {
-  if (streak >= 30) return 'myth';
-  if (streak >= 20) return 'crown';
-  if (streak >= 10) return 'diamond';
-  if (streak >= 5) return 'lightning';
-  if (streak >= 3) return 'fire';
-  return 'none';
-}
-
-/**
- * 해당 날짜가 환자에게 "예정"된 날인지 판단
- * - scheduled_attendances(is_cancelled=false) 재료화 row가 있으면 예정
- * - 없어도 scheduled_patterns 요일 매칭이면 예정 (history backfill)
- * - is_cancelled=true 재료화 row가 있으면 취소로 처리 → !예정
- * - 환자 등록일 이전은 예정 아님
- */
-function isScheduledOnDate(
-  dateStr: string,
-  dow: number,
-  scheduledMaterialized: Set<string>,
-  cancelledMaterialized: Set<string>,
-  patternDows: Set<number>,
-  patientCreatedDate: string,
-): boolean {
-  if (dateStr < patientCreatedDate) return false;
-  if (cancelledMaterialized.has(dateStr)) return false;
-  return scheduledMaterialized.has(dateStr) || patternDows.has(dow);
-}
-
-/**
- * 연속 출석 일수 계산 (오늘 포함, 역순)
- * 규칙:
- * - 출석 기록이 있으면 무조건 카운트 (요일 무관, 재료화 테이블 유무 무관)
- * - 주말/공휴일에 미출석이면 스킵 (스트릭 안 끊김)
- * - 평일에 미출석이면서 "예정된 날"이면 break (결석 = 스트릭 종료)
- *   * 예정 판정: materialized / scheduled_patterns 요일 / cancelled 여부 종합
- * - 평일에 미출석이고 예정도 아니면 스킵 (쉬는 요일은 스트릭 안 끊김)
- * - 환자 등록일 이전 날짜는 더 이상 돌지 않음
- */
-function calculateConsecutiveAttendance(
-  scheduledMaterialized: Set<string>,
-  cancelledMaterialized: Set<string>,
-  patternDows: Set<number>,
-  attendedDates: Set<string>,
-  patientCreatedDate: string,
-  holidayMap: Map<string, string>,
-  endDate: string,
-): number {
-  let count = 0;
-  let cursor = parseISO(endDate);
-
-  for (let i = 0; i < 365; i++) {
-    const dateStr = format(cursor, 'yyyy-MM-dd');
-    if (patientCreatedDate && dateStr < patientCreatedDate) break;
-
-    const isAttended = attendedDates.has(dateStr);
-
-    if (isAttended) {
-      count++;
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    const isHolidayOrWeekend = isWeekend(dateStr) || holidayMap.has(dateStr);
-    if (isHolidayOrWeekend) {
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    const isScheduled = isScheduledOnDate(
-      dateStr,
-      cursor.getDay(),
-      scheduledMaterialized,
-      cancelledMaterialized,
-      patternDows,
-      patientCreatedDate,
-    );
-
-    if (isScheduled) {
-      break;
-    }
-
-    cursor = subDays(cursor, 1);
-  }
-
-  return count;
-}
-
-/**
- * 연속 진찰 일수 계산
- * 규칙:
- * - 주말/공휴일: 출석만 했어도 카운트 (진찰 의무 없음). 미출석이면 스킵.
- * - 평일 출석+진찰 → 카운트
- * - 평일 출석했으나 진찰 없음 → break (진찰 스트릭 종료)
- * - 평일 미출석 + 예정된 날 → break (결석으로 진찰 스트릭 종료)
- * - 평일 미출석 + 예정 아닌 날 → 스킵
- */
-function calculateConsecutiveConsultation(
-  scheduledMaterialized: Set<string>,
-  cancelledMaterialized: Set<string>,
-  patternDows: Set<number>,
-  attendedDates: Set<string>,
-  consultedDates: Set<string>,
-  patientCreatedDate: string,
-  holidayMap: Map<string, string>,
-  endDate: string,
-): number {
-  let count = 0;
-  let cursor = parseISO(endDate);
-
-  for (let i = 0; i < 365; i++) {
-    const dateStr = format(cursor, 'yyyy-MM-dd');
-    if (patientCreatedDate && dateStr < patientCreatedDate) break;
-
-    const isAttended = attendedDates.has(dateStr);
-    const isHolidayOrWeekend = isWeekend(dateStr) || holidayMap.has(dateStr);
-
-    if (isHolidayOrWeekend) {
-      if (isAttended) count++;
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    // 평일
-    if (isAttended) {
-      if (!consultedDates.has(dateStr)) break;
-      count++;
-      cursor = subDays(cursor, 1);
-      continue;
-    }
-
-    // 평일 미출석
-    const isScheduled = isScheduledOnDate(
-      dateStr,
-      cursor.getDay(),
-      scheduledMaterialized,
-      cancelledMaterialized,
-      patternDows,
-      patientCreatedDate,
-    );
-    if (isScheduled) break;
-
-    cursor = subDays(cursor, 1);
-  }
-
-  return count;
 }
 
 export async function getAttendanceBoard(
@@ -178,20 +26,12 @@ export async function getAttendanceBoard(
 
   await ensureScheduleGenerated(supabase, date);
 
-  // 스트릭 계산용 60일 전 날짜
-  const streakStartDate = format(subDays(parseISO(date), 60), 'yyyy-MM-dd');
-
   const [
     { data: patients, error: patientsError },
     { data: attendances, error: attendancesError },
     { data: scheduled, error: scheduledError },
     { data: consultations, error: consultationsError },
     { data: roomMappings, error: roomMappingsError },
-    allAttendances,
-    allConsultations,
-    allScheduled,
-    allPatterns,
-    holidayMap,
   ] = await Promise.all([
     supabase
       .from('patients')
@@ -216,39 +56,6 @@ export async function getAttendanceBoard(
       .eq('role', 'primary')
       .eq('is_active', true)
       .returns<RoomMappingWithCoordinator[]>(),
-    // 스트릭 계산용 과거 출석 데이터 (60일치라 1000행 서버캡을 넘어갈 수 있어 전체 페이지 fetch)
-    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
-      supabase
-        .from('attendances')
-        .select('patient_id, date')
-        .gte('date', streakStartDate)
-        .lte('date', date)
-        .order('id'),
-    ),
-    fetchAllPaginated<{ patient_id: string; date: string }>(() =>
-      supabase
-        .from('consultations')
-        .select('patient_id, date')
-        .gte('date', streakStartDate)
-        .lte('date', date)
-        .order('id'),
-    ),
-    fetchAllPaginated<{ patient_id: string; date: string; is_cancelled: boolean }>(() =>
-      supabase
-        .from('scheduled_attendances')
-        .select('patient_id, date, is_cancelled')
-        .gte('date', streakStartDate)
-        .lte('date', date)
-        .order('id'),
-    ),
-    fetchAllPaginated<{ patient_id: string; day_of_week: number }>(() =>
-      supabase
-        .from('scheduled_patterns')
-        .select('patient_id, day_of_week')
-        .eq('is_active', true)
-        .order('id'),
-    ),
-    getHolidayDatesMap(supabase, streakStartDate, date),
   ]);
 
   if (patientsError || attendancesError || scheduledError || consultationsError || roomMappingsError) {
@@ -261,6 +68,13 @@ export async function getAttendanceBoard(
       `출석 보드 데이터 조회 실패: ${errorMsg}`,
     );
   }
+
+  // 전 활성 환자 스트릭 맵 (60일 윈도우 + 자동 휴원 감지, 공유 모듈)
+  const streaksMap: Map<string, PatientStreaks> = await getStreaksMap(
+    supabase,
+    date,
+    (patients ?? []).map((p) => ({ id: p.id, created_at: p.created_at })),
+  );
 
   // 오늘 출석 맵
   const attendanceMap = new Map<string, string>();
@@ -275,38 +89,6 @@ export async function getAttendanceBoard(
   const consultedSet = new Set<string>(
     (consultations ?? []).map((c) => c.patient_id),
   );
-
-  // 스트릭 계산용 환자별 데이터 맵 구축
-  const patientAttendanceDates = new Map<string, Set<string>>();
-  const patientConsultationDates = new Map<string, Set<string>>();
-  const patientScheduledDates = new Map<string, Set<string>>();
-  const patientCancelledDates = new Map<string, Set<string>>();
-  const patientPatternDows = new Map<string, Set<number>>();
-
-  for (const a of allAttendances ?? []) {
-    const set = patientAttendanceDates.get(a.patient_id) ?? new Set();
-    set.add(a.date);
-    patientAttendanceDates.set(a.patient_id, set);
-  }
-
-  for (const c of allConsultations ?? []) {
-    const set = patientConsultationDates.get(c.patient_id) ?? new Set();
-    set.add(c.date);
-    patientConsultationDates.set(c.patient_id, set);
-  }
-
-  for (const s of allScheduled ?? []) {
-    const target = s.is_cancelled ? patientCancelledDates : patientScheduledDates;
-    const set = target.get(s.patient_id) ?? new Set<string>();
-    set.add(s.date);
-    target.set(s.patient_id, set);
-  }
-
-  for (const p of allPatterns ?? []) {
-    const set = patientPatternDows.get(p.patient_id) ?? new Set<number>();
-    set.add(p.day_of_week);
-    patientPatternDows.set(p.patient_id, set);
-  }
 
   // 코디네이터 맵
   const coordinatorMap = new Map<string, string>();
@@ -343,19 +125,13 @@ export async function getAttendanceBoard(
 
     const isNotScheduled = status === 'not_scheduled';
 
-    const pScheduled = patientScheduledDates.get(patient.id) ?? new Set<string>();
-    const pCancelled = patientCancelledDates.get(patient.id) ?? new Set<string>();
-    const pAttended = patientAttendanceDates.get(patient.id) ?? new Set<string>();
-    const pConsulted = patientConsultationDates.get(patient.id) ?? new Set<string>();
-    const pPatternDows = patientPatternDows.get(patient.id) ?? new Set<number>();
-    const patientCreatedDate = (patient.created_at ?? '').slice(0, 10);
-
-    const attendanceStreak = isNotScheduled
-      ? 0
-      : calculateConsecutiveAttendance(pScheduled, pCancelled, pPatternDows, pAttended, patientCreatedDate, holidayMap, date);
-    const consultationStreak = isNotScheduled
-      ? 0
-      : calculateConsecutiveConsultation(pScheduled, pCancelled, pPatternDows, pAttended, pConsulted, patientCreatedDate, holidayMap, date);
+    const raw = streaksMap.get(patient.id) ?? {
+      attendance_streak: 0,
+      consultation_streak: 0,
+      streak_tier: 'none' as const,
+    };
+    const attendanceStreak = isNotScheduled ? 0 : raw.attendance_streak;
+    const consultationStreak = isNotScheduled ? 0 : raw.consultation_streak;
 
     const boardPatient: BoardPatient = {
       id: patient.id,

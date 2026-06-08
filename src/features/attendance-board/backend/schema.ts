@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StreakTier } from '@/features/shared/lib/streak-tier';
 
 export const getAttendanceBoardSchema = z.object({
   date: z.string().optional(),
@@ -6,8 +7,8 @@ export const getAttendanceBoardSchema = z.object({
 
 export type GetAttendanceBoardParams = z.infer<typeof getAttendanceBoardSchema>;
 
-/** 스트릭 등급 */
-export type StreakTier = 'none' | 'fire' | 'lightning' | 'diamond' | 'crown' | 'myth';
+/** 스트릭 등급 (단일 출처 재노출) */
+export type { StreakTier };
 
 /** 출석 4-상태 */
 export type AttendanceStatus = 'attended_consulted' | 'attended' | 'absent' | 'not_scheduled';
