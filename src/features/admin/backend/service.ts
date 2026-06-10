@@ -865,8 +865,19 @@ interface StatsAggregate {
   excludedWeekends: number;
 }
 
+/** aggregateStats에서 실제로 사용하는 컬럼만 추린 타입 */
+interface DailyStatsForAggregate {
+  date: string;
+  scheduled_count: number;
+  attendance_count: number;
+  consultation_count: number;
+  attendance_rate: number | null;
+  consultation_rate: number | null;
+  consultation_rate_vs_attendance: number | null;
+}
+
 function aggregateStats(
-  rows: DailyStatsRow[],
+  rows: DailyStatsForAggregate[],
   holidayMap: Map<string, string>,
 ): StatsAggregate {
   const acc: StatsAggregate = {
@@ -1285,9 +1296,15 @@ export async function getStatsSummary(
     .toISOString()
     .split('T')[0];
 
-  // 7개 쿼리 병렬 실행 (daily_stats 통합 쿼리)
+  // 현재기간/이전기간 daily_stats를 별도 쿼리로 분리하여 메모리 필터 제거
+  // 기존 단일 쿼리(prevStartDate~end_date 전체 로드 후 JS filter)에서 개선
+  const DAILY_STATS_SELECT =
+    'date, scheduled_count, attendance_count, consultation_count, attendance_rate, consultation_rate, consultation_rate_vs_attendance';
+
+  // 9개 쿼리 병렬 실행
   const [
-    { data: allStats },
+    { data: periodStatsRaw },
+    { data: prevStatsRaw },
     { count: scheduledCount },
     { count: attendanceCount },
     { count: consultationCount },
@@ -1296,10 +1313,15 @@ export async function getStatsSummary(
     prevHolidays,
   ] = await Promise.all([
     supabase.from('daily_stats')
-      .select('*')
-      .gte('date', prevStartDate)
+      .select(DAILY_STATS_SELECT)
+      .gte('date', query.start_date)
       .lte('date', query.end_date)
-      .returns<DailyStatsRow[]>(),
+      .returns<DailyStatsForAggregate[]>(),
+    supabase.from('daily_stats')
+      .select(DAILY_STATS_SELECT)
+      .gte('date', prevStartDate)
+      .lte('date', prevEndDate)
+      .returns<DailyStatsForAggregate[]>(),
     supabase.from('scheduled_attendances')
       .select('*', { count: 'exact', head: true })
       .eq('date', today)
@@ -1317,12 +1339,8 @@ export async function getStatsSummary(
     getHolidayDatesMap(supabase, prevStartDate, prevEndDate),
   ]);
 
-  const allStatsRows = allStats ?? [];
-  const periodStats = allStatsRows.filter((r) => r.date >= query.start_date);
-  const prevStats = allStatsRows.filter((r) => r.date < query.start_date);
-
-  const periodAgg = aggregateStats(periodStats, holidays);
-  const prevAgg = aggregateStats(prevStats, prevHolidays);
+  const periodAgg = aggregateStats(periodStatsRaw ?? [], holidays);
+  const prevAgg = aggregateStats(prevStatsRaw ?? [], prevHolidays);
 
   return {
     period: {
