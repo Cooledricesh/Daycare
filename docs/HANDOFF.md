@@ -22,7 +22,8 @@
 | 배포 | Vercel — `main` push 시 자동 배포. **push는 반드시 사용자 확인 후** (실서비스) |
 | DB | Supabase 프로젝트 `hgkhcbdixubimbraigen` (Daycare, ap-south-1) — 운영 DB 직결 주의 |
 | 연동 | Carescheduler (주사제 시스템, `careschedulerp.vercel.app`, Supabase `xlhtmakvxbdjnpvtzdqh`) — BFF로 주사 이력 조회 |
-| 크론 | vercel.json: 월간리포트(매월 1일), 공휴일 동기화(매월 1일). 환자 동기화는 Google Sheets 08:15 KST |
+| 크론 | vercel.json: 월간리포트(매월 1일), 공휴일 동기화(매월 1일) — **Hobby 플랜이라 2개가 한도**. 정오 슬랙 리포트는 **Supabase pg_cron**(jobname `noon-attendance-report`, UTC 03:05 평일)이 pg_net으로 엔드포인트 호출. 환자 동기화는 Google Sheets 08:15 KST |
+| 슬랙 알림 | 평일 12:05 미출석/미진찰 명단(실명) + 월간 리포트 요약 → `SLACK_WEBHOOK_URL` (Vercel env + .env.local). 상세: `docs/superpowers/plans/2026-06-10-slack-noon-report.md`. 정기 알림은 앱 직송 — 헤르메스 에이전트 경유 금지(장애 시 누락). CRON_SECRET은 2026-06-11 rotate (Vercel env·.env.local·cron.job 세 곳 동일값) |
 
 ### 마이그레이션 적용 방법 (중요)
 
@@ -75,11 +76,14 @@ src/features/shared/               → 직역 공통 (스트릭, 캘린더, Stre
 
 **완료**: 성능 리팩토링 전체 (계획 문서의 Phase A~D, 커밋 13개 push·배포·마이그레이션 적용 완료, 사용자가 출석보드 체감 속도 직접 확인함). improvement-plan.md의 Phase 1/4/5/6/7/8/9 완료.
 
+**완료 (2026-06-11)**: 슬랙 정오 출석 리포트 + 월간 리포트 통보 (pg_cron 트리거, 배포 완료. 첫 자동 실행 2026-06-11 12:05 KST — 실행 이력: `SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;`)
+
 **남은 백로그** (우선순위 순):
-1. `docs/improvement-plan.md` Phase 2 — `as any` 제거 (82+곳, 후순위)
-2. Phase 3 잔여 — 코드 중복 제거
-3. 성능 비범위 항목 (필요해지면): 결석위험 사전계산(materialized view), 월간 리포트 내부 중복 쿼리 정리, 하이라이트 캐싱(B5), 스트릭 Postgres RPC 이전
-4. 키보드 단축키 P2 부채 2건
+1. 헤르메스 에이전트용 읽기 전용 리포트 API (`/api/external/reports/*`, API key 인증 — carescheduler 패턴 재사용). 슬랙에서 온디맨드 질의용
+2. Supabase 타입 자동 생성(`supabase gen types`) 전환 → Phase 2 `as any` 제거(82+곳)와 연계
+3. Phase 3 잔여 — 코드 중복 제거
+4. 성능 비범위 항목 (필요해지면): 결석위험 사전계산, 월간 리포트 내부 중복 쿼리 정리, 하이라이트 캐싱(B5), 스트릭 Postgres RPC 이전
+5. 키보드 단축키 P2 부채 2건
 
 ## 7. 주요 문서 맵
 
