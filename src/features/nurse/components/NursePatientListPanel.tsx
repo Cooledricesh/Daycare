@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useCallback, memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,95 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'scheduled', label: '예정' },
   { key: 'completed', label: '완료' },
 ];
+
+interface NursePatientRowProps {
+  patient: NursePatientSummary;
+  isSelected: boolean;
+  streak: number;
+  onSelect: (patient: NursePatientSummary) => void;
+}
+
+const NursePatientRow = memo(function NursePatientRow({
+  patient,
+  isSelected,
+  streak,
+  onSelect,
+}: NursePatientRowProps) {
+  const age = calculateKoreanAge(patient.birth_date);
+  return (
+    <button
+      className={cn(
+        'w-full text-left px-4 py-3 border-b border-l-4 transition-colors hover:bg-gray-50',
+        isSelected
+          ? 'bg-emerald-50 border-l-emerald-500'
+          : patient.has_nurse_task && !patient.task_completed
+            ? 'border-l-orange-400 bg-orange-50/30'
+            : patient.is_consulted
+              ? 'border-l-green-400 bg-green-50/30'
+              : patient.is_attended
+                ? 'border-l-transparent'
+                : patient.is_scheduled
+                  ? 'border-l-red-400 bg-red-50/30'
+                  : 'border-l-gray-200'
+      )}
+      onClick={() => onSelect(patient)}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <PatientAvatar avatarUrl={patient.avatar_url} size="sm" fallbackColorClass="bg-gray-100" iconColorClass="text-gray-500" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-sm truncate">{getPatientDisplayName(patient)}</span>
+              <span className="text-xs text-gray-400">
+                {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
+              </span>
+              {age !== null && (
+                <span className="text-xs text-gray-400">{age}세</span>
+              )}
+              <StreakBadge streak={streak} />
+            </div>
+            {patient.coordinator_name && (
+              <span className="text-xs text-gray-400">
+                {patient.coordinator_name}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {patient.is_attended ? (
+            <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] px-1.5 py-0">
+              <Check className="w-2.5 h-2.5 mr-0.5" />
+              출석
+            </Badge>
+          ) : patient.is_scheduled ? (
+            <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
+              <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+              미출석
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="bg-gray-50 text-gray-400 text-[10px] px-1.5 py-0">
+              <Clock className="w-2.5 h-2.5 mr-0.5" />
+              미예정
+            </Badge>
+          )}
+          {patient.is_consulted && (
+            <Badge variant="secondary" className="bg-green-50 text-green-600 text-[10px] px-1.5 py-0">
+              <Check className="w-2.5 h-2.5 mr-0.5" />
+              진찰
+            </Badge>
+          )}
+          {patient.has_nurse_task && !patient.task_completed && (
+            <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
+              <Bell className="w-2.5 h-2.5 mr-0.5" />
+              지시
+            </Badge>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+});
+NursePatientRow.displayName = 'NursePatientRow';
 
 interface NursePatientListPanelProps {
   patients: NursePatientSummary[];
@@ -48,6 +137,11 @@ export function NursePatientListPanel({
 }: NursePatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
   const { data: streaksData } = useStreaks();
+
+  const handleSelectPatient = useCallback(
+    (patient: NursePatientSummary) => onSelectPatient(patient),
+    [onSelectPatient],
+  );
 
   const counts = useMemo(() => {
     const scheduled = patients.filter(p => p.is_scheduled).length;
@@ -166,79 +260,13 @@ export function NursePatientListPanel({
         ) : (
           <div>
             {filteredPatients.map((patient) => (
-              <button
+              <NursePatientRow
                 key={patient.id}
-                className={cn(
-                  'w-full text-left px-4 py-3 border-b border-l-4 transition-colors hover:bg-gray-50',
-                  selectedPatientId === patient.id
-                    ? 'bg-emerald-50 border-l-emerald-500'
-                    : patient.has_nurse_task && !patient.task_completed
-                      ? 'border-l-orange-400 bg-orange-50/30'
-                      : patient.is_consulted
-                        ? 'border-l-green-400 bg-green-50/30'
-                        : patient.is_attended
-                          ? 'border-l-transparent'
-                          : patient.is_scheduled
-                            ? 'border-l-red-400 bg-red-50/30'
-                            : 'border-l-gray-200'
-                )}
-                onClick={() => onSelectPatient(patient)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <PatientAvatar avatarUrl={patient.avatar_url} size="sm" fallbackColorClass="bg-gray-100" iconColorClass="text-gray-500" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-sm truncate">{getPatientDisplayName(patient)}</span>
-                        <span className="text-xs text-gray-400">
-                          {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
-                        </span>
-                        {calculateKoreanAge(patient.birth_date) !== null && (
-                          <span className="text-xs text-gray-400">
-                            {calculateKoreanAge(patient.birth_date)}세
-                          </span>
-                        )}
-                        <StreakBadge streak={streaksData?.streaks?.[patient.id]?.attendance_streak ?? 0} />
-                      </div>
-                      {patient.coordinator_name && (
-                        <span className="text-xs text-gray-400">
-                          {patient.coordinator_name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {patient.is_attended ? (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] px-1.5 py-0">
-                        <Check className="w-2.5 h-2.5 mr-0.5" />
-                        출석
-                      </Badge>
-                    ) : patient.is_scheduled ? (
-                      <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
-                        <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
-                        미출석
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-gray-50 text-gray-400 text-[10px] px-1.5 py-0">
-                        <Clock className="w-2.5 h-2.5 mr-0.5" />
-                        미예정
-                      </Badge>
-                    )}
-                    {patient.is_consulted && (
-                      <Badge variant="secondary" className="bg-green-50 text-green-600 text-[10px] px-1.5 py-0">
-                        <Check className="w-2.5 h-2.5 mr-0.5" />
-                        진찰
-                      </Badge>
-                    )}
-                    {patient.has_nurse_task && !patient.task_completed && (
-                      <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
-                        <Bell className="w-2.5 h-2.5 mr-0.5" />
-                        지시
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </button>
+                patient={patient}
+                isSelected={selectedPatientId === patient.id}
+                streak={streaksData?.streaks?.[patient.id]?.attendance_streak ?? 0}
+                onSelect={handleSelectPatient}
+              />
             ))}
           </div>
         )}

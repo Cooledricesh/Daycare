@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { getStreakTier, STREAK_TIER_META, STREAK_BADGE_MIN } from '@/features/shared/lib/streak-tier';
 
 interface StreakBadgeProps {
@@ -11,7 +12,7 @@ interface StreakBadgeProps {
  * 목록용 압축 스트릭 뱃지. streak < 3 이면 렌더링하지 않음.
  * 예: 🔥3, ⚡7, 💎12
  */
-export function StreakBadge({ streak, className }: StreakBadgeProps) {
+export const StreakBadge = memo(function StreakBadge({ streak, className }: StreakBadgeProps) {
   if (streak < STREAK_BADGE_MIN) return null;
   const tier = getStreakTier(streak);
   if (tier === 'none') return null;
@@ -40,4 +41,5 @@ export function StreakBadge({ streak, className }: StreakBadgeProps) {
       {meta.icon}{streak}
     </span>
   );
-}
+});
+StreakBadge.displayName = 'StreakBadge';

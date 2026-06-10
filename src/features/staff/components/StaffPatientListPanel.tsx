@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useCallback, memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,150 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'scheduled', label: '예정' },
   { key: 'completed', label: '완료' },
 ];
+
+interface StaffPatientRowProps {
+  patient: PatientSummary;
+  isSelected: boolean;
+  streak: number;
+  attendanceMode: boolean;
+  consultationMode: boolean;
+  isAnyMode: boolean;
+  /** 출석 모드: 현재 환자가 체크된 상태인지 (출석 or 선택됨, 취소 제외) */
+  attendanceChecked: boolean;
+  /** 진찰 모드: 현재 환자가 체크된 상태인지 */
+  consultChecked: boolean;
+  /** 진찰 모드: checkbox 비활성 여부 */
+  consultDisabled: boolean;
+  onSelect: (patient: PatientSummary) => void;
+  onToggleAttendance: (patient: PatientSummary) => void;
+  onToggleConsult: (patient: PatientSummary) => void;
+}
+
+const StaffPatientRow = memo(function StaffPatientRow({
+  patient,
+  isSelected,
+  streak,
+  attendanceMode,
+  consultationMode,
+  isAnyMode,
+  attendanceChecked,
+  consultChecked,
+  consultDisabled,
+  onSelect,
+  onToggleAttendance,
+  onToggleConsult,
+}: StaffPatientRowProps) {
+  const age = calculateKoreanAge(patient.birth_date);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={cn(
+        'w-full text-left px-4 py-3 border-b border-l-4 transition-colors hover:bg-gray-50 cursor-pointer',
+        attendanceMode && !patient.is_attended && attendanceChecked
+          ? 'bg-blue-50 border-l-blue-500'
+          : attendanceMode && patient.is_attended && !attendanceChecked
+            ? 'bg-red-50 border-l-red-500'
+          : consultationMode && !patient.is_consulted && consultChecked
+            ? 'bg-green-50 border-l-green-500'
+            : consultationMode && patient.is_consulted && !consultChecked
+              ? 'bg-red-50 border-l-red-500'
+          : isSelected && !isAnyMode
+            ? 'bg-emerald-50 border-l-emerald-500'
+            : patient.has_task && !patient.task_completed
+              ? 'border-l-orange-400 bg-orange-50/30'
+              : patient.is_consulted
+                ? 'border-l-green-400 bg-green-50/30'
+                : patient.is_attended
+                  ? 'border-l-transparent'
+                  : patient.is_scheduled
+                    ? 'border-l-red-400 bg-red-50/30'
+                    : 'border-l-gray-200'
+      )}
+      onClick={() => {
+        if (attendanceMode) {
+          onToggleAttendance(patient);
+        } else if (consultationMode) {
+          onToggleConsult(patient);
+        } else {
+          onSelect(patient);
+        }
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          {attendanceMode ? (
+            <Checkbox
+              checked={attendanceChecked}
+              onCheckedChange={() => onToggleAttendance(patient)}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0"
+            />
+          ) : consultationMode ? (
+            <Checkbox
+              checked={consultChecked}
+              onCheckedChange={() => onToggleConsult(patient)}
+              onClick={(e) => e.stopPropagation()}
+              disabled={consultDisabled}
+              className="shrink-0"
+            />
+          ) : (
+            <PatientAvatar avatarUrl={patient.avatar_url} size="sm" fallbackColorClass="bg-gray-100" iconColorClass="text-gray-500" />
+          )}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-medium text-sm truncate">{getPatientDisplayName(patient)}</span>
+            <span className="text-xs text-gray-400">
+              {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
+            </span>
+            {age !== null && (
+              <span className="text-xs text-gray-400">{age}세</span>
+            )}
+            <StreakBadge streak={streak} />
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {patient.is_attended ? (
+            <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] px-1.5 py-0">
+              <Check className="w-2.5 h-2.5 mr-0.5" />
+              출석
+            </Badge>
+          ) : patient.is_scheduled ? (
+            <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
+              <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+              미출석
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="bg-gray-50 text-gray-400 text-[10px] px-1.5 py-0">
+              <Clock className="w-2.5 h-2.5 mr-0.5" />
+              미예정
+            </Badge>
+          )}
+          {!attendanceMode && patient.is_consulted && (
+            <Badge variant="secondary" className={cn(
+              'text-[10px] px-1.5 py-0',
+              patient.is_coordinator_checked
+                ? 'bg-green-50 text-green-500'
+                : 'bg-green-50 text-green-600',
+            )}>
+              {patient.is_coordinator_checked ? (
+                <><Stethoscope className="w-2.5 h-2.5 mr-0.5" />코디</>
+              ) : (
+                <><Check className="w-2.5 h-2.5 mr-0.5" />진찰</>
+              )}
+            </Badge>
+          )}
+          {!attendanceMode && patient.has_task && !patient.task_completed && (
+            <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
+              <Bell className="w-2.5 h-2.5 mr-0.5" />
+              지시
+            </Badge>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+StaffPatientRow.displayName = 'StaffPatientRow';
 
 interface StaffPatientListPanelProps {
   patients: PatientSummary[];
@@ -85,6 +229,11 @@ export function StaffPatientListPanel({
 }: StaffPatientListPanelProps) {
   const { rawValue, searchQuery, inputProps, clear: clearSearch } = useKoreanSearchInput();
   const { data: streaksData } = useStreaks();
+
+  const handleSelectPatient = useCallback(
+    (patient: PatientSummary) => onSelectPatient(patient),
+    [onSelectPatient],
+  );
 
   const counts = useMemo(() => {
     const scheduled = patients.filter(p => p.is_scheduled).length;
@@ -359,129 +508,32 @@ export function StaffPatientListPanel({
         ) : (
           <div>
             {filteredPatients.map((patient) => (
-              <div
-                role="button"
-                tabIndex={0}
+              <StaffPatientRow
                 key={patient.id}
-                className={cn(
-                  'w-full text-left px-4 py-3 border-b border-l-4 transition-colors hover:bg-gray-50 cursor-pointer',
-                  // 출석 모드 스타일
-                  attendanceMode && selectedIds.has(patient.id) && !patient.is_attended
-                    ? 'bg-blue-50 border-l-blue-500'
-                    : attendanceMode && cancelIds.has(patient.id) && patient.is_attended
-                      ? 'bg-red-50 border-l-red-500'
-                    // 진찰 모드 스타일
-                    : consultationMode && consultSelectedIds.has(patient.id)
-                      ? 'bg-green-50 border-l-green-500'
-                      : consultationMode && consultCancelIds.has(patient.id)
-                        ? 'bg-red-50 border-l-red-500'
-                    // 일반 모드 스타일
-                    : selectedPatientId === patient.id && !isAnyMode
-                      ? 'bg-emerald-50 border-l-emerald-500'
-                      : patient.has_task && !patient.task_completed
-                        ? 'border-l-orange-400 bg-orange-50/30'
-                        : patient.is_consulted
-                          ? 'border-l-green-400 bg-green-50/30'
-                          : patient.is_attended
-                            ? 'border-l-transparent'
-                            : patient.is_scheduled
-                              ? 'border-l-red-400 bg-red-50/30'
-                              : 'border-l-gray-200'
-                )}
-                onClick={() => {
-                  if (attendanceMode) {
-                    togglePatient(patient);
-                  } else if (consultationMode) {
-                    toggleConsultPatient(patient);
-                  } else {
-                    onSelectPatient(patient);
-                  }
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {attendanceMode ? (
-                      <Checkbox
-                        checked={
-                          patient.is_attended
-                            ? !cancelIds.has(patient.id)
-                            : selectedIds.has(patient.id)
-                        }
-                        onCheckedChange={() => togglePatient(patient)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0"
-                      />
-                    ) : consultationMode ? (
-                      <Checkbox
-                        checked={
-                          patient.is_consulted
-                            ? !consultCancelIds.has(patient.id)
-                            : consultSelectedIds.has(patient.id)
-                        }
-                        onCheckedChange={() => toggleConsultPatient(patient)}
-                        onClick={(e) => e.stopPropagation()}
-                        disabled={
-                          !patient.is_attended ||
-                          (patient.is_consulted && !patient.is_coordinator_checked)
-                        }
-                        className="shrink-0"
-                      />
-                    ) : (
-                      <PatientAvatar avatarUrl={patient.avatar_url} size="sm" fallbackColorClass="bg-gray-100" iconColorClass="text-gray-500" />
-                    )}
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-medium text-sm truncate">{getPatientDisplayName(patient)}</span>
-                      <span className="text-xs text-gray-400">
-                        {patient.gender === 'M' ? '남' : patient.gender === 'F' ? '여' : ''}
-                      </span>
-                      {calculateKoreanAge(patient.birth_date) !== null && (
-                        <span className="text-xs text-gray-400">
-                          {calculateKoreanAge(patient.birth_date)}세
-                        </span>
-                      )}
-                      <StreakBadge streak={streaksData?.streaks?.[patient.id]?.attendance_streak ?? 0} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {patient.is_attended ? (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] px-1.5 py-0">
-                        <Check className="w-2.5 h-2.5 mr-0.5" />
-                        출석
-                      </Badge>
-                    ) : patient.is_scheduled ? (
-                      <Badge variant="secondary" className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0">
-                        <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
-                        미출석
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-gray-50 text-gray-400 text-[10px] px-1.5 py-0">
-                        <Clock className="w-2.5 h-2.5 mr-0.5" />
-                        미예정
-                      </Badge>
-                    )}
-                    {!attendanceMode && patient.is_consulted && (
-                      <Badge variant="secondary" className={cn(
-                        'text-[10px] px-1.5 py-0',
-                        patient.is_coordinator_checked
-                          ? 'bg-green-50 text-green-500'
-                          : 'bg-green-50 text-green-600',
-                      )}>
-                        {patient.is_coordinator_checked ? (
-                          <><Stethoscope className="w-2.5 h-2.5 mr-0.5" />코디</>
-                        ) : (
-                          <><Check className="w-2.5 h-2.5 mr-0.5" />진찰</>
-                        )}
-                      </Badge>
-                    )}
-                    {!attendanceMode && patient.has_task && !patient.task_completed && (
-                      <Badge variant="secondary" className="bg-orange-50 text-orange-600 text-[10px] px-1.5 py-0">
-                        <Bell className="w-2.5 h-2.5 mr-0.5" />
-                        지시
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
+                patient={patient}
+                isSelected={selectedPatientId === patient.id}
+                streak={streaksData?.streaks?.[patient.id]?.attendance_streak ?? 0}
+                attendanceMode={attendanceMode}
+                consultationMode={consultationMode}
+                isAnyMode={isAnyMode}
+                attendanceChecked={
+                  patient.is_attended
+                    ? !cancelIds.has(patient.id)
+                    : selectedIds.has(patient.id)
+                }
+                consultChecked={
+                  patient.is_consulted
+                    ? !consultCancelIds.has(patient.id)
+                    : consultSelectedIds.has(patient.id)
+                }
+                consultDisabled={
+                  !patient.is_attended ||
+                  (patient.is_consulted && !patient.is_coordinator_checked)
+                }
+                onSelect={handleSelectPatient}
+                onToggleAttendance={togglePatient}
+                onToggleConsult={toggleConsultPatient}
+              />
             ))}
           </div>
         )}
