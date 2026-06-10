@@ -3,8 +3,28 @@ import { getAppConfig } from '@/server/config';
 import { createServiceClient } from '@/server/supabase/client';
 import { generateMonthlyReport } from '@/features/monthly-report/backend/service';
 import { MonthlyReportError } from '@/features/monthly-report/backend/error';
+import { sendSlackMessage } from '@/server/integrations/slack/client';
+import type { MonthlyReportResponse } from '@/features/monthly-report/backend/schema';
 
 export const runtime = 'nodejs';
+
+/**
+ * 월간 리포트 핵심 수치를 슬랙 텍스트로 조립합니다.
+ */
+function composeMonthlyReportSlackMessage(
+  report: MonthlyReportResponse,
+): string {
+  const monthLabel = `${report.year}년 ${report.month}월`;
+  const attendanceRate = report.registered_count_eom > 0
+    ? ((report.daily_avg_attendance / report.registered_count_eom) * 100).toFixed(1)
+    : '0.0';
+
+  return [
+    `\u{1F4CA} ${monthLabel} 월간 리포트 생성 완료`,
+    `총 출석 ${report.total_attendance_days}건 · 일평균 ${report.daily_avg_attendance.toFixed(1)}명 · 출석률 ${attendanceRate}% · 진찰률 ${report.consultation_attendance_rate.toFixed(1)}%`,
+    `등록 ${report.registered_count_eom}명 (신규 ${report.new_patient_count}명 / 퇴원 ${report.discharged_count}명)`,
+  ].join('\n');
+}
 
 /** UTC 밀리초를 KST로 변환하여 전날 날짜 정보를 반환합니다 */
 function getKstYesterdayInfo(): { year: number; month: number } {
@@ -83,7 +103,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // 리포트 생성
   try {
-    await generateMonthlyReport(supabase, year, month, 'cron');
+    const report = await generateMonthlyReport(supabase, year, month, 'cron');
+
+    // 슬랙 요약 통보 (미설정이면 조용히 스킵, 실패해도 크론 응답은 성공 유지)
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+    if (webhookUrl) {
+      const slackText = composeMonthlyReportSlackMessage(report);
+      await sendSlackMessage(webhookUrl, { text: slackText });
+    }
+
     return NextResponse.json(
       { year, month, status: 'generated' },
       { status: 200 },

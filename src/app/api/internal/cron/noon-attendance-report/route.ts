@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import { getAppConfig } from '@/server/config';
+import { createServiceClient } from '@/server/supabase/client';
+import { getTodayString, getNowKST } from '@/lib/date';
+import { isWeekend, getHolidayDatesMap } from '@/lib/business-days';
+import { getAttendanceBoard } from '@/features/attendance-board/backend/service';
+import { sendSlackMessage } from '@/server/integrations/slack/client';
+import { composeNoonReportMessage } from '@/server/services/noon-report';
+
+export const runtime = 'nodejs';
+
+/**
+ * KST 오늘 날짜를 "6월 10일 (수)" 형식으로 반환합니다.
+ */
+function formatKstDateLabel(kstDate: Date): string {
+  return format(kstDate, 'M월 d일 (E)', { locale: ko });
+}
+
+/**
+ * POST /api/internal/cron/noon-attendance-report
+ *
+ * Vercel Cron 스케줄: 5 3 * * 1-5 (UTC) = KST 평일 12:05
+ * KST 기준 오늘 출석 현황을 슬랙으로 전송합니다.
+ * - 주말/공휴일은 스킵 (200 + status:'skipped')
+ * - SLACK_WEBHOOK_URL 미설정 시 503
+ */
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const authHeader = req.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET이 설정되지 않았습니다' },
+      { status: 500 },
+    );
+  }
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: '인증에 실패했습니다' }, { status: 401 });
+  }
+
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return NextResponse.json(
+      { error: 'SLACK_WEBHOOK_URL이 설정되지 않았습니다' },
+      { status: 503 },
+    );
+  }
+
+  const todayStr = getTodayString();
+  const nowKst = getNowKST();
+
+  // 주말 스킵
+  if (isWeekend(todayStr)) {
+    return NextResponse.json(
+      { status: 'skipped', reason: 'weekend' },
+      { status: 200 },
+    );
+  }
+
+  // 공휴일 스킵
+  const config = getAppConfig();
+  const supabase = createServiceClient({
+    url: config.supabase.url,
+    serviceRoleKey: config.supabase.serviceRoleKey,
+  });
+
+  const holidayMap = await getHolidayDatesMap(supabase, todayStr, todayStr);
+  if (holidayMap.has(todayStr)) {
+    return NextResponse.json(
+      { status: 'skipped', reason: 'holiday', holiday: holidayMap.get(todayStr) },
+      { status: 200 },
+    );
+  }
+
+  // 출석 보드 조회
+  const board = await getAttendanceBoard(supabase, { date: todayStr });
+
+  const dateLabel = formatKstDateLabel(nowKst);
+  const messageText = composeNoonReportMessage(board, dateLabel);
+
+  // 슬랙 전송
+  const result = await sendSlackMessage(webhookUrl, { text: messageText });
+
+  if (!result.ok) {
+    const errorMsg = 'error' in result ? result.error : '알 수 없는 오류';
+    return NextResponse.json(
+      { error: `슬랙 전송 실패: ${errorMsg}` },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      status: 'sent',
+      date: todayStr,
+      total_attended: board.total_attended,
+      total_scheduled: board.total_scheduled,
+      total_consulted: board.total_consulted,
+    },
+    { status: 200 },
+  );
+}
