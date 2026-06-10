@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { errorBoundary } from '@/server/middleware/error';
 import { withAppContext } from '@/server/middleware/context';
 import { withSupabase } from '@/server/middleware/supabase';
+import { withRequestTiming } from '@/server/middleware/timing';
 import { withAuth } from '@/server/middleware/auth';
 import { requireRole } from '@/server/middleware/rbac';
 import { success, failure, respond } from '@/server/http/response';
@@ -23,9 +24,10 @@ export const createHonoApp = () => {
 
   const app = new Hono<AppEnv>();
 
-  // 공통 미들웨어 (순서 중요: error -> context -> supabase -> auth)
+  // 공통 미들웨어 (순서 중요: error -> context -> timing -> supabase -> auth)
   app.use('*', errorBoundary());
   app.use('*', withAppContext());
+  app.use('*', withRequestTiming());
   app.use('*', withSupabase());
 
   // JWT 인증 + RBAC 미들웨어 (역할별 접근 제어)
