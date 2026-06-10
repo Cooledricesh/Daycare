@@ -154,6 +154,105 @@ export function calculateConsecutiveConsultation(
   return count;
 }
 
+/** 캐시 만료 판정 기준: 사용자가 승인한 최대 표시 지연 5분 */
+const STREAKS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** streaks_cache payload 단일 환자 엔트리 형태 */
+type StreaksCacheEntry = {
+  attendance_streak: number;
+  consultation_streak: number;
+  streak_tier: StreakTier;
+};
+
+/**
+ * Map → JSON payload: patient_id 키마다 PatientStreaks를 직렬화
+ */
+function serializeStreaksPayload(
+  map: Map<string, PatientStreaks>,
+): Record<string, StreaksCacheEntry> {
+  const payload: Record<string, StreaksCacheEntry> = {};
+  for (const [id, streaks] of map) {
+    payload[id] = {
+      attendance_streak: streaks.attendance_streak,
+      consultation_streak: streaks.consultation_streak,
+      streak_tier: streaks.streak_tier,
+    };
+  }
+  return payload;
+}
+
+/**
+ * JSON payload → Map: 구조가 다르거나 빈 값이면 null 반환해 캐시 미스로 취급
+ */
+function deserializeStreaksPayload(
+  raw: unknown,
+): Map<string, PatientStreaks> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const result = new Map<string, PatientStreaks>();
+  for (const [id, entry] of Object.entries(raw as Record<string, unknown>)) {
+    if (
+      !entry ||
+      typeof entry !== 'object' ||
+      typeof (entry as StreaksCacheEntry).attendance_streak !== 'number' ||
+      typeof (entry as StreaksCacheEntry).consultation_streak !== 'number' ||
+      typeof (entry as StreaksCacheEntry).streak_tier !== 'string'
+    ) {
+      return null;
+    }
+    result.set(id, entry as PatientStreaks);
+  }
+  return result;
+}
+
+/**
+ * 캐시 래퍼: streaks_cache 테이블에서 TTL 이내 row가 있으면 즉시 반환,
+ * 없거나 만료되었으면 getStreaksMap을 실행하고 결과를 upsert한다.
+ * 캐시 조회/저장 오류는 전체 요청을 실패시키지 않고 원본 계산으로 fallback한다.
+ */
+export async function getStreaksMapCached(
+  supabase: SupabaseClient<Database>,
+  endDate: string,
+  patients: Array<{ id: string; created_at: string | null }>,
+): Promise<Map<string, PatientStreaks>> {
+  try {
+    const { data: cached } = await supabase
+      .from('streaks_cache')
+      .select('payload, computed_at')
+      .eq('cache_date', endDate)
+      .single();
+
+    if (cached) {
+      const computedAtMs = new Date(cached.computed_at).getTime();
+      if (Date.now() - computedAtMs < STREAKS_CACHE_TTL_MS) {
+        const map = deserializeStreaksPayload(cached.payload);
+        if (map !== null) {
+          return map;
+        }
+      }
+    }
+  } catch {
+    console.warn('[streaks_cache] 캐시 조회 실패 — 원본 계산으로 fallback');
+  }
+
+  const fresh = await getStreaksMap(supabase, endDate, patients);
+
+  try {
+    const computedAt = new Date().toISOString();
+    await supabase.from('streaks_cache').upsert(
+      {
+        cache_date: endDate,
+        payload: serializeStreaksPayload(fresh),
+        computed_at: computedAt,
+      },
+      { onConflict: 'cache_date' },
+    );
+  } catch {
+    console.warn('[streaks_cache] 캐시 저장 실패 — 계산 결과는 정상 반환');
+  }
+
+  return fresh;
+}
+
 /**
  * 전 활성 환자의 raw 스트릭 맵을 계산한다 (today별 표시 보정은 호출측 책임).
  * - 60일 윈도우 데이터를 페이지네이션으로 로드

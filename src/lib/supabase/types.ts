@@ -583,6 +583,30 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            streaks_cache: {
+                Row: {
+                    cache_date: string;
+                    payload: Json;
+                    computed_at: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    cache_date: string;
+                    payload: Json;
+                    computed_at: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    cache_date?: string;
+                    payload?: Json;
+                    computed_at?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
             monthly_reports: {
                 Row: {
                     id: string;

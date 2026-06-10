@@ -10,7 +10,7 @@ import type {
 import { AttendanceBoardError, AttendanceBoardErrorCode } from './error';
 import { getTodayString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
-import { getStreaksMap, type PatientStreaks } from '@/features/shared/backend/streak';
+import { getStreaksMapCached, type PatientStreaks } from '@/features/shared/backend/streak';
 import { getStreakTier } from '@/features/shared/lib/streak-tier';
 import type { StreaksResponse } from './streaks-schema';
 
@@ -70,8 +70,8 @@ export async function getAttendanceBoard(
     );
   }
 
-  // 전 활성 환자 스트릭 맵 (60일 윈도우 + 자동 휴원 감지, 공유 모듈)
-  const streaksMap: Map<string, PatientStreaks> = await getStreaksMap(
+  // 전 활성 환자 스트릭 맵 (60일 윈도우 + 자동 휴원 감지, 5분 서버 캐시)
+  const streaksMap: Map<string, PatientStreaks> = await getStreaksMapCached(
     supabase,
     date,
     (patients ?? []).map((p) => ({ id: p.id, created_at: p.created_at })),
@@ -227,7 +227,7 @@ export async function getStreaksForActivePatients(
     );
   }
 
-  const map = await getStreaksMap(
+  const map = await getStreaksMapCached(
     supabase,
     date,
     (patients ?? []).map((p) => ({ id: p.id, created_at: p.created_at })),
