@@ -48,11 +48,32 @@
   - holidays 테이블에 오늘 날짜 존재 (`getHolidayDatesMap` 재사용)
 - 날짜는 KST 기준 오늘 (`getTodayString` 등 기존 유틸 확인 후 재사용)
 
-### 4. 스케줄 — vercel.json
+### 4. 스케줄 — Supabase pg_cron (확정: 2026-06-11)
 
-- `{ "path": "/api/internal/cron/noon-attendance-report", "schedule": "5 3 * * 1-5" }` (UTC 03:05 = KST 12:05)
-- ⚠️ Vercel Hobby 플랜은 크론 2개 제한 (이미 2개 사용 중) — Pro가 아니면 배포 실패 가능.
-  Hobby일 경우 대안: GitHub Actions schedule로 `curl -X POST -H "Authorization: Bearer $CRON_SECRET"` 호출
+Vercel Hobby 플랜 크론 2개 제한(월간리포트·공휴일동기화가 이미 사용)으로 vercel.json 대신
+**Supabase pg_cron + pg_net**으로 트리거. 운영 DB에 적용 완료:
+
+```sql
+-- 확장: CREATE EXTENSION pg_cron, pg_net (migration: enable_pg_cron_pg_net)
+-- 잡 등록 (jobname 동일하면 갱신됨):
+SELECT cron.schedule(
+  'noon-attendance-report',
+  '5 3 * * 1-5',  -- UTC 03:05 = KST 평일 12:05
+  $$
+  SELECT net.http_post(
+    url := 'https://dddaycare.vercel.app/api/internal/cron/noon-attendance-report',
+    body := '{}'::jsonb,
+    headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET 실제값>', 'Content-Type', 'application/json'),
+    timeout_milliseconds := 15000
+  )
+  $$
+);
+```
+
+- CRON_SECRET은 2026-06-11 rotate됨 (Vercel의 기존 값이 Sensitive라 열람 불가 → 새 값 발급).
+  실제 값: `.env.local` + Vercel 환경변수 + 위 cron.job command 세 곳에 동일하게 존재
+- 실행 이력 확인: `SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;`
+- 잡 중지: `SELECT cron.unschedule('noon-attendance-report');`
 
 ### 5. 월간 리포트 슬랙 통보
 
