@@ -2,6 +2,7 @@
 
 ## Must
 
+- **새로운 작업을 시작하기 전에 반드시 `docs/HANDOFF.md`를 먼저 읽는다.** 이 문서가 레포의 실제 구조, 운영 절차, 성능 불변식, 현재 백로그의 단일 출처다. 구조 변경·큰 기능 추가·운영 절차 변경이 있는 작업을 마치면 `docs/HANDOFF.md`를 갱신한다.
 - always use client component for all components. (use `use client` directive)
 - always use promise for page.tsx params props.
 - use valid picsum.photos stock image for placeholder image
