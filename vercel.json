@@ -7,10 +7,6 @@
     {
       "path": "/api/internal/cron/holidays-sync",
       "schedule": "0 0 1 * *"
-    },
-    {
-      "path": "/api/internal/cron/noon-attendance-report",
-      "schedule": "5 3 * * 1-5"
     }
   ]
 }
