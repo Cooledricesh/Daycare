@@ -49,8 +49,10 @@ export const adminKeys = {
     patients: (date: string) => ['admin', 'dashboard', 'patients', date] as const,
     patient: (patientId: string, date: string) => ['admin', 'dashboard', 'patient', patientId, date] as const,
     patientAll: ['admin', 'dashboard', 'patient'] as const,
+    patientByIdAll: (patientId: string) => ['admin', 'dashboard', 'patient', patientId] as const,
     patientHistory: (patientId: string, months: number) => ['admin', 'dashboard', 'patient-history', patientId, months] as const,
     patientHistoryAll: ['admin', 'dashboard', 'patient-history'] as const,
+    patientHistoryByIdAll: (patientId: string) => ['admin', 'dashboard', 'patient-history', patientId] as const,
     patientsAll: ['admin', 'dashboard', 'patients'] as const,
   },
   coordinatorWorkload: {

@@ -105,9 +105,14 @@ export const useAdminCreateMessage = () => {
       );
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
-      queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
+    onSuccess: (_data, params) => {
+      // patientId를 알고 있으므로 해당 환자 키만 무효화
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.dashboard.patientByIdAll(params.patientId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.dashboard.patientHistoryByIdAll(params.patientId),
+      });
     },
   });
 };
@@ -119,6 +124,7 @@ export const useAdminDeleteMessage = () => {
     mutationFn: async (messageId: string) => {
       await apiClient.delete(`/api/admin/dashboard/messages/${messageId}`);
     },
+    // messageId만 있고 patientId를 알 수 없어 prefix 전체 무효화 유지
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
@@ -133,6 +139,7 @@ export const useAdminUpdateMessage = () => {
     mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
       await apiClient.patch(`/api/admin/dashboard/messages/${messageId}`, { content });
     },
+    // messageId만 있고 patientId를 알 수 없어 prefix 전체 무효화 유지
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
@@ -147,6 +154,8 @@ export const useAdminDeleteConsultation = () => {
     mutationFn: async (consultationId: string) => {
       await apiClient.delete(`/api/admin/dashboard/consultations/${consultationId}`);
     },
+    // consultationId만 있고 patientId를 알 수 없어 prefix 전체 무효화 유지
+    // patientsAll도 함께 무효화 — 목록의 진찰 상태 갱신에 필요
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientAll });
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard.patientHistoryAll });
