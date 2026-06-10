@@ -6,7 +6,8 @@ import { createServiceClient } from '@/server/supabase/client';
 import { getTodayString, getNowKST } from '@/lib/date';
 import { isWeekend, getHolidayDatesMap } from '@/lib/business-days';
 import { getAttendanceBoard } from '@/features/attendance-board/backend/service';
-import { sendSlackMessage } from '@/server/integrations/slack/client';
+import { postSlackMessage } from '@/server/integrations/slack/client';
+import { SLACK_CHANNELS } from '@/constants/slack-channels';
 import { composeNoonReportMessage } from '@/server/services/noon-report';
 
 export const runtime = 'nodejs';
@@ -22,9 +23,9 @@ function formatKstDateLabel(kstDate: Date): string {
  * POST /api/internal/cron/noon-attendance-report
  *
  * Vercel Cron 스케줄: 5 3 * * 1-5 (UTC) = KST 평일 12:05
- * KST 기준 오늘 출석 현황을 슬랙으로 전송합니다.
+ * KST 기준 오늘 출석 현황을 슬랙 #진찰 채널로 전송합니다.
  * - 주말/공휴일은 스킵 (200 + status:'skipped')
- * - SLACK_WEBHOOK_URL 미설정 시 503
+ * - SLACK_BOT_TOKEN 미설정 시 503
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const authHeader = req.headers.get('authorization');
@@ -40,10 +41,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: '인증에 실패했습니다' }, { status: 401 });
   }
 
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  if (!webhookUrl) {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) {
     return NextResponse.json(
-      { error: 'SLACK_WEBHOOK_URL이 설정되지 않았습니다' },
+      { error: 'SLACK_BOT_TOKEN이 설정되지 않았습니다' },
       { status: 503 },
     );
   }
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const messageText = composeNoonReportMessage(board, dateLabel);
 
   // 슬랙 전송
-  const result = await sendSlackMessage(webhookUrl, { text: messageText });
+  const result = await postSlackMessage(botToken, SLACK_CHANNELS.CONSULTATION, messageText);
 
   if (!result.ok) {
     const errorMsg = 'error' in result ? result.error : '알 수 없는 오류';

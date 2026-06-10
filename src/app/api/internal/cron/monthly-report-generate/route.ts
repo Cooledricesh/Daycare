@@ -3,7 +3,8 @@ import { getAppConfig } from '@/server/config';
 import { createServiceClient } from '@/server/supabase/client';
 import { generateMonthlyReport } from '@/features/monthly-report/backend/service';
 import { MonthlyReportError } from '@/features/monthly-report/backend/error';
-import { sendSlackMessage } from '@/server/integrations/slack/client';
+import { postSlackMessage } from '@/server/integrations/slack/client';
+import { SLACK_CHANNELS } from '@/constants/slack-channels';
 import type { MonthlyReportResponse } from '@/features/monthly-report/backend/schema';
 
 export const runtime = 'nodejs';
@@ -106,10 +107,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const report = await generateMonthlyReport(supabase, year, month, 'cron');
 
     // 슬랙 요약 통보 (미설정이면 조용히 스킵, 실패해도 크론 응답은 성공 유지)
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-    if (webhookUrl) {
+    const botToken = process.env.SLACK_BOT_TOKEN;
+    if (botToken) {
       const slackText = composeMonthlyReportSlackMessage(report);
-      await sendSlackMessage(webhookUrl, { text: slackText });
+      await postSlackMessage(botToken, SLACK_CHANNELS.CONSULTATION, slackText);
     }
 
     return NextResponse.json(

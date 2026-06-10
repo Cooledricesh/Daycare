@@ -87,8 +87,18 @@ SELECT cron.schedule(
 
 ## 환경변수
 
-- `SLACK_WEBHOOK_URL` — Vercel(Production) + `.env.local`. config/index.ts envSchema에는 **추가하지 않음**
+- ~~`SLACK_WEBHOOK_URL`~~ → **2026-06-11 `SLACK_BOT_TOKEN`으로 전환** (봇: @alimi, chat.postMessage)
+  - 웹훅은 채널당 환경변수가 1개씩 늘어나는 문제 → 봇 토큰 1개 + 채널 상수(`src/constants/slack-channels.ts`)로 통일
+  - 새 채널 추가 = 슬랙에서 `/invite @alimi` + 상수 한 줄. 환경변수 불변
+  - 채널: 정오 현황·월간 리포트 → `#진찰`, 생일 알림 → `#마루`
+- Vercel(Production) + `.env.local`. config/index.ts envSchema에는 **추가하지 않음**
   (필수화하면 미설정 시 전체 백엔드가 죽음 — HOLIDAY_API_KEY처럼 라우트에서 직접 읽기)
+
+## 생일 알림 (2026-06-11 추가)
+
+- `/api/internal/cron/birthday-report` — 매일 KST 08:30 (pg_cron jobname `birthday-report`, `30 23 * * *` UTC)
+- 그날 생일인 활성 회원("환자"의 원내 호칭)이 있을 때만 `#마루` 채널 전송, 없으면 skip
+- 서버 UTC 환경 함정: `isBirthdayToday`에 `getNowKST()`를 명시적으로 전달해야 함
 
 ## 비범위 (후속)
 

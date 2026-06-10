@@ -5,7 +5,8 @@ import { getAppConfig } from '@/server/config';
 import { createServiceClient } from '@/server/supabase/client';
 import { getTodayString, getNowKST } from '@/lib/date';
 import { isBirthdayToday } from '@/lib/birthday';
-import { sendSlackMessage } from '@/server/integrations/slack/client';
+import { postSlackMessage } from '@/server/integrations/slack/client';
+import { SLACK_CHANNELS } from '@/constants/slack-channels';
 import { composeBirthdayReportMessage } from '@/server/services/birthday-report';
 import type { BirthdayPatient } from '@/server/services/birthday-report';
 
@@ -25,7 +26,7 @@ function formatKstDateLabel(kstDate: Date): string {
  * 오늘 생일인 활성 환자가 있으면 슬랙 "마루" 채널로 축하 메시지를 전송합니다.
  * - 주말/공휴일 포함 매일 실행 (생일은 매일 체크)
  * - 생일자 0명이면 스킵 (200 + status:'skipped')
- * - SLACK_WEBHOOK_URL_MARU 미설정 시 503
+ * - SLACK_BOT_TOKEN 미설정 시 503
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const authHeader = req.headers.get('authorization');
@@ -41,10 +42,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: '인증에 실패했습니다' }, { status: 401 });
   }
 
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL_MARU;
-  if (!webhookUrl) {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) {
     return NextResponse.json(
-      { error: 'SLACK_WEBHOOK_URL_MARU이 설정되지 않았습니다' },
+      { error: 'SLACK_BOT_TOKEN이 설정되지 않았습니다' },
       { status: 503 },
     );
   }
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const messageText = composeBirthdayReportMessage(birthdayPatients, dateLabel);
 
   // 슬랙 전송
-  const result = await sendSlackMessage(webhookUrl, { text: messageText });
+  const result = await postSlackMessage(botToken, SLACK_CHANNELS.MARU, messageText);
 
   if (!result.ok) {
     const errorMsg = 'error' in result ? result.error : '알 수 없는 오류';
