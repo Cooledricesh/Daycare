@@ -23,7 +23,7 @@
 | DB | Supabase 프로젝트 `hgkhcbdixubimbraigen` (Daycare, ap-south-1) — 운영 DB 직결 주의 |
 | 연동 | Carescheduler (주사제 시스템, `careschedulerp.vercel.app`, Supabase `xlhtmakvxbdjnpvtzdqh`) — BFF로 주사 이력 조회 |
 | 크론 | vercel.json: 월간리포트(매월 1일), 공휴일 동기화(매월 1일) — **Hobby 플랜이라 2개가 한도**. 정오 슬랙 리포트는 **Supabase pg_cron**(jobname `noon-attendance-report`, UTC 03:05 평일)이 pg_net으로 엔드포인트 호출. 환자 동기화는 Google Sheets 08:15 KST |
-| 슬랙 알림 | 평일 12:05 미출석/미진찰 명단(실명) + 월간 리포트 요약 → `SLACK_WEBHOOK_URL` (Vercel env + .env.local). 상세: `docs/superpowers/plans/2026-06-10-slack-noon-report.md`. 정기 알림은 앱 직송 — 헤르메스 에이전트 경유 금지(장애 시 누락). CRON_SECRET은 2026-06-11 rotate (Vercel env·.env.local·cron.job 세 곳 동일값) |
+| 슬랙 알림 | ① 평일 12:05 미출석/미진찰 명단(실명) + 월간 리포트 요약 → `SLACK_WEBHOOK_URL` ② 매일 08:30 회원("환자"의 원내 호칭) 생일 알림 → `SLACK_WEBHOOK_URL_MARU` (마루 채널 — 마루는 대동병원 낮병원 이름). 상세: `docs/superpowers/plans/2026-06-10-slack-noon-report.md`. 정기 알림은 앱 직송 — 헤르메스 에이전트 경유 금지(장애 시 누락). CRON_SECRET은 2026-06-11 rotate (Vercel env·.env.local·cron.job 세 곳 동일값). 새 정기 알림 추가 레시피: compose 순수함수 + cron 라우트 복사 + pg_cron 잡 1줄 |
 
 ### 마이그레이션 적용 방법 (중요)
 
