@@ -21,7 +21,8 @@ export const useAttendanceBoardData = (date?: string) => {
     },
     refetchInterval: BOARD_CONFIG.REFETCH_INTERVAL,
     refetchOnWindowFocus: true,
-    staleTime: 10_000,
+    // staleTime을 폴링 주기와 동일하게 설정하여 불필요한 중복 요청 방지
+    staleTime: BOARD_CONFIG.REFETCH_INTERVAL,
     retry: 1,
   });
 };
