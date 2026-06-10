@@ -19,7 +19,7 @@
 | **Phase 2** | 타입 안전성 | 🔶 후순위 | 82+ `as any` 제거 필요 |
 | **Phase 3** | 코드 중복 제거 | 🔶 후순위 | task/message 공통 서비스 |
 | **Phase 4** | 테스트 커버리지 | ✅ **완료** | Unit 63개, 공통서비스 100%, auth 100% |
-| **Phase 6** | 성능 최적화 | 🔶 후순위 | N+1 쿼리 해결 |
+| **Phase 6** | 성능 최적화 | ✅ **완료** (2026-06-10) | [성능 리팩토링 계획](superpowers/plans/2026-06-10-performance-refactor.md)으로 흡수·대체 |
 
 ---
 
@@ -155,20 +155,18 @@ const { data } = await supabase.from('patients').select('id, name, gender')
 - API 라우트 통합 테스트
 - 컴포넌트 테스트
 
-### Phase 6: 성능 최적화
+### Phase 6: 성능 최적화 — ✅ 완료 (2026-06-10)
 
-**N+1 쿼리 해결**:
-- Admin `getPatients`: coordinator 조인 최적화
-- Staff `getMyPatients`: RPC 또는 복합 쿼리
+[2026-06-10 성능 리팩토링 계획](superpowers/plans/2026-06-10-performance-refactor.md)으로 흡수·대체됨.
 
-**Query Invalidation 개선**:
-```typescript
-// Before
-queryClient.invalidateQueries({ queryKey: ['admin', 'staff'] });
-
-// After (정확한 키 사용)
-queryClient.invalidateQueries({ queryKey: ['admin', 'staff', 'list'], exact: true });
-```
+주요 완료 항목:
+- `fetchAllPaginated` wave 병렬화 (직렬 N왕복 → 병렬)
+- 스트릭 계산 `streaks_cache` 테이블 5분 TTL 캐싱
+- 의사 대기목록 consultations/task_completions 중복 조회 제거
+- getStatsSummary 기간별 쿼리 분리
+- 출석 캘린더 다중 월 fan-out → 범위 단일 엔드포인트
+- 4개 직역 환자 목록 행 memo + invalidation 정밀화
+- API 요청별 소요시간 로깅 미들웨어 (baseline 측정)
 
 ---
 
@@ -192,7 +190,7 @@ queryClient.invalidateQueries({ queryKey: ['admin', 'staff', 'list'], exact: tru
 1. **Phase 4** - 테스트 추가 (안전망 확보)
 2. **Phase 2** - 타입 안전성 (리팩토링 기반)
 3. **Phase 3** - 코드 중복 제거
-4. **Phase 6** - 성능 최적화
+4. ~~**Phase 6** - 성능 최적화~~ ✅ 완료 (2026-06-10)
 5. Google Sheets 연동 (필요시)
 
 ---
