@@ -125,8 +125,9 @@ interface AttendanceResult {
   checked_at: string;
 }
 
-/** consultations with task_completions join */
+/** consultations with task_completions join (단계2에서 한 번만 조회) */
 interface ConsultationWithTaskCompletions {
+  id: string;
   patient_id: string;
   has_task: boolean;
   task_completions: { is_completed: boolean }[];
@@ -148,20 +149,6 @@ interface VitalsForPatient {
 /** scheduled_attendances select result */
 interface ScheduledAttendanceResult {
   patient_id: string;
-}
-
-/** consultations for task status */
-interface ConsultationForTask {
-  id: string;
-  patient_id: string;
-  task_target: TaskTarget | null;
-}
-
-/** task completion status */
-interface TaskCompletionStatus {
-  consultation_id: string;
-  role: 'coordinator' | 'nurse';
-  is_completed: boolean;
 }
 
 /** patients select for createConsultation */
@@ -554,7 +541,7 @@ export async function getWaitingPatients(
       .in('patient_id', patientIds)
       .returns<AttendanceResult[]>(),
     supabase.from('consultations')
-      .select('patient_id, has_task, task_completions(is_completed)')
+      .select('id, patient_id, has_task, task_completions(is_completed)')
       .eq('date', date)
       .in('patient_id', patientIds)
       .returns<ConsultationWithTaskCompletions[]>(),
@@ -598,45 +585,27 @@ export async function getWaitingPatients(
     });
   });
 
-  // 단계 3: ensureScheduleGenerated 완료 후 스케줄/지시사항 쿼리 병렬 실행
-  const [
-    { data: scheduledAttendances },
-    { data: taskConsultations },
-  ] = await Promise.all([
-    supabase.from('scheduled_attendances')
-      .select('patient_id')
-      .eq('date', date)
-      .eq('is_cancelled', false)
-      .in('patient_id', patientIds)
-      .returns<ScheduledAttendanceResult[]>(),
-    supabase.from('consultations')
-      .select('id, patient_id, task_target')
-      .eq('date', date)
-      .eq('has_task', true)
-      .in('patient_id', patientIds)
-      .returns<ConsultationForTask[]>(),
-  ]);
+  // 단계 3: ensureScheduleGenerated 완료 후 scheduled_attendances 조회
+  // (ensureScheduleGenerated 이후 실행되어야 하므로 별도 단계 유지)
+  const { data: scheduledAttendances } = await supabase
+    .from('scheduled_attendances')
+    .select('patient_id')
+    .eq('date', date)
+    .eq('is_cancelled', false)
+    .in('patient_id', patientIds)
+    .returns<ScheduledAttendanceResult[]>();
 
   const scheduledSet = new Set<string>(
     (scheduledAttendances || []).map((s) => s.patient_id),
   );
 
-  // 단계 4: 지시사항 완료 상태 조회 (조건부)
-  const taskConsultationIds = (taskConsultations || []).map((c) => c.id);
-  let taskCompletions: TaskCompletionStatus[] = [];
-  if (taskConsultationIds.length > 0) {
-    const { data } = await supabase
-      .from('task_completions')
-      .select('consultation_id, role, is_completed')
-      .in('consultation_id', taskConsultationIds)
-      .returns<TaskCompletionStatus[]>();
-    taskCompletions = data || [];
-  }
-
-  // 환자별 지시사항 상태 Map: 'none' | 'pending' | 'completed'
+  // 단계2 consultations 데이터에서 직접 taskStatusMap 계산
+  // (단계3 consultations 재조회·단계4 task_completions 재조회 제거)
+  // 기존 로직: has_task 진찰이 여러 건일 때 하나라도 미완료면 pending,
+  //           task_completions가 0건이면 pending 취급
   const taskStatusMap = new Map<string, 'none' | 'pending' | 'completed'>();
-  (taskConsultations || []).forEach((c) => {
-    const completions = taskCompletions.filter((tc) => tc.consultation_id === c.id);
+  (consultations || []).filter((c) => c.has_task).forEach((c) => {
+    const completions = c.task_completions;
     const allCompleted = completions.length > 0 && completions.every((tc) => tc.is_completed);
 
     const currentStatus = taskStatusMap.get(c.patient_id);
