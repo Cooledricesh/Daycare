@@ -465,6 +465,129 @@ sharedRoutes.get('/patient/:id/attendance-calendar', async (c) => {
 });
 
 /**
+ * GET /api/shared/patient/:id/attendance-calendar/range?from=YYYY-MM&to=YYYY-MM
+ * 환자별 다중 월 출석/예정 데이터 (fan-out 제거용 범위 조회)
+ * 최대 ATTENDANCE_CALENDAR_RANGE_MAX_MONTHS 개월
+ */
+export const ATTENDANCE_CALENDAR_RANGE_MAX_MONTHS = 24;
+
+interface DateRow { date: string }
+interface ScheduledDateRow { date: string; is_cancelled: boolean | null }
+
+export interface MonthCalendarData {
+  year: number;
+  month: number;
+  attended_dates: string[];
+  scheduled_dates: string[];
+  consulted_dates: string[];
+}
+
+/** 날짜 행 배열을 월별로 그룹핑하여 MonthCalendarData 배열을 반환하는 순수 함수 */
+export function groupAttendanceByMonth(params: {
+  fromYear: number;
+  fromMonth: number;
+  toYear: number;
+  toMonth: number;
+  attendances: DateRow[];
+  scheduledAttendances: ScheduledDateRow[];
+  consultations: DateRow[];
+}): MonthCalendarData[] {
+  const { fromYear, fromMonth, toYear, toMonth, attendances, scheduledAttendances, consultations } = params;
+  const monthMap = new Map<string, MonthCalendarData>();
+  const monthList: { year: number; month: number }[] = [];
+
+  for (let y = fromYear, m = fromMonth; y < toYear || (y === toYear && m <= toMonth); ) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    monthMap.set(key, { year: y, month: m, attended_dates: [], scheduled_dates: [], consulted_dates: [] });
+    monthList.push({ year: y, month: m });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+
+  for (const a of attendances) {
+    monthMap.get(a.date.slice(0, 7))?.attended_dates.push(a.date);
+  }
+  for (const s of scheduledAttendances) {
+    if (!s.is_cancelled) {
+      monthMap.get(s.date.slice(0, 7))?.scheduled_dates.push(s.date);
+    }
+  }
+  for (const con of consultations) {
+    monthMap.get(con.date.slice(0, 7))?.consulted_dates.push(con.date);
+  }
+
+  return monthList.map(({ year, month }) => {
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    return monthMap.get(key) ?? { year, month, attended_dates: [], scheduled_dates: [], consulted_dates: [] };
+  });
+}
+
+sharedRoutes.get('/patient/:id/attendance-calendar/range', async (c) => {
+  const supabase = c.get('supabase');
+  const patientId = c.req.param('id');
+  const fromParam = c.req.query('from');
+  const toParam = c.req.query('to');
+
+  if (!fromParam || !toParam) {
+    return respond(c, failure(400, 'INVALID_REQUEST', 'from, to 파라미터가 필요합니다 (YYYY-MM)'));
+  }
+
+  const fromMatch = fromParam.match(/^(\d{4})-(\d{2})$/);
+  const toMatch = toParam.match(/^(\d{4})-(\d{2})$/);
+  if (!fromMatch || !toMatch) {
+    return respond(c, failure(400, 'INVALID_REQUEST', 'from, to는 YYYY-MM 형식이어야 합니다'));
+  }
+
+  const fromYear = parseInt(fromMatch[1]);
+  const fromMonth = parseInt(fromMatch[2]);
+  const toYear = parseInt(toMatch[1]);
+  const toMonth = parseInt(toMatch[2]);
+
+  const monthCount = (toYear - fromYear) * 12 + (toMonth - fromMonth) + 1;
+  if (monthCount <= 0) {
+    return respond(c, failure(400, 'INVALID_REQUEST', 'from은 to보다 이전이어야 합니다'));
+  }
+  if (monthCount > ATTENDANCE_CALENDAR_RANGE_MAX_MONTHS) {
+    return respond(c, failure(400, 'RANGE_TOO_LARGE', `최대 ${ATTENDANCE_CALENDAR_RANGE_MAX_MONTHS}개월까지 조회 가능합니다`));
+  }
+
+  const rangeStart = `${fromYear}-${String(fromMonth).padStart(2, '0')}-01`;
+  const lastDayOfTo = new Date(toYear, toMonth, 0).getDate();
+  const rangeEnd = `${toYear}-${String(toMonth).padStart(2, '0')}-${String(lastDayOfTo).padStart(2, '0')}`;
+
+  const [
+    { data: attendances },
+    { data: scheduledAttendances },
+    { data: consultations },
+  ] = await Promise.all([
+    supabase.from('attendances')
+      .select('date')
+      .eq('patient_id', patientId)
+      .gte('date', rangeStart)
+      .lte('date', rangeEnd),
+    supabase.from('scheduled_attendances')
+      .select('date, is_cancelled')
+      .eq('patient_id', patientId)
+      .gte('date', rangeStart)
+      .lte('date', rangeEnd),
+    supabase.from('consultations')
+      .select('date')
+      .eq('patient_id', patientId)
+      .gte('date', rangeStart)
+      .lte('date', rangeEnd),
+  ]);
+
+  const months = groupAttendanceByMonth({
+    fromYear, fromMonth, toYear, toMonth,
+    attendances: attendances || [],
+    scheduledAttendances: scheduledAttendances || [],
+    consultations: consultations || [],
+  });
+
+  return respond(c, success({ months }, 200));
+});
+
+/**
  * GET /api/shared/patient/:id/timeline
  * 환자 타임라인 이벤트 (입원~오늘)
  */

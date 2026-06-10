@@ -14,6 +14,10 @@ export const sharedKeys = {
     all: ['shared', 'attendance-calendar'] as const,
     detail: (patientId: string, year: number, month: number) => ['shared', 'attendance-calendar', patientId, year, month] as const,
   },
+  attendanceCalendarRange: {
+    all: ['shared', 'attendance-calendar-range'] as const,
+    detail: (patientId: string, from: string, to: string) => ['shared', 'attendance-calendar-range', patientId, from, to] as const,
+  },
   absenceRiskOverview: {
     all: ['shared', 'absence-risk-overview'] as const,
     detail: (period: string) => ['shared', 'absence-risk-overview', period] as const,

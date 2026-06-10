@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueries } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/remote/api-client';
 import { sharedKeys } from './query-keys';
 
@@ -15,36 +15,58 @@ interface MonthKey {
   month: number; // 1-12
 }
 
+interface MonthResult {
+  year: number;
+  month: number;
+  data: CalendarData;
+}
+
+interface AttendanceCalendarRangeResponse {
+  months: Array<{ year: number; month: number } & CalendarData>;
+}
+
+function toYearMonthParam(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
 export function useMultiMonthAttendanceCalendar(
   patientId: string,
   months: MonthKey[],
   enabled = true,
 ) {
-  const queries = useQueries({
-    queries: months.map(({ year, month }) => ({
-      queryKey: sharedKeys.attendanceCalendar.detail(patientId, year, month),
-      queryFn: async () => {
-        const params = new URLSearchParams({
-          year: String(year),
-          month: String(month),
-        });
-        const response = await apiClient.get<CalendarData>(
-          `/api/shared/patient/${patientId}/attendance-calendar?${params}`,
-        );
-        return response.data;
-      },
-      enabled: enabled && !!patientId,
-      staleTime: 5 * 60 * 1000,
-    })),
+  const from = months.length > 0
+    ? toYearMonthParam(months[0].year, months[0].month)
+    : '';
+  const to = months.length > 0
+    ? toYearMonthParam(months[months.length - 1].year, months[months.length - 1].month)
+    : '';
+
+  const query = useQuery({
+    queryKey: sharedKeys.attendanceCalendarRange.detail(patientId, from, to),
+    queryFn: async () => {
+      const params = new URLSearchParams({ from, to });
+      const response = await apiClient.get<AttendanceCalendarRangeResponse>(
+        `/api/shared/patient/${patientId}/attendance-calendar/range?${params}`,
+      );
+      return response.data;
+    },
+    enabled: enabled && !!patientId && months.length > 0,
+    staleTime: 5 * 60 * 1000,
   });
 
+  const monthResults: MonthResult[] = (query.data?.months ?? []).map((m) => ({
+    year: m.year,
+    month: m.month,
+    data: {
+      attended_dates: m.attended_dates,
+      scheduled_dates: m.scheduled_dates,
+      consulted_dates: m.consulted_dates,
+    },
+  }));
+
   return {
-    isLoading: queries.some((q) => q.isLoading),
-    isError: queries.some((q) => q.isError),
-    months: queries
-      .map((q, idx): { year: number; month: number; data: CalendarData } | null =>
-        q.data ? { year: months[idx].year, month: months[idx].month, data: q.data } : null,
-      )
-      .filter((m): m is { year: number; month: number; data: CalendarData } => m !== null),
+    isLoading: query.isLoading,
+    isError: query.isError,
+    months: monthResults,
   };
 }
