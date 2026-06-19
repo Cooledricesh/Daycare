@@ -23,7 +23,7 @@
 | DB | Supabase 프로젝트 `hgkhcbdixubimbraigen` (Daycare, ap-south-1) — 운영 DB 직결 주의 |
 | 연동 | Carescheduler (주사제 시스템, `careschedulerp.vercel.app`, Supabase `xlhtmakvxbdjnpvtzdqh`) — BFF로 주사 이력 조회 |
 | 크론 | vercel.json: 월간리포트(매월 1일), 공휴일 동기화(매월 1일) — **Hobby 플랜이라 2개가 한도**. 정오 슬랙 리포트는 **Supabase pg_cron**(jobname `noon-attendance-report`, UTC 03:05 평일)이 pg_net으로 엔드포인트 호출. 환자 동기화는 Google Sheets 08:15 KST |
-| 슬랙 알림 | 봇 `@alimi`(`SLACK_BOT_TOKEN` 1개) + 채널 상수 `src/constants/slack-channels.ts`. ① 평일 12:05 미출석/미진찰 명단(실명) + 월간 리포트 요약 → `#진찰` ② 매일 08:30 회원("환자"의 원내 호칭) 생일 알림 → `#마루` (마루 = 대동병원 낮병원 이름). 상세: `docs/superpowers/plans/2026-06-10-slack-noon-report.md`. 정기 알림은 앱 직송 — 헤르메스 에이전트 경유 금지(장애 시 누락). CRON_SECRET은 2026-06-11 rotate (Vercel env·.env.local·cron.job 세 곳 동일값). 새 알림 레시피: compose 순수함수 + cron 라우트 복사 + 채널 상수(+필요시 `/invite @alimi`) + pg_cron 잡 1줄 — 환경변수 추가 불필요 |
+| 슬랙 알림 | 봇 `@alimi`(`SLACK_BOT_TOKEN` 1개) + 채널 상수 `src/constants/slack-channels.ts`. ① 평일 12:05 미출석/미진찰 명단(실명) + 월간 리포트 요약 → `#진찰` ② 매일 08:30 회원("환자"의 원내 호칭) 생일 알림 → `#마루` (마루 = 대동병원 낮병원 이름). 상세: `docs/superpowers/plans/2026-06-10-slack-noon-report.md`. 정기 알림은 앱 직송 — 헤르메스 에이전트 경유 금지(장애 시 누락). CRON_SECRET은 2026-06-11 rotate (Vercel env·.env.local·cron.job 세 곳 동일값). **새 알림 추가는 `docs/cron-jobs-guide.md` 참고** (compose 순수함수 + cron 라우트 복사 + 채널 상수 + pg_cron 잡 1줄, 환경변수 불필요. 배포→pg_cron 등록 순서 주의) |
 
 ### 마이그레이션 적용 방법 (중요)
 
@@ -93,4 +93,5 @@ src/features/shared/               → 직역 공통 (스트릭, 캘린더, Stre
 | `docs/database.md` | 테이블 정의·관계 |
 | `docs/improvement-plan.md` | 리팩토링 페이즈별 상태 |
 | `docs/superpowers/plans/` | 날짜별 구현 계획 (최신순 확인) |
+| `docs/cron-jobs-guide.md` | **크론잡(정기 슬랙 알림) 추가 표준 절차** |
 | `docs/e2e-testing-guide.md` | Playwright E2E (baseURL localhost:3000) |
