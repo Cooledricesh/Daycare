@@ -26,7 +26,7 @@ Supabase pg_cron (스케줄러)
 | 부품 | 위치 | 역할 |
 |---|---|---|
 | `postSlackMessage(botToken, channel, text)` | `src/server/integrations/slack/client.ts` | 슬랙 전송. 실패해도 throw 안 하고 `{ ok, error }` 반환 |
-| `SLACK_CHANNELS` | `src/constants/slack-channels.ts` | 채널 상수 (`#진찰`, `#마루` …) |
+| `SLACK_CHANNELS` | `src/constants/slack-channels.ts` | 채널 상수 (`마루-진찰`은 채널 ID `C0B9LCED676`, `#마루` …) |
 | `getTodayString()` / `getNowKST()` | `src/lib/date.ts` | KST 기준 오늘 날짜 / 현재 시각 Date |
 | `getHolidayDatesMap()`, `isWeekend()` | `src/lib/business-days.ts` | 공휴일/주말 판정 |
 | `createServiceClient()` + `getAppConfig()` | `src/server/supabase/client.ts`, `src/server/config` | service-role Supabase 클라이언트 |
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 ### Step 3. 채널 (필요 시에만)
 
-- `#진찰` 또는 `#마루`로 보내면 추가 작업 없음.
+- 기존 채널로 보내면 추가 작업 없음. 단, 채널명이 바뀔 수 있는 운영 채널은 Slack 채널 ID를 상수에 저장한다.
 - **새 채널**이면:
   1. 슬랙에서 그 채널에 들어가 `/invite @alimi` (봇 초대 — 안 하면 `not_in_channel` 에러)
   2. `src/constants/slack-channels.ts`에 상수 한 줄 추가
@@ -186,10 +186,10 @@ SELECT cron.unschedule('weekly-absence-report');
 
 | jobname | 스케줄(UTC) | KST | 라우트 | 채널 |
 |---|---|---|---|---|
-| `noon-attendance-report` | `5 3 * * 1-5` | 평일 12:05 | noon-attendance-report | `#진찰` |
+| `noon-attendance-report` | `5 3 * * 1-5` | 평일 12:05 | noon-attendance-report | `#마루-진찰` (`C0B9LCED676`) |
 | `birthday-report` | `30 23 * * *` | 매일 08:30 | birthday-report | `#마루` |
 
-월간 리포트(`monthly-report-generate`)·공휴일 동기화(`holidays-sync`)는 **Vercel 크론**(vercel.json)으로 따로 돈다. 월간 리포트는 생성 후 `#진찰`로 요약을 슬랙 통보한다.
+월간 리포트(`monthly-report-generate`)·공휴일 동기화(`holidays-sync`)는 **Vercel 크론**(vercel.json)으로 따로 돈다. 월간 리포트는 생성 후 `#마루-진찰`(`C0B9LCED676`)로 요약을 슬랙 통보한다.
 
 ## 6. 관련 문서
 

@@ -23,7 +23,7 @@ function formatKstDateLabel(kstDate: Date): string {
  * POST /api/internal/cron/noon-attendance-report
  *
  * Vercel Cron 스케줄: 5 3 * * 1-5 (UTC) = KST 평일 12:05
- * KST 기준 오늘 출석 현황을 슬랙 #진찰 채널로 전송합니다.
+ * KST 기준 오늘 출석 현황을 슬랙 #마루-진찰 채널로 전송합니다.
  * - 주말/공휴일은 스킵 (200 + status:'skipped')
  * - SLACK_BOT_TOKEN 미설정 시 503
  */

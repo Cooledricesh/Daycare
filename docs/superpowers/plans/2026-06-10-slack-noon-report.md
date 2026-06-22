@@ -2,7 +2,7 @@
 
 ## 목표
 
-평일 정오(KST 12:05)에 병원 공용 슬랙 채널로 **그날 미출석/미진찰 환자 명단(실명)**을 자동 전송.
+평일 정오(KST 12:05)에 병원 공용 슬랙 `#마루-진찰` 채널로 **그날 미출석/미진찰 환자 명단(실명)**을 자동 전송.
 월간 리포트 생성 시에도 요약을 슬랙으로 통보.
 
 사용자 결정사항:
@@ -90,7 +90,7 @@ SELECT cron.schedule(
 - ~~`SLACK_WEBHOOK_URL`~~ → **2026-06-11 `SLACK_BOT_TOKEN`으로 전환** (봇: @alimi, chat.postMessage)
   - 웹훅은 채널당 환경변수가 1개씩 늘어나는 문제 → 봇 토큰 1개 + 채널 상수(`src/constants/slack-channels.ts`)로 통일
   - 새 채널 추가 = 슬랙에서 `/invite @alimi` + 상수 한 줄. 환경변수 불변
-  - 채널: 정오 현황·월간 리포트 → `#진찰`, 생일 알림 → `#마루`
+  - 채널: 정오 현황·월간 리포트 → `#마루-진찰`(채널 ID `C0B9LCED676`), 생일 알림 → `#마루`
 - Vercel(Production) + `.env.local`. config/index.ts envSchema에는 **추가하지 않음**
   (필수화하면 미설정 시 전체 백엔드가 죽음 — HOLIDAY_API_KEY처럼 라우트에서 직접 읽기)
 
