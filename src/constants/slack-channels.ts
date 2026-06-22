@@ -7,8 +7,8 @@
 export const SLACK_CHANNELS = {
   /** 정오 출석 현황 + 월간 리포트 요약: #마루-진찰 (채널명 변경에 영향받지 않도록 ID 사용) */
   CONSULTATION: 'C0B9LCED676',
-  /** 회원 생일 알림 (마루 = 대동병원 낮병원 이름) */
-  MARU: '#마루',
+  /** 회원 생일 알림: #마루 (마루 = 대동병원 낮병원 이름. 채널명 변경에 영향받지 않도록 ID 사용) */
+  MARU: 'C0B8982ED33',
 } as const;
 
 export type SlackChannel = (typeof SLACK_CHANNELS)[keyof typeof SLACK_CHANNELS];
