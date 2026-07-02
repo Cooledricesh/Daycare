@@ -5,6 +5,55 @@ import type { ConsultationStats } from '../schema';
 type Supabase = SupabaseClient<Database>;
 
 /**
+ * 해당 월 휴진일(진찰 없는 날) 날짜 목록을 반환합니다.
+ * 휴진일은 진찰 지표 계산에서만 제외합니다(출석 지표에는 영향 없음).
+ */
+async function getMonthClosureDates(
+  supabase: Supabase,
+  monthStart: string,
+  nextMonth: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('clinic_closures')
+    .select('date')
+    .gte('date', monthStart)
+    .lt('date', nextMonth);
+  if (error) throw new Error(`휴진일 조회 실패: ${error.message}`);
+  return (data || []).map((r) => r.date);
+}
+
+async function countScheduledInDates(supabase: Supabase, dates: string[]): Promise<number> {
+  if (dates.length === 0) return 0;
+  const { count, error } = await supabase
+    .from('scheduled_attendances')
+    .select('*', { count: 'exact', head: true })
+    .in('date', dates)
+    .eq('is_cancelled', false);
+  if (error) throw new Error(`휴진일 예정 출석 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
+async function countConsultationsInDates(supabase: Supabase, dates: string[]): Promise<number> {
+  if (dates.length === 0) return 0;
+  const { count, error } = await supabase
+    .from('consultations')
+    .select('*', { count: 'exact', head: true })
+    .in('date', dates);
+  if (error) throw new Error(`휴진일 진찰 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
+async function countAttendancesInDates(supabase: Supabase, dates: string[]): Promise<number> {
+  if (dates.length === 0) return 0;
+  const { count, error } = await supabase
+    .from('attendances')
+    .select('*', { count: 'exact', head: true })
+    .in('date', dates);
+  if (error) throw new Error(`휴진일 출석 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
+/**
  * 진찰 통계를 계산합니다 (spec §4.4)
  *
  * consultations 테이블 자체가 "진찰 실시" 기록이며,
@@ -54,9 +103,17 @@ export async function calculateConsultationStats(
 
   if (attErr) throw new Error(`출석 기록 조회 실패: ${attErr.message}`);
 
-  const scheduled = scheduledCount ?? 0;
-  const performed = performedCount ?? 0;
-  const attended = attendanceCount ?? 0;
+  // 휴진일은 진찰 지표에서 제외 (해당 날짜의 예정/진찰/출석 count 차감)
+  const closureDates = await getMonthClosureDates(supabase, monthStart, nextMonth);
+  const [closureScheduled, closurePerformed, closureAttended] = await Promise.all([
+    countScheduledInDates(supabase, closureDates),
+    countConsultationsInDates(supabase, closureDates),
+    countAttendancesInDates(supabase, closureDates),
+  ]);
+
+  const scheduled = Math.max(0, (scheduledCount ?? 0) - closureScheduled);
+  const performed = Math.max(0, (performedCount ?? 0) - closurePerformed);
+  const attended = Math.max(0, (attendanceCount ?? 0) - closureAttended);
 
   // 누락 = 예정 - 실시 (음수는 0으로 클램핑)
   const missed = Math.max(0, scheduled - performed);
@@ -106,8 +163,14 @@ export async function calculateConsultationAttendanceRate(
         .lt('date', nextMonth),
     ]);
 
-  const attended = attendanceCount ?? 0;
-  const consulted = consultationCount ?? 0;
+  // 휴진일은 진찰 참석률에서 제외 (출석·진찰 count 차감)
+  const closureDates = await getMonthClosureDates(supabase, monthStart, nextMonth);
+  const [closureAttended, closureConsulted] = await Promise.all([
+    countAttendancesInDates(supabase, closureDates),
+    countConsultationsInDates(supabase, closureDates),
+  ]);
+  const attended = Math.max(0, (attendanceCount ?? 0) - closureAttended);
+  const consulted = Math.max(0, (consultationCount ?? 0) - closureConsulted);
 
   if (attended === 0) return 0;
 

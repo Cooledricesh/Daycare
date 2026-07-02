@@ -115,4 +115,21 @@ describe('computeTodayHighlights', () => {
     const result = await computeTodayHighlights(supabase as any, afterNoonKst);
     expect(result.events.suddenAbsence.some((p) => p.id === 'p1')).toBe(true);
   });
+
+  it('오늘이 휴진일이면 정오 이후라도 examMissed는 비어야 한다', async () => {
+    const afterNoonKst = new Date('2026-04-11T04:00:00Z'); // KST 13:00
+    const supabase = mockSupabase({
+      patients: [
+        { id: 'p1', name: '오기용', birth_date: null, display_name: null, avatar_url: null, room_number: '3101', status: 'active', created_at: '2025-01-01T00:00:00Z' },
+      ],
+      // 출석했지만 진찰 없음 → 원래라면 examMissed 대상
+      attendances: [{ patient_id: 'p1', date: '2026-04-11' }],
+      scheduled_attendances: [{ patient_id: 'p1', date: '2026-04-11', is_cancelled: false }],
+      consultations: [],
+      // 휴진일 등록
+      clinic_closures: [{ date: '2026-04-11' }],
+    });
+    const result = await computeTodayHighlights(supabase as any, afterNoonKst);
+    expect(result.events.examMissed).toEqual([]);
+  });
 });

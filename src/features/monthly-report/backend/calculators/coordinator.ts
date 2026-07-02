@@ -129,6 +129,15 @@ export async function calculateCoordinatorPerformance(
     return data ?? [];
   });
 
+  // 해당 월 휴진일 (진찰 참석률 계산에서만 제외)
+  const { data: closureRows, error: closureErr } = await supabase
+    .from('clinic_closures')
+    .select('date')
+    .gte('date', monthStartStr)
+    .lte('date', monthEndStr);
+  if (closureErr) throw new Error(`휴진일 조회 실패: ${closureErr.message}`);
+  const closureSet = new Set<string>((closureRows ?? []).map((r) => r.date));
+
   // 환자별 출석/예정/진찰 세트 구성
   const attendedByPatient = new Map<string, Set<string>>();
   for (const att of attendances) {
@@ -189,19 +198,22 @@ export async function calculateCoordinatorPerformance(
 
       const possibleDays = scheduledSet.size;
       const attendedDays = attended.size;
-      const consultedDays = consulted.size;
 
-      // 출석률 (예정 대비)
+      // 진찰 참석률용: 휴진일 제외한 출석·진찰 일수
+      const attendedDaysForConsult = [...attended].filter((d) => !closureSet.has(d)).length;
+      const consultedDaysForConsult = [...consulted].filter((d) => !closureSet.has(d)).length;
+
+      // 출석률 (예정 대비) — 휴진일 포함(출석 지표)
       const attendanceRate =
         possibleDays > 0
           ? Math.min((attendedDays / possibleDays) * 100, 100)
           : 0;
       totalAttendanceRate += attendanceRate;
 
-      // 진찰 참석률 (출석 대비)
+      // 진찰 참석률 (출석 대비) — 휴진일 제외
       const consultationRate =
-        attendedDays > 0
-          ? Math.min((consultedDays / attendedDays) * 100, 100)
+        attendedDaysForConsult > 0
+          ? Math.min((consultedDaysForConsult / attendedDaysForConsult) * 100, 100)
           : 0;
       totalConsultationRate += consultationRate;
 

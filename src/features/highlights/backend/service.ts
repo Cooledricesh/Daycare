@@ -98,6 +98,13 @@ export async function computeTodayHighlights(
     if (row.date === todayStr) consultationTodaySet.add(row.patient_id);
   }
 
+  // 오늘이 휴진일이면 진찰 누락(examMissed) 판정을 억제한다 (출석은 정상).
+  const { data: closureRows } = await supabase
+    .from('clinic_closures')
+    .select('date')
+    .eq('date', todayStr);
+  const isClinicClosureToday = (closureRows || []).length > 0;
+
   const threeDayAbsence: HighlightPatient[] = [];
   const suddenAbsence: HighlightPatient[] = [];
   const examMissed: HighlightPatient[] = [];
@@ -134,7 +141,7 @@ export async function computeTodayHighlights(
         suddenAbsence.push(toHighlightPatient(p, '평소 개근자'));
       }
 
-      if (attendanceTodaySet.has(p.id) && !consultationTodaySet.has(p.id)) {
+      if (!isClinicClosureToday && attendanceTodaySet.has(p.id) && !consultationTodaySet.has(p.id)) {
         examMissed.push(toHighlightPatient(p));
       }
     }
