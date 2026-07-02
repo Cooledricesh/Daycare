@@ -44,6 +44,10 @@ export const adminKeys = {
     all: ['admin', 'holidays'] as const,
     list: (filters?: object) => ['admin', 'holidays', filters] as const,
   },
+  clinicClosures: {
+    all: ['admin', 'clinic-closures'] as const,
+    list: (filters?: object) => ['admin', 'clinic-closures', filters] as const,
+  },
   dashboard: {
     all: ['admin', 'dashboard'] as const,
     patients: (date: string) => ['admin', 'dashboard', 'patients', date] as const,

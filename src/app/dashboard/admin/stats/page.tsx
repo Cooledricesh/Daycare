@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStatsSummary, useDailyStats, useBatchRecalculateStats } from '@/features/admin/hooks/useStats';
 import { useBatchGenerateSchedules } from '@/features/admin/hooks/useSchedule';
 import { HolidayManageDialog } from '@/features/admin/components/HolidayManageDialog';
+import { ClinicClosureManageDialog } from '@/features/admin/components/ClinicClosureManageDialog';
 import { STATS_DATA_START_DATE_OBJ } from '@/features/shared/constants/stats';
 import { useToast } from '@/hooks/use-toast';
 import { StatsDateRangePicker } from '@/features/shared/components/stats/StatsDateRangePicker';
@@ -83,6 +84,7 @@ export default function StatsPage() {
             onEndDateChange={setEndDate}
           />
           <HolidayManageDialog />
+          <ClinicClosureManageDialog />
           <Button
             variant="outline"
             onClick={handleRecalculate}
