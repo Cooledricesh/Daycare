@@ -1,7 +1,11 @@
 # 휴진일(진찰 없는 날) 관리 — 설계 문서
 
 > 작성일: 2026-07-02
-> 상태: 설계 승인 대기
+> 상태: 설계 승인 대기 (Codex 리뷰 1차 반영 완료 — 2026-07-02)
+>
+> **개정 이력**
+> - 2026-07-02 초안
+> - 2026-07-02 Codex CLI 리뷰 11건 코드 대조 검증 후 반영: 진찰 지표 계산 지점을 5곳 → 월간리포트/하이라이트/요일통계/차트/슬랙 composer까지 확장, `average_consultation_rate` 분모 분리 명시, §4.3(오늘 rate N/A) 폐기, `reason` NOT NULL, 마이그레이션 완성형.
 
 ## 1. 배경 / 문제
 
@@ -31,18 +35,30 @@
 
 새 테이블 `clinic_closures`. 기존 `holidays`와 동일한 형태로 최소한만 둔다.
 
+기존 `holidays`(`date`, `reason VARCHAR(100) NOT NULL`)와 컬럼 규격을 맞춘다.
+
 ```sql
 CREATE TABLE IF NOT EXISTS clinic_closures (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   date        DATE NOT NULL UNIQUE,
-  reason      TEXT,
+  reason      VARCHAR(100) NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_clinic_closures_date ON clinic_closures(date);
--- updated_at 트리거는 공용 update_updated_at() 재사용
--- RLS 비활성 (프로젝트 규칙)
+
+-- updated_at 트리거 (공용 함수 재사용)
+DROP TRIGGER IF EXISTS trg_clinic_closures_updated_at ON clinic_closures;
+CREATE TRIGGER trg_clinic_closures_updated_at
+  BEFORE UPDATE ON clinic_closures
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- RLS 비활성 (프로젝트 규칙 — 모든 테이블 RLS 미사용)
+ALTER TABLE clinic_closures DISABLE ROW LEVEL SECURITY;
 ```
+
+- `reason`은 공휴일과 동일하게 **NOT NULL**, zod `min(1).max(100)` (Codex 지적 9).
+- 마이그레이션은 완성형으로 트리거·RLS 구문 포함 (Codex 지적 10). 실제 `update_updated_at()` 함수명은 기존 마이그레이션에서 재확인 후 사용.
 
 - 마이그레이션 파일: `supabase/migrations/`에 idempotent SQL 추가. `holidays` 테이블 마이그레이션(`20260313000001_create_holidays_table.sql`)을 참고.
 - 적용은 Supabase MCP `apply_migration` (project_id: `hgkhcbdixubimbraigen`)로 사용자 위임.
@@ -52,35 +68,69 @@ CREATE INDEX IF NOT EXISTS idx_clinic_closures_date ON clinic_closures(date);
 
 핵심 원칙: **진찰 관련 지표에서만 해당 날짜를 제외하고, 출석 지표는 손대지 않는다.**
 
-기존 공휴일 처리가 이미 "진찰 집계에서 날짜 제외" 패턴을 갖고 있으므로, 그 지점마다 휴진일 집합을 **추가로 함께 제외**한다.
+> **Codex 리뷰 반영**: "진찰 지표"가 계산되는 지점은 초안이 다룬 5곳보다 많다. 아래 7개 지점을 모두 처리한다. 각 항목의 파일·라인은 2026-07-02 코드 대조로 확인함.
 
-### 4.1 진찰 참석률 평균 — `aggregateStats` (`src/features/admin/backend/service.ts`)
+### 4.1 진찰 참석률/진찰률 평균 — `aggregateStats` (`src/features/admin/backend/service.ts:879~926`, 평균 산출 `:1348~1356`)
 
-- 현재: 공휴일은 전체 제외, 주말은 진찰 집계에서만 제외.
-- 변경: 기간 내 휴진일 날짜 집합을 조회해, 진찰 참석률/진찰률 누적(`consultationRateVsAttendanceSum`, `consultationDays` 등)에서 **휴진일을 제외**. 단 **출석률 누적에는 휴진일을 계속 포함**(공휴일과 다른 지점).
-- 휴진일 집합 조회는 기존 `getHolidayDatesMap`(`src/lib/business-days.ts`)과 동일한 형태의 헬퍼(`getClinicClosureDatesSet` 등)로 추가.
+현재 구조 (확인 결과):
+- `average_consultation_rate_vs_attendance = consultationRateVsAttendanceSum / consultationDays` — **주 지표. 이미 별도 분모(`consultationDays` = 평일 수)를 씀.** → 휴진일을 `consultationRateVsAttendanceSum`과 `consultationDays` 양쪽에서 빼면 깔끔하게 해결.
+- `average_consultation_rate = consultationRateSum / attendanceDays` — **함정(Codex 지적 3). 진찰률(예정 대비)이 출석률과 분모(`attendanceDays`)를 공유한다.** 휴진일의 분자(`consultationRateSum`)만 빼고 분모(`attendanceDays`)를 그대로 두면 평균이 부당하게 낮아진다.
 
-### 4.2 일별 통계 조회 — `getDailyStats` (동 service)
+변경:
+- `aggregateStats`에 휴진일 집합(`closureSet: Set<string>`)을 인자로 추가.
+- **진찰률용 별도 분모 `consultationRateDays` 신설.** 공휴일이 아닌 날마다: 출석률은 항상 누적(`attendanceRateSum`, `attendanceDays++`), 진찰률(`consultationRateSum`)은 **휴진일이 아닐 때만 누적하고 `consultationRateDays++`**.
+- 주 지표(`consultationRateVsAttendanceSum`/`consultationDays`)도 평일이면서 **휴진일이 아닐 때만** 누적.
+- 평균 산출부: `average_consultation_rate = consultationRateDays > 0 ? consultationRateSum / consultationRateDays : 0`.
+- **출석률(`average_attendance_rate`)은 휴진일 포함해 계산 — 절대 건드리지 않는다.**
+- 휴진일 집합 조회는 기존 `getHolidayDatesMap`(`src/lib/business-days.ts`) 옆에 동형 헬퍼 `getClinicClosureDatesSet(supabase, start, end): Promise<Set<string>>`를 신설(admin service에서 재노출).
 
-- 현재: 조회 시점에 `is_holiday: holidays.has(row.date)` 플래그를 붙임(daily_stats에는 저장 안 함).
-- 변경: 동일하게 `is_clinic_closure: closures.has(row.date)` 플래그를 조회 시점에 부여. 휴진일인 행은 진찰률(`consultation_rate`, `consultation_rate_vs_attendance`)을 프런트에서 N/A로 표시.
+### 4.2 일별 통계 조회 — `getDailyStats` (`:1400~1410` 부근)
 
-### 4.3 오늘 실시간 요약 — `getStatsSummary` today 블록
+- 현재: 조회 시점에 `is_holiday: holidays.has(row.date)` 플래그 부여(daily_stats에는 저장 안 함).
+- 변경: 동일하게 `is_clinic_closure: closures.has(row.date)` 플래그를 부여. → `DailyStatsItem` 스키마(`admin/backend/schema.ts`)에 `is_clinic_closure: boolean` 필드 추가.
 
-- 오늘이 휴진일이면 오늘의 진찰 참석률을 N/A(null) 처리. 출석률은 정상.
+### 4.3 월간 리포트 진찰 계산기 — `src/features/monthly-report/backend/calculators/consultation.ts` (Codex 지적 1, 신규)
 
-### 4.4 슬랙 정오 리포트 — `src/app/api/internal/cron/noon-attendance-report/route.ts`
+- 현재: `scheduled_attendances`/`consultations`/`attendances`를 월 범위 count 쿼리로 **직접 집계**. `missed = scheduled − performed`, 진찰 참석률 = performed/attended. 휴진일 미제외 시 그대로 왜곡.
+- 변경: 세 count 쿼리 모두 **휴진일 날짜를 제외**(`.not('date', 'in', (closureDates))` 또는 휴진일 count를 별도 조회해 차감). 휴진일이 없으면 동작 불변. 출석 계산기(별도)는 손대지 않는다.
+- 참고: 이 계산기는 현재 공휴일도 제외하지 않으나, 그건 본 작업 범위 밖(휴진일만 처리).
 
-- 현재: 주말/공휴일이면 전체 skip.
-- 변경: 휴진일이면 **미진찰 명단 섹션만 생략**, **미출석 명단은 그대로 발송**(출석은 여전히 관리 대상).
+### 4.4 오늘 하이라이트 `examMissed` — `src/features/highlights/backend/service.ts:137` (Codex 지적 2, 신규)
 
-### 4.5 손대지 않는 것
+- 현재: KST 정오 이후 "출석했는데 진찰 기록 없음"이면 `examMissed` 카드에 추가.
+- 변경: **오늘이 휴진일이면 `examMissed` 판정을 통째로 건너뜀**(카드 빈 배열). (다른 하이라이트 카드 — 결석 등 — 는 영향 없음.) 서비스에서 `todayStr`가 `clinic_closures`에 있는지 조회하는 분기 추가.
 
-- 의사 대기목록(`getWaitingPatients`, 실시간): 그대로 둔다. 휴진일에도 다른 의사들은 진찰하므로 대기목록/미진찰 표시는 유효하다. (역사적 통계만 왜곡을 막으면 됨.)
+### 4.5 슬랙 정오 리포트 — 라우트 + composer (Codex 지적 4)
+
+- 라우트 `src/app/api/internal/cron/noon-attendance-report/route.ts`: 현재 주말/공휴일 전체 skip. 휴진일은 **skip하지 않고**, `clinic_closures`에 오늘이 있으면 `clinicClosed: true`를 composer에 전달.
+- composer `src/server/services/noon-report.ts`의 `composeNoonReportMessage(board, dateLabel, options?)`: `clinicClosed`면 요약줄의 `진찰 c/y` 부분과 "출석 후 미진찰" 섹션·"전원 출석·진찰 완료" 문구를 생략. **미출석 명단은 그대로 발송.**
+
+### 4.6 요일별 통계 — `src/features/shared/lib/stats.ts:calculateDayOfWeekStats` (Codex 지적 5, 신규)
+
+- 현재: `!s.is_holiday` 필터 후, 같은 `items`/`count`로 출석·진찰 평균 동시 산출.
+- 변경: 진찰 평균(`avgConsultationRateVsAttendance`, `avgConsultation`)은 **휴진일 제외한 부분집합·별도 분모**로 계산. 출석 평균은 전체 유지. `is_clinic_closure` 플래그 사용.
+
+### 4.7 추이 차트 — `src/features/shared/components/stats/RateLineChart.tsx:44` (Codex 지적 6, 신규)
+
+- 현재: `rates`가 `is_holiday`/주말(`filterWeekends`)만 null 처리. 진찰 차트는 같은 컴포넌트 재사용.
+- 변경: `filterClosures?: boolean` prop 추가. **진찰 차트에만 true로 넘겨** 휴진일 point를 null 처리(raw + 7일 이동평균에서 제외). 출석 차트는 false(기본) → 휴진일 정상 표시. `is_clinic_closure` 플래그 사용.
+
+### 4.8 캐시 무효화 정책 (Codex 지적 8)
+
+- 휴진일 CRUD mutation의 onSuccess에서 통계 쿼리 + **하이라이트 쿼리**를 함께 invalidate.
+- **월간 리포트는 저장형(생성 시점 스냅샷)** → 휴진일을 나중에 추가/삭제하면 이미 생성된 해당 월 리포트는 자동 반영 안 됨. UI/문서에 "휴진일 변경 시 해당 월 리포트 재생성 필요" 안내를 명시. (자동 재생성은 범위 밖.)
+
+### 4.9 폐기된 초안 항목
+
+- ~~초안 §4.3 "오늘 진찰 참석률 N/A"~~ → **폐기**(Codex 지적 7). 확인 결과 `getStatsSummary` today 블록과 `StatsKpiCards.tsx`는 오늘 진찰을 **rate 없이 건수(`진찰: N명`)로만** 표시한다. N/A 처리할 rate 필드 자체가 없다. 필요 시 "건수 옆 휴진 배지" 정도의 표시만 선택적으로 검토(필수 아님).
+
+### 4.10 손대지 않는 것
+
+- 의사 대기목록(`getWaitingPatients`, 실시간): 그대로 둔다. 휴진일에도 다른 의사들은 진찰하므로 대기목록 표시는 유효.
 - 출석률 관련 모든 계산.
 - 기존 공휴일 로직 일체.
 
-> 구현 계획 단계에서 위 5개 지점의 **정확한 파일·라인·함수**를 grep으로 재확인해 전부 나열한다(HANDOFF 워크플로우 규칙).
+> 구현 계획 단계에서 위 지점들의 **정확한 파일·라인·함수**를 grep으로 재확인해 전부 나열한다(HANDOFF 워크플로우 규칙).
 
 ## 5. 백엔드 (feature 구조)
 
@@ -93,15 +143,17 @@ CREATE INDEX IF NOT EXISTS idx_clinic_closures_date ON clinic_closures(date);
 
 ## 6. 프런트엔드
 
-- `admin/hooks/useClinicClosures.ts`: `useClinicClosures`(useQuery) / `useCreateClinicClosure` / `useDeleteClinicClosure`(useMutation). `@/lib/remote/api-client` 경유. onSuccess 시 관련 통계 쿼리 invalidate.
+- `admin/hooks/useClinicClosures.ts`: `useClinicClosures`(useQuery) / `useCreateClinicClosure` / `useDeleteClinicClosure`(useMutation). `@/lib/remote/api-client` 경유. onSuccess 시 통계 쿼리 + **하이라이트 쿼리** invalidate (§4.8).
 - `admin/hooks/query-keys.ts`: 휴진일 쿼리 키 추가.
-- UI: 통계 페이지(`src/app/dashboard/admin/stats/page.tsx`)에서 기존 공휴일 관리 옆에 "휴진일 관리" 진입점 추가. 기존 `HolidayManageDialog.tsx`와 동일 UX의 `ClinicClosureManageDialog.tsx` 신규 작성(목록 + 날짜 하나 추가 + 삭제). 전부 Client Component.
-- 일별 통계 표에서 휴진일 행의 진찰률을 N/A로 표시하는 렌더 분기 추가(`is_clinic_closure` 플래그 사용).
+- UI: 통계 페이지(`src/app/dashboard/admin/stats/page.tsx`)에서 기존 공휴일 관리 옆에 "휴진일 관리" 진입점 추가. 기존 `HolidayManageDialog.tsx`와 동일 UX의 `ClinicClosureManageDialog.tsx` 신규 작성(목록 + 날짜 하나 추가 + 삭제). 다이얼로그 안내문에 "휴진일 변경 시 해당 월 월간 리포트는 재생성해야 반영됨" 문구 포함. 전부 Client Component.
+- 일별 통계 표에서 휴진일 행의 진찰률을 N/A로 표시하는 렌더 분기 추가(`is_clinic_closure` 플래그 사용). 진찰 추이 차트에는 `RateLineChart`에 `filterClosures` prop 전달(§4.7).
 
 ## 7. 검증 / 테스트
 
-- `getClinicClosureDatesSet` 및 `aggregateStats`의 휴진일 제외 로직 단위 테스트(공휴일 제외 테스트가 있으면 그 패턴 확장).
-- 시나리오: 휴진일에 출석 O·진찰 X인 환자들이 (a) 진찰 참석률 평균에 영향 없음, (b) 출석률에는 정상 반영, (c) 슬랙 리포트에서 미진찰 명단 미포함·미출석 명단 포함.
+- `aggregateStats`: 휴진일이 (a) 진찰 참석률 평균에서 제외, (b) `average_consultation_rate` 분자·분모(`consultationRateDays`) 동시 제외로 평균 왜곡 없음, (c) 출석률에는 정상 포함됨을 단위 테스트(공휴일 제외 테스트 패턴 확장).
+- `composeNoonReportMessage`: `clinicClosed` 옵션 시 미진찰 섹션 생략·미출석 명단 유지.
+- 월간 리포트 `calculateConsultationStats`: 휴진일 count 제외 검증.
+- 요일별 통계·차트: 휴진일이 진찰 평균/차트 point에서만 빠지고 출석에는 남는지.
 - 품질 게이트(커밋 전 전부 통과): `npx tsc --noEmit` / `npx eslint src --quiet` / `npx vitest run` / `npm run build`.
 
 ## 8. 범위 밖 (YAGNI)
