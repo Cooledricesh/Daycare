@@ -29,3 +29,20 @@ export async function getHolidayDatesMap(
   });
   return map;
 }
+
+/**
+ * 기간 내 휴진일(진찰 없는 날) 날짜를 Set<yyyy-MM-dd>으로 반환합니다.
+ * 공휴일과 달리 출석 지표에는 영향을 주지 않고 진찰 지표에서만 제외하는 용도.
+ */
+export async function getClinicClosureDatesSet(
+  supabase: SupabaseClient<Database>,
+  startDate: string,
+  endDate: string,
+): Promise<Set<string>> {
+  const { data } = await supabase.from('clinic_closures')
+    .select('date')
+    .gte('date', startDate)
+    .lte('date', endDate);
+
+  return new Set((data || []).map((r) => r.date));
+}

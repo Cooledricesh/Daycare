@@ -24,6 +24,8 @@ import {
   getSyncLogsQuerySchema,
   createHolidaySchema,
   getHolidaysQuerySchema,
+  createClinicClosureSchema,
+  getClinicClosuresQuerySchema,
   getCoordinatorWorkloadQuerySchema,
 } from './schema';
 import { getNursePatients } from '@/features/nurse/backend/service';
@@ -71,6 +73,9 @@ import {
   getHolidays,
   createHoliday,
   deleteHoliday,
+  getClinicClosures,
+  createClinicClosure,
+  deleteClinicClosure,
   getCoordinatorWorkload,
 } from './service';
 
@@ -647,6 +652,73 @@ adminRoutes.delete('/holidays/:id', async (c) => {
 
   try {
     const result = await deleteHoliday(supabase, holidayId);
+    return respond(c, success(result, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+// ========== Clinic Closures Routes ==========
+
+/**
+ * GET /api/admin/clinic-closures
+ * 휴진일 목록 조회
+ */
+adminRoutes.get('/clinic-closures', async (c) => {
+  const supabase = c.get('supabase');
+  const query = {
+    start_date: c.req.query('start_date'),
+    end_date: c.req.query('end_date'),
+  };
+
+  try {
+    const params = getClinicClosuresQuerySchema.parse(query);
+    const result = await getClinicClosures(supabase, params);
+    return respond(c, success({ data: result }, 200));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * POST /api/admin/clinic-closures
+ * 휴진일 등록
+ */
+adminRoutes.post('/clinic-closures', async (c) => {
+  const supabase = c.get('supabase');
+  const body = await c.req.json();
+
+  try {
+    const request = createClinicClosureSchema.parse(body);
+    const result = await createClinicClosure(supabase, request);
+    return respond(c, success(result, 201));
+  } catch (error) {
+    if (error instanceof AdminError) {
+      if (error.code === 'CLINIC_CLOSURE_ALREADY_EXISTS') {
+        return respond(c, failure(409, error.code, error.message));
+      }
+      return respond(c, failure(400, error.code, error.message));
+    }
+    throw error;
+  }
+});
+
+/**
+ * DELETE /api/admin/clinic-closures/:id
+ * 휴진일 삭제
+ */
+adminRoutes.delete('/clinic-closures/:id', async (c) => {
+  const supabase = c.get('supabase');
+  const closureId = c.req.param('id');
+
+  try {
+    const result = await deleteClinicClosure(supabase, closureId);
     return respond(c, success(result, 200));
   } catch (error) {
     if (error instanceof AdminError) {

@@ -4,7 +4,11 @@ import bcrypt from 'bcryptjs';
 import { formatScheduleDays, getTodayString, getYesterdayString, DAY_NAMES_KO } from '@/lib/date';
 import { AdminError, AdminErrorCode } from './error';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
-import { isWeekend as isWeekendUtil, getHolidayDatesMap as getHolidayDatesMapUtil } from '@/lib/business-days';
+import {
+  isWeekend as isWeekendUtil,
+  getHolidayDatesMap as getHolidayDatesMapUtil,
+  getClinicClosureDatesSet as getClinicClosureDatesSetUtil,
+} from '@/lib/business-days';
 import { fetchAllPaginated } from '@/lib/supabase-pagination';
 import { eachDayOfInterval, parseISO } from 'date-fns';
 import type {
@@ -42,6 +46,9 @@ import type {
   CreateHolidayRequest,
   GetHolidaysQuery,
   HolidayItem,
+  CreateClinicClosureRequest,
+  GetClinicClosuresQuery,
+  ClinicClosureItem,
   GetCoordinatorWorkloadQuery,
   CoordinatorWorkloadItem,
   CoordinatorWorkloadSummary,
@@ -845,6 +852,7 @@ export async function calculateDailyStats(
     ...data,
     is_holiday: false,
     is_weekend: false,
+    is_clinic_closure: false,
   } as DailyStatsItem;
 }
 
@@ -858,6 +866,7 @@ interface StatsAggregate {
   totalConsultation: number;
   attendanceRateSum: number;
   consultationRateSum: number;
+  consultationRateDays: number;
   attendanceDays: number;
   consultationRateVsAttendanceSum: number;
   consultationDays: number;
@@ -876,9 +885,10 @@ interface DailyStatsForAggregate {
   consultation_rate_vs_attendance: number | null;
 }
 
-function aggregateStats(
+export function aggregateStats(
   rows: DailyStatsForAggregate[],
   holidayMap: Map<string, string>,
+  closureSet: Set<string>,
 ): StatsAggregate {
   const acc: StatsAggregate = {
     totalScheduled: 0,
@@ -886,6 +896,7 @@ function aggregateStats(
     totalConsultation: 0,
     attendanceRateSum: 0,
     consultationRateSum: 0,
+    consultationRateDays: 0,
     attendanceDays: 0,
     consultationRateVsAttendanceSum: 0,
     consultationDays: 0,
@@ -902,21 +913,27 @@ function aggregateStats(
 
     const holiday = holidayMap.has(s.date);
     const weekend = isWeekend(s.date);
+    const closure = closureSet.has(s.date);
 
     if (holiday) {
       acc.excludedHolidays++;
       continue;
     }
 
-    // 공휴일이 아닌 날: 출석률 집계 (주말 포함)
+    // 공휴일이 아닌 날: 출석률은 항상 집계 (주말·휴진일 포함)
     acc.attendanceRateSum += Math.min(s.attendance_rate || 0, 100);
-    acc.consultationRateSum += Math.min(s.consultation_rate || 0, 100);
     acc.attendanceDays++;
+
+    // 진찰률(예정 대비): 휴진일 제외, 별도 분모
+    if (!closure) {
+      acc.consultationRateSum += Math.min(s.consultation_rate || 0, 100);
+      acc.consultationRateDays++;
+    }
 
     if (weekend) {
       acc.excludedWeekends++;
-    } else {
-      // 평일: 진찰 참석률 집계
+    } else if (!closure) {
+      // 평일 & 휴진일 아님: 진찰 참석률 집계
       acc.consultationRateVsAttendanceSum += Math.min(s.consultation_rate_vs_attendance || 0, 100);
       acc.consultationDays++;
     }
@@ -930,6 +947,12 @@ const getHolidayDatesMap = (
   startDate: string,
   endDate: string,
 ): Promise<Map<string, string>> => getHolidayDatesMapUtil(supabase as SupabaseClient, startDate, endDate);
+
+const getClinicClosureDatesSet = (
+  supabase: SupabaseClient<Database>,
+  startDate: string,
+  endDate: string,
+): Promise<Set<string>> => getClinicClosureDatesSetUtil(supabase as SupabaseClient, startDate, endDate);
 
 // ========== Holiday CRUD ==========
 
@@ -996,6 +1019,74 @@ export async function deleteHoliday(
     throw new AdminError(
       AdminErrorCode.HOLIDAY_DELETE_FAILED,
       `공휴일 삭제 실패: ${error.message}`,
+    );
+  }
+
+  return { success: true };
+}
+
+// ========== Clinic Closure CRUD ==========
+
+export async function getClinicClosures(
+  supabase: SupabaseClient<Database>,
+  query: GetClinicClosuresQuery,
+): Promise<ClinicClosureItem[]> {
+  const { data, error } = await supabase
+    .from('clinic_closures')
+    .select('*')
+    .gte('date', query.start_date)
+    .lte('date', query.end_date)
+    .order('date');
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.CLINIC_CLOSURE_FETCH_FAILED,
+      `휴진일 조회 실패: ${error.message}`,
+    );
+  }
+
+  return (data || []) as ClinicClosureItem[];
+}
+
+export async function createClinicClosure(
+  supabase: SupabaseClient<Database>,
+  request: CreateClinicClosureRequest,
+): Promise<ClinicClosureItem> {
+  const { data, error } = await supabase
+    .from('clinic_closures')
+    .insert({ date: request.date, reason: request.reason })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new AdminError(
+        AdminErrorCode.CLINIC_CLOSURE_ALREADY_EXISTS,
+        '이미 등록된 휴진일입니다',
+      );
+    }
+    throw new AdminError(
+      AdminErrorCode.CLINIC_CLOSURE_CREATE_FAILED,
+      `휴진일 등록 실패: ${error.message}`,
+    );
+  }
+
+  return data as ClinicClosureItem;
+}
+
+export async function deleteClinicClosure(
+  supabase: SupabaseClient<Database>,
+  closureId: string,
+): Promise<{ success: boolean }> {
+  const { error } = await supabase
+    .from('clinic_closures')
+    .delete()
+    .eq('id', closureId);
+
+  if (error) {
+    throw new AdminError(
+      AdminErrorCode.CLINIC_CLOSURE_DELETE_FAILED,
+      `휴진일 삭제 실패: ${error.message}`,
     );
   }
 
@@ -1311,6 +1402,8 @@ export async function getStatsSummary(
     { count: registeredCount },
     holidays,
     prevHolidays,
+    closures,
+    prevClosures,
   ] = await Promise.all([
     supabase.from('daily_stats')
       .select(DAILY_STATS_SELECT)
@@ -1337,10 +1430,12 @@ export async function getStatsSummary(
       .eq('status', 'active'),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
     getHolidayDatesMap(supabase, prevStartDate, prevEndDate),
+    getClinicClosureDatesSet(supabase, query.start_date, query.end_date),
+    getClinicClosureDatesSet(supabase, prevStartDate, prevEndDate),
   ]);
 
-  const periodAgg = aggregateStats(periodStatsRaw ?? [], holidays);
-  const prevAgg = aggregateStats(prevStatsRaw ?? [], prevHolidays);
+  const periodAgg = aggregateStats(periodStatsRaw ?? [], holidays, closures);
+  const prevAgg = aggregateStats(prevStatsRaw ?? [], prevHolidays, prevClosures);
 
   return {
     period: {
@@ -1349,8 +1444,8 @@ export async function getStatsSummary(
     },
     average_attendance_rate: periodAgg.attendanceDays > 0
       ? periodAgg.attendanceRateSum / periodAgg.attendanceDays : 0,
-    average_consultation_rate: periodAgg.attendanceDays > 0
-      ? periodAgg.consultationRateSum / periodAgg.attendanceDays : 0,
+    average_consultation_rate: periodAgg.consultationRateDays > 0
+      ? periodAgg.consultationRateSum / periodAgg.consultationRateDays : 0,
     average_consultation_rate_vs_attendance: periodAgg.consultationDays > 0
       ? periodAgg.consultationRateVsAttendanceSum / periodAgg.consultationDays : 0,
     total_scheduled: periodAgg.totalScheduled,
@@ -1365,8 +1460,8 @@ export async function getStatsSummary(
     previous_period: {
       average_attendance_rate: prevAgg.attendanceDays > 0
         ? prevAgg.attendanceRateSum / prevAgg.attendanceDays : 0,
-      average_consultation_rate: prevAgg.attendanceDays > 0
-        ? prevAgg.consultationRateSum / prevAgg.attendanceDays : 0,
+      average_consultation_rate: prevAgg.consultationRateDays > 0
+        ? prevAgg.consultationRateSum / prevAgg.consultationRateDays : 0,
       average_consultation_rate_vs_attendance: prevAgg.consultationDays > 0
         ? prevAgg.consultationRateVsAttendanceSum / prevAgg.consultationDays : 0,
     },
@@ -1382,7 +1477,7 @@ export async function getDailyStats(
   // Lazy 마감: 전일 통계 미존재 시 계산
   await ensureYesterdayStatsClosed(supabase);
 
-  const [{ data, error }, holidays] = await Promise.all([
+  const [{ data, error }, holidays, closures] = await Promise.all([
     supabase
       .from('daily_stats')
       .select('*')
@@ -1391,6 +1486,7 @@ export async function getDailyStats(
       .order('date')
       .returns<DailyStatsRow[]>(),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
+    getClinicClosureDatesSet(supabase, query.start_date, query.end_date),
   ]);
 
   if (error) {
@@ -1405,6 +1501,7 @@ export async function getDailyStats(
     is_holiday: holidays.has(row.date),
     holiday_reason: holidays.get(row.date) || undefined,
     is_weekend: isWeekend(row.date),
+    is_clinic_closure: closures.has(row.date),
   }));
 }
 
@@ -1889,6 +1986,7 @@ export async function getCoordinatorWorkload(
     attendanceRows,
     consultationRows,
     holidayMap,
+    closureSet,
   ] = await Promise.all([
     supabase.from('staff')
       .select('id, name')
@@ -1920,17 +2018,20 @@ export async function getCoordinatorWorkload(
         .order('id'),
     ),
     getHolidayDatesMap(supabase, query.start_date, query.end_date),
+    getClinicClosureDatesSet(supabase, query.start_date, query.end_date),
   ]);
 
-  // 영업일 계산: 기간 내 날짜에서 주말 + 공휴일 제외
+  // 영업일 계산: 기간 내 날짜에서 주말 + 공휴일 제외 (출석 지표용 — 휴진일 포함)
   const allDays = eachDayOfInterval({
     start: parseISO(query.start_date),
     end: parseISO(query.end_date),
   });
-  const workingDays = allDays.filter((day) => {
-    const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-    return !isWeekend(dateStr) && !holidayMap.has(dateStr);
-  }).length;
+  const workingDayStrs = allDays
+    .map((day) => `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`)
+    .filter((dateStr) => !isWeekend(dateStr) && !holidayMap.has(dateStr));
+  const workingDays = workingDayStrs.length;
+  // 진찰 지표용 영업일: 휴진일 추가 제외
+  const consultationWorkingDays = workingDayStrs.filter((dateStr) => !closureSet.has(dateStr)).length;
 
   // 환자 → 코디 매핑
   const patientToCoordinator = new Map<string, string>();
@@ -1966,6 +2067,8 @@ export async function getCoordinatorWorkload(
   // 코디별 scheduled/attended/consulted 집계
   const coordinatorScheduled = new Map<string, number>();
   const coordinatorAttended = new Map<string, number>();
+  // 진찰 전환율 분모용: 휴진일 출석 제외한 출석 수
+  const coordinatorAttendedForConsult = new Map<string, number>();
   const coordinatorConsulted = new Map<string, number>();
 
   for (const row of scheduledRows || []) {
@@ -1974,16 +2077,21 @@ export async function getCoordinatorWorkload(
     coordinatorScheduled.set(coordId, (coordinatorScheduled.get(coordId) ?? 0) + 1);
   }
 
-  // 출석: 모든 출석 카운트 (비예정 출석 포함 → 실질 업무량 반영)
+  // 출석: 모든 출석 카운트 (비예정 출석 포함 → 실질 업무량 반영). 휴진일 출석도 포함(출석 지표)
   for (const row of attendanceRows || []) {
     const coordId = patientToCoordinator.get(row.patient_id);
     if (!coordId) continue;
     coordinatorAttended.set(coordId, (coordinatorAttended.get(coordId) ?? 0) + 1);
+    // 진찰 전환율 분모는 휴진일 출석 제외
+    if (!closureSet.has(row.date)) {
+      coordinatorAttendedForConsult.set(coordId, (coordinatorAttendedForConsult.get(coordId) ?? 0) + 1);
+    }
   }
 
-  // 진찰: (patient_id, date) 중복 제거 + 출석 기반만 카운트 (전환율 100% 이하 보장)
+  // 진찰: (patient_id, date) 중복 제거 + 출석 기반만 카운트 (전환율 100% 이하 보장). 휴진일 제외
   const consultedKeySet = new Set<string>();
   for (const row of consultationRows || []) {
+    if (closureSet.has(row.date)) continue;
     const key = `${row.patient_id}_${row.date}`;
     if (consultedKeySet.has(key)) continue;
     if (!attendedKeySet.has(key)) continue;
@@ -1997,17 +2105,20 @@ export async function getCoordinatorWorkload(
   const rawItems = (coordinators || []).map((coord) => {
     const totalScheduled = coordinatorScheduled.get(coord.id) ?? 0;
     const totalAttended = coordinatorAttended.get(coord.id) ?? 0;
+    const totalAttendedForConsult = coordinatorAttendedForConsult.get(coord.id) ?? 0;
     const totalConsulted = coordinatorConsulted.get(coord.id) ?? 0;
     const patientCount = coordinatorPatientCount.get(coord.id) ?? 0;
 
     const safeDays = workingDays > 0 ? workingDays : 1;
+    // 진찰 평균/전환율은 휴진일 제외 영업일·출석을 분모로 사용
+    const safeConsultDays = consultationWorkingDays > 0 ? consultationWorkingDays : 1;
     const avgDailyAttendance = Math.round((totalAttended / safeDays) * 100) / 100;
-    const avgDailyConsultation = Math.round((totalConsulted / safeDays) * 100) / 100;
+    const avgDailyConsultation = Math.round((totalConsulted / safeConsultDays) * 100) / 100;
     const attendanceRate = totalScheduled > 0
       ? Math.min(100, Math.round((totalAttended / totalScheduled) * 10000) / 100)
       : 0;
-    const consultationConversionRate = totalAttended > 0
-      ? Math.round((totalConsulted / totalAttended) * 10000) / 100
+    const consultationConversionRate = totalAttendedForConsult > 0
+      ? Math.round((totalConsulted / totalAttendedForConsult) * 10000) / 100
       : 0;
 
     return {

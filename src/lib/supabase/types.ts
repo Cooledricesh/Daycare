@@ -532,6 +532,30 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            clinic_closures: {
+                Row: {
+                    id: string;
+                    date: string;
+                    reason: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    date: string;
+                    reason: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    date?: string;
+                    reason?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
             holidays: {
                 Row: {
                     id: string;

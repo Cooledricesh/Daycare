@@ -164,6 +164,18 @@ export const getHolidaysQuerySchema = z.object({
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+// ========== Clinic Closures API Schemas ==========
+
+export const createClinicClosureSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '올바른 날짜 형식이 아닙니다'),
+  reason: z.string().min(1, '사유를 입력해주세요').max(100, '사유는 100자 이하이어야 합니다'),
+});
+
+export const getClinicClosuresQuerySchema = z.object({
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
 // ========== Schedule/Stats Generation Schemas ==========
 
 export const generateScheduleRequestSchema = z.object({
@@ -197,6 +209,9 @@ export type GetDailyStatsQuery = z.infer<typeof getDailyStatsQuerySchema>;
 
 export type CreateHolidayRequest = z.infer<typeof createHolidaySchema>;
 export type GetHolidaysQuery = z.infer<typeof getHolidaysQuerySchema>;
+
+export type CreateClinicClosureRequest = z.infer<typeof createClinicClosureSchema>;
+export type GetClinicClosuresQuery = z.infer<typeof getClinicClosuresQuerySchema>;
 
 export type GenerateScheduleRequest = z.infer<typeof generateScheduleRequestSchema>;
 export type BatchGenerateRequest = z.infer<typeof batchGenerateSchema>;
@@ -317,6 +332,7 @@ export interface DailyStatsItem {
   is_holiday: boolean;
   holiday_reason?: string;
   is_weekend: boolean;
+  is_clinic_closure: boolean;
 }
 
 export interface DayOfWeekStatsItem {
@@ -331,6 +347,14 @@ export interface DayOfWeekStatsItem {
 }
 
 export interface HolidayItem {
+  id: string;
+  date: string;
+  reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClinicClosureItem {
   id: string;
   date: string;
   reason: string;
