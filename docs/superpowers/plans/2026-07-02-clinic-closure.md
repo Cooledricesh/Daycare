@@ -23,20 +23,23 @@
 
 ## 파일 구조 (생성/수정)
 
+> **2차 Codex 리뷰 반영(2026-07-02)**: 코디네이터 진찰 참석률 계산기 태스크 추가(Task 8B), `src/lib/supabase/types.ts` 수기 타입 추가를 Task 1로 승격(Task 3의 tsc 게이트 선결), import 별칭 충돌 수정(Task 4), `calculateDailyStats` 반환 필드(Task 7), `countInDates` 테이블별 분리+error throw(Task 8), StatsDetailTable 공휴일 '제외' 회귀 방지(Task 13), `totalConsultation` 방침 명시(Task 6).
+
 **생성**
 - `supabase/migrations/20260702000001_create_clinic_closures_table.sql` — 테이블
 - `src/features/admin/components/ClinicClosureManageDialog.tsx` — 관리 UI
 - `src/features/admin/hooks/useClinicClosures.ts` — React Query 훅
 
 **수정**
+- `src/lib/supabase/types.ts` — 수기 `Database` 타입에 `clinic_closures` 정의 추가(`holidays` 동형) — **Task 3 이전 필수**
 - `src/lib/business-days.ts` — `getClinicClosureDatesSet` 헬퍼 추가
 - `src/features/admin/backend/schema.ts` — 스키마·타입·`DailyStatsItem.is_clinic_closure`
 - `src/features/admin/backend/error.ts` — 에러 코드
 - `src/features/admin/backend/service.ts` — CRUD, `aggregateStats` export+시그니처, `getDailyStats`, `getStatsSummary`
 - `src/features/admin/backend/route.ts` — `/clinic-closures` 라우트
 - `src/features/admin/hooks/query-keys.ts` — 쿼리 키
-- `src/features/monthly-report/backend/calculators/consultation.ts` — 휴진일 제외
-- `src/features/monthly-report/backend/service.ts` — 계산기 호출 시 휴진일 주입
+- `src/features/monthly-report/backend/calculators/consultation.ts` — 휴진일 제외(시그니처 불변)
+- `src/features/monthly-report/backend/calculators/coordinator.ts` — 코디별 진찰 참석률 휴진일 제외(시그니처 불변)
 - `src/features/highlights/backend/service.ts` — `examMissed` 억제
 - `src/server/services/noon-report.ts` — `clinicClosed` 옵션
 - `src/app/api/internal/cron/noon-attendance-report/route.ts` — 휴진일 감지·옵션 전달
@@ -84,11 +87,43 @@ CREATE TRIGGER set_clinic_closures_updated_at
 ALTER TABLE clinic_closures DISABLE ROW LEVEL SECURITY;
 ```
 
-- [ ] **Step 2: 커밋** (적용은 최종 Task에서 MCP로 사용자 위임)
+- [ ] **Step 2: 수기 `Database` 타입에 `clinic_closures` 추가** (`src/lib/supabase/types.ts`)
+
+이 레포의 `Database`는 자동생성이 아니라 수기 타입이다(`holidays`가 `:535`에 정의됨). `clinic_closures`가 없으면 Task 3의 `.from('clinic_closures')`에서 tsc 에러가 난다. `holidays:` 블록 바로 위에 동형 정의를 삽입:
+
+```ts
+            clinic_closures: {
+                Row: {
+                    id: string;
+                    date: string;
+                    reason: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    date: string;
+                    reason: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    date?: string;
+                    reason?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
+```
+
+- [ ] **Step 3: 커밋** (마이그레이션 적용은 최종 Task에서 MCP로 사용자 위임)
 
 ```bash
-git add supabase/migrations/20260702000001_create_clinic_closures_table.sql
-git commit -m "feat(db): 휴진일 clinic_closures 테이블 마이그레이션 추가"
+npx tsc --noEmit
+git add supabase/migrations/20260702000001_create_clinic_closures_table.sql src/lib/supabase/types.ts
+git commit -m "feat(db): 휴진일 clinic_closures 테이블 마이그레이션·타입 추가"
 ```
 
 ---
@@ -231,11 +266,13 @@ git commit -m "feat(lib): 휴진일 날짜 집합 조회 헬퍼 추가"
 - Consumes: `getClinicClosureDatesSet` (Task 3), `ClinicClosureItem`/요청 타입 (Task 2), `AdminErrorCode.CLINIC_CLOSURE_*` (Task 2)
 - Produces: `getClinicClosures`, `createClinicClosure`, `deleteClinicClosure`, 그리고 파일 내부용 `getClinicClosureDatesSet` 재노출 상수
 
-- [ ] **Step 1: import 추가** (`service.ts` 상단 import 정리 — `getHolidayDatesMap as getHolidayDatesMapUtil`이 import되는 곳)
+- [ ] **Step 1: import 추가** (`service.ts:7` — 기존 별칭 형태 유지, `getClinicClosureDatesSet`만 추가)
+
+실제 `service.ts:7`은 `import { isWeekend as isWeekendUtil, getHolidayDatesMap as getHolidayDatesMapUtil } from '@/lib/business-days';`이고 `:853`에 `const isWeekend = isWeekendUtil` 로컬 별칭이 있다. **`isWeekend`를 별칭 없이 재import하면 식별자 충돌**이므로, 기존 별칭 형태를 유지하고 항목만 추가한다:
 
 ```ts
 import {
-  isWeekend,
+  isWeekend as isWeekendUtil,
   getHolidayDatesMap as getHolidayDatesMapUtil,
   getClinicClosureDatesSet as getClinicClosureDatesSetUtil,
 } from '@/lib/business-days';
@@ -333,7 +370,7 @@ git add src/features/admin/backend/service.ts
 git commit -m "feat(admin): 휴진일 CRUD 서비스·헬퍼 재노출 추가"
 ```
 
-> `clinic_closures` 테이블이 `Database` 타입에 없으면 tsc에서 `.from('clinic_closures')`가 에러날 수 있다. 현 프로젝트는 Supabase 타입 자동생성 전이라 `Database`가 수기 타입이면 `src/lib/supabase/types.ts`에 `clinic_closures` 정의를 `holidays`와 동형으로 추가한다(추가 Step). 자동생성/느슨한 타입이면 불필요.
+> `clinic_closures`의 `Database` 타입 정의는 Task 1 Step 2에서 이미 추가됨 → 여기서는 불필요.
 
 ---
 
@@ -435,6 +472,7 @@ git commit -m "feat(admin): 휴진일 CRUD 라우트 추가"
 - 출석률(`attendanceRateSum`/`attendanceDays`): 휴진일 **포함** (변경 없음).
 - 진찰률(`consultationRateSum`): 휴진일 **제외**, 별도 분모 `consultationRateDays`로 나눈다.
 - 진찰 참석률(`consultationRateVsAttendanceSum`/`consultationDays`): 평일 AND 휴진일 아닌 날만.
+- **`totalConsultation`(총 진찰 건수) 방침**: 휴진일 판정 이전에 누적되는 **원시 합계**이므로 그대로 둔다(변경 없음). 휴진일에는 진찰 기록이 0건이라 실질 영향이 없고, 이 값은 rate가 아닌 단순 카운트라 "진찰 지표 왜곡" 대상이 아니다. (Codex 2차 지적 4 반영 — 방침 명시.)
 
 - [ ] **Step 1: 실패 테스트 작성** (`aggregate-stats.test.ts`)
 
@@ -604,14 +642,14 @@ git commit -m "feat(admin): 기간 통계에서 휴진일 진찰 지표 제외·
 
 ---
 
-## Task 7: `getDailyStats`에 `is_clinic_closure` 플래그
+## Task 7: `getDailyStats`/`calculateDailyStats`에 `is_clinic_closure` 플래그
 
 **Files:**
-- Modify: `src/features/admin/backend/service.ts` (`getDailyStats` `:1385~1409`)
+- Modify: `src/features/admin/backend/service.ts` (`getDailyStats` `:1385~1409`, `calculateDailyStats` 반환 `:843~847`)
 
 **Interfaces:**
 - Consumes: `getClinicClosureDatesSet` (Task 4)
-- Produces: `getDailyStats` 반환 객체에 `is_clinic_closure` 포함
+- Produces: `getDailyStats`·`calculateDailyStats` 반환 객체에 `is_clinic_closure` 포함
 
 - [ ] **Step 1: Promise.all에 휴진일 조회 추가** (`:1385`)
 
@@ -641,7 +679,20 @@ git commit -m "feat(admin): 기간 통계에서 휴진일 진찰 지표 제외·
   }));
 ```
 
-- [ ] **Step 3: 타입 체크 & 커밋**
+- [ ] **Step 3: `calculateDailyStats` 반환에도 필드 추가** (`:843~847`)
+
+`calculateDailyStats`는 `{...data, is_holiday: false, is_weekend: false} as DailyStatsItem`로 끝난다. `as` 캐스팅이라 tsc가 누락을 못 잡지만 런타임에 `is_clinic_closure`가 `undefined`로 흐른다. 명시적으로 추가:
+```ts
+  return {
+    ...data,
+    is_holiday: false,
+    is_weekend: false,
+    is_clinic_closure: false,
+  } as DailyStatsItem;
+```
+(이 함수는 daily_stats 배치 계산용이며 플래그를 저장하지 않으므로 `false` 고정으로 충분. 조회 시 실제 값은 `getDailyStats`가 부여.)
+
+- [ ] **Step 4: 타입 체크 & 커밋**
 
 ```bash
 npx tsc --noEmit
@@ -665,30 +716,51 @@ git commit -m "feat(admin): 일별 통계에 휴진일 플래그(is_clinic_closu
 
 - [ ] **Step 1: 휴진일 날짜 조회 헬퍼 (파일 내부)** (`consultation.ts` 상단, import 아래)
 
+테이블별로 분리하고 `error`를 throw한다(union 제네릭 추론 붕괴·조용한 실패 방지 — Codex 2차 지적 6).
+
 ```ts
 async function getMonthClosureDates(
   supabase: Supabase,
   monthStart: string,
   nextMonth: string,
 ): Promise<string[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('clinic_closures')
     .select('date')
     .gte('date', monthStart)
     .lt('date', nextMonth);
+  if (error) throw new Error(`휴진일 조회 실패: ${error.message}`);
   return (data || []).map((r) => r.date);
 }
 
-async function countInDates(
-  supabase: Supabase,
-  table: 'scheduled_attendances' | 'consultations' | 'attendances',
-  dates: string[],
-  onlyActiveSchedule: boolean,
-): Promise<number> {
+async function countScheduledInDates(supabase: Supabase, dates: string[]): Promise<number> {
   if (dates.length === 0) return 0;
-  let q = supabase.from(table).select('*', { count: 'exact', head: true }).in('date', dates);
-  if (onlyActiveSchedule) q = q.eq('is_cancelled', false);
-  const { count } = await q;
+  const { count, error } = await supabase
+    .from('scheduled_attendances')
+    .select('*', { count: 'exact', head: true })
+    .in('date', dates)
+    .eq('is_cancelled', false);
+  if (error) throw new Error(`휴진일 예정 출석 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
+async function countConsultationsInDates(supabase: Supabase, dates: string[]): Promise<number> {
+  if (dates.length === 0) return 0;
+  const { count, error } = await supabase
+    .from('consultations')
+    .select('*', { count: 'exact', head: true })
+    .in('date', dates);
+  if (error) throw new Error(`휴진일 진찰 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
+async function countAttendancesInDates(supabase: Supabase, dates: string[]): Promise<number> {
+  if (dates.length === 0) return 0;
+  const { count, error } = await supabase
+    .from('attendances')
+    .select('*', { count: 'exact', head: true })
+    .in('date', dates);
+  if (error) throw new Error(`휴진일 출석 조회 실패: ${error.message}`);
   return count ?? 0;
 }
 ```
@@ -705,9 +777,9 @@ async function countInDates(
 ```ts
   const closureDates = await getMonthClosureDates(supabase, monthStart, nextMonth);
   const [closureScheduled, closurePerformed, closureAttended] = await Promise.all([
-    countInDates(supabase, 'scheduled_attendances', closureDates, true),
-    countInDates(supabase, 'consultations', closureDates, false),
-    countInDates(supabase, 'attendances', closureDates, false),
+    countScheduledInDates(supabase, closureDates),
+    countConsultationsInDates(supabase, closureDates),
+    countAttendancesInDates(supabase, closureDates),
   ]);
 
   const scheduled = Math.max(0, (scheduledCount ?? 0) - closureScheduled);
@@ -727,19 +799,76 @@ async function countInDates(
 ```ts
   const closureDates = await getMonthClosureDates(supabase, monthStart, nextMonth);
   const [closureAttended, closureConsulted] = await Promise.all([
-    countInDates(supabase, 'attendances', closureDates, false),
-    countInDates(supabase, 'consultations', closureDates, false),
+    countAttendancesInDates(supabase, closureDates),
+    countConsultationsInDates(supabase, closureDates),
   ]);
   const attended = Math.max(0, (attendanceCount ?? 0) - closureAttended);
   const consulted = Math.max(0, (consultationCount ?? 0) - closureConsulted);
 ```
 
-- [ ] **Step 4: 타입 체크 & 커밋** (service.ts 호출부는 시그니처 불변이라 수정 불필요 — 확인만)
+- [ ] **Step 4: 타입 체크 & 커밋** (`monthly-report/backend/service.ts` 호출부는 시그니처 불변이라 수정 없음 — 확인만)
 
 ```bash
 npx tsc --noEmit
 git add src/features/monthly-report/backend/calculators/consultation.ts
 git commit -m "feat(monthly-report): 진찰 통계에서 휴진일 제외"
+```
+
+---
+
+## Task 8B: 월간 리포트 코디네이터별 진찰 참석률 휴진일 제외 (Codex 2차 지적 1)
+
+**Files:**
+- Modify: `src/features/monthly-report/backend/calculators/coordinator.ts` (`calculateCoordinatorPerformance` `:50~`, 진찰 참석률 계산 `:191~206`)
+
+**Interfaces:**
+- Consumes: `clinic_closures` 테이블
+- Produces: `calculateCoordinatorPerformance(supabase, year, month)` — 시그니처 불변. 코디별 `consultation_attendance_rate`에서만 휴진일 제외(출석률 `avg_attendance_rate`·연속결석은 불변).
+
+**배경:** `coordinator.ts`는 월간 진찰 데이터를 환자별 Set으로 모아, 코디별로 `consultationRate = consultedDays / attendedDays`(`:202~204`)를 계산한다. 휴진일에는 consultedDays만 0이 되어 코디 진찰 참석률이 왜곡된다. 진찰 참석률 계산에서만 휴진일 날짜를 attended/consulted 양쪽에서 빼면 된다.
+
+- [ ] **Step 1: 휴진일 날짜 Set 조회** (진찰 데이터 조회 블록 `:118~130` 뒤에 추가)
+
+```ts
+  // 해당 월 휴진일 (진찰 참석률 계산에서만 제외)
+  const { data: closureRows, error: closureErr } = await supabase
+    .from('clinic_closures')
+    .select('date')
+    .gte('date', monthStartStr)
+    .lte('date', monthEndStr);
+  if (closureErr) throw new Error(`휴진일 조회 실패: ${closureErr.message}`);
+  const closureSet = new Set<string>((closureRows ?? []).map((r) => r.date));
+```
+
+- [ ] **Step 2: 진찰 참석률 계산에서 휴진일 제외** (`:191~206` 루프 내부)
+
+기존:
+```ts
+      const possibleDays = scheduledSet.size;
+      const attendedDays = attended.size;
+      const consultedDays = consulted.size;
+```
+아래에 휴진일 제외 변수 추가:
+```ts
+      const attendedDaysForConsult = [...attended].filter((d) => !closureSet.has(d)).length;
+      const consultedDaysForConsult = [...consulted].filter((d) => !closureSet.has(d)).length;
+```
+그리고 진찰 참석률 계산만 새 변수로 교체(출석률은 기존 `attendedDays`/`possibleDays` 그대로):
+```ts
+      // 진찰 참석률 (출석 대비) — 휴진일 제외
+      const consultationRate =
+        attendedDaysForConsult > 0
+          ? Math.min((consultedDaysForConsult / attendedDaysForConsult) * 100, 100)
+          : 0;
+      totalConsultationRate += consultationRate;
+```
+
+- [ ] **Step 3: 타입 체크 & 커밋**
+
+```bash
+npx tsc --noEmit
+git add src/features/monthly-report/backend/calculators/coordinator.ts
+git commit -m "feat(monthly-report): 코디네이터별 진찰 참석률에서 휴진일 제외"
 ```
 
 ---
@@ -1079,11 +1208,23 @@ useMemo 의존성 배열에 `filterClosures` 추가.
 
 - [ ] **Step 3: `StatsDetailTable` 진찰 셀 휴진일 표시** (`:105~112`)
 
-진찰 참석률 셀을 휴진일 우선 분기로:
+진찰 참석률 셀에 휴진일 분기만 추가한다. **기존 공휴일은 `'제외'` 표기를 그대로 유지**(Codex 2차 지적 7 — `'-'`로 바꾸면 회귀). 현재 코드:
+```tsx
+                      <TableCell className={`text-right ${stat.is_holiday || stat.is_weekend ? '' : getRateCellClass(stat.consultation_rate_vs_attendance, CONSULTATION_RATE_THRESHOLDS)}`}>
+                        {stat.is_holiday
+                          ? '제외'
+                          : stat.is_weekend
+                            ? '-'
+                            : stat.consultation_rate_vs_attendance != null
+                              ? `${stat.consultation_rate_vs_attendance.toFixed(1)}%`
+                              : '-'}
+                      </TableCell>
+```
+로 바꾼다:
 ```tsx
                       <TableCell className={`text-right ${stat.is_holiday || stat.is_weekend || stat.is_clinic_closure ? '' : getRateCellClass(stat.consultation_rate_vs_attendance, CONSULTATION_RATE_THRESHOLDS)}`}>
                         {stat.is_holiday
-                          ? '-'
+                          ? '제외'
                           : stat.is_clinic_closure
                             ? '휴진'
                             : stat.is_weekend
@@ -1273,7 +1414,8 @@ Expected: 모두 통과.
 - §3 데이터 → Task 1 ✅ (reason NOT NULL VARCHAR(100), 트리거, RLS disable)
 - §4.1 aggregateStats + 분모 분리 → Task 6 ✅ (핵심, 단위 테스트 포함)
 - §4.2 getDailyStats 플래그 → Task 7 ✅ / 스키마 Task 2 ✅
-- §4.3 월간 리포트 (2개 함수) → Task 8 ✅
+- §4.3 월간 리포트 진찰 카드 (2개 함수) → Task 8 ✅
+- §4.3+ 월간 리포트 코디네이터별 진찰 참석률 → Task 8B ✅ (Codex 2차 지적 1)
 - §4.4 하이라이트 examMissed → Task 9 ✅
 - §4.5 슬랙 composer + 라우트 → Task 10, 11 ✅
 - §4.6 요일별 통계 → Task 12 ✅
@@ -1281,8 +1423,11 @@ Expected: 모두 통과.
 - §4.8 무효화(하이라이트 포함) + 월간 리포트 재생성 안내 → Task 14 + Task 15 안내문 ✅
 - §4.9 today rate N/A 폐기 → 계획에 today 변경 없음 ✅
 - §5 백엔드 CRUD → Task 2/4/5 ✅
+- 수기 Database 타입(`clinic_closures`) → Task 1 Step 2 ✅ (Codex 2차 지적 2 — Task 3 tsc 선결)
 - §6 프런트 훅·UI → Task 14/15 ✅
 - §7 테스트 → Task 6/9/10/12 ✅
 - 마이그레이션 적용 → Task 16 ✅
+
+**2차 리뷰 반영 확인:** 코디네이터 계산기(Task 8B) ✅ · types.ts 승격(Task 1) ✅ · import 별칭 충돌(Task 4 Step 1) ✅ · calculateDailyStats 필드(Task 7 Step 3) ✅ · countInDates 분리+throw(Task 8) ✅ · StatsDetailTable '제외' 유지(Task 13) ✅ · totalConsultation 방침(Task 6) ✅
 
 **타입 일관성:** `is_clinic_closure`(스키마·getDailyStats·stats·차트·상세표), `getClinicClosureDatesSet`(business-days→service→noon route), `consultationRateDays`(StatsAggregate·aggregateStats·평균), `clinicClosed` 옵션(composer·noon route), 훅 3종 이름 일관 ✅
