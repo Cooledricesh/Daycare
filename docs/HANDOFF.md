@@ -2,7 +2,7 @@
 
 > **목적**: 시간이 지난 뒤 새 세션에서 작업을 시작할 때, 이 문서 하나로 레포 전체 맥락을 복원한다.
 > **유지 규칙**: 구조 변경·큰 기능 추가·운영 절차 변경이 있는 작업을 끝낼 때마다 이 문서를 갱신한다.
-> 최종 갱신: 2026-06-10
+> 최종 갱신: 2026-07-02
 
 ## 1. 이 프로젝트가 뭔가
 
@@ -77,6 +77,8 @@ src/features/shared/               → 직역 공통 (스트릭, 캘린더, Stre
 **완료**: 성능 리팩토링 전체 (계획 문서의 Phase A~D, 커밋 13개 push·배포·마이그레이션 적용 완료, 사용자가 출석보드 체감 속도 직접 확인함). improvement-plan.md의 Phase 1/4/5/6/7/8/9 완료.
 
 **완료 (2026-06-11)**: 슬랙 정오 출석 리포트 + 월간 리포트 통보 (pg_cron 트리거, 배포 완료. 첫 자동 실행 2026-06-11 12:05 KST — 실행 이력: `SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;`)
+
+**구현 완료·적용 대기 (2026-07-02)**: 휴진일(진찰 없는 날) 관리. 주치의 휴가처럼 출석은 하되 진찰만 없는 날을 관리자가 지정 → 그날은 **출석은 정상 집계, 모든 진찰 지표에서만 제외**(공휴일과 별개 개념). 계획: `docs/superpowers/plans/2026-07-02-clinic-closure.md` (Codex 2회 리뷰 반영). 관리 UI: 관리자 통계 페이지의 공휴일 관리 옆 "휴진일 관리". 진찰 지표 제외 반영 지점: 기간 통계 `aggregateStats`(+`average_consultation_rate` 분모 분리 `consultationRateDays`), 일별 통계 플래그 `is_clinic_closure`, 월간 리포트 진찰 카드·참석률·코디별 참석률, admin 코디 워크로드 진찰 전환율·일평균, 오늘 하이라이트 `examMissed`, 슬랙 정오 리포트(미진찰 생략·미출석 유지), 요일별 통계·진찰 추이 차트·상세표. **출석 지표는 불변.** ⚠️ **적용 대기 마이그레이션**: `supabase/migrations/20260702000001_create_clinic_closures_table.sql` (Supabase MCP `apply_migration`로 적용 필요). 월간 리포트는 저장형이라 휴진일 변경 시 해당 월 리포트 재생성해야 반영됨.
 
 **남은 백로그** (우선순위 순):
 1. 헤르메스 에이전트용 읽기 전용 리포트 API (`/api/external/reports/*`, API key 인증 — carescheduler 패턴 재사용). 슬랙에서 온디맨드 질의용

@@ -1430,4 +1430,6 @@ Expected: 모두 통과.
 
 **2차 리뷰 반영 확인:** 코디네이터 계산기(Task 8B) ✅ · types.ts 승격(Task 1) ✅ · import 별칭 충돌(Task 4 Step 1) ✅ · calculateDailyStats 필드(Task 7 Step 3) ✅ · countInDates 분리+throw(Task 8) ✅ · StatsDetailTable '제외' 유지(Task 13) ✅ · totalConsultation 방침(Task 6) ✅
 
+**구현 중 추가 발견(두 리뷰 모두 놓친 지점):** admin `getCoordinatorWorkload`(`service.ts`, staff-workload 페이지)가 코디별 `consultation_conversion_rate`(진찰 전환율)·`avg_daily_consultation`(일평균 진찰)을 계산한다. `consultation_rate*` 네이밍이 아니라(`totalConsulted`/`consultationConversionRate`) 두 리뷰의 grep에 안 걸렸다. 휴진일에 전 코디 전환율이 왜곡되므로 함께 수정: 진찰 전환율 분모는 휴진일 제외 출석(`coordinatorAttendedForConsult`), 일평균 분모는 휴진일 제외 영업일(`consultationWorkingDays`). 출석 지표(avg_daily_attendance·attendance_rate·팀 평균·워크로드 등급)는 불변.
+
 **타입 일관성:** `is_clinic_closure`(스키마·getDailyStats·stats·차트·상세표), `getClinicClosureDatesSet`(business-days→service→noon route), `consultationRateDays`(StatsAggregate·aggregateStats·평균), `clinicClosed` 옵션(composer·noon route), 훅 3종 이름 일관 ✅
