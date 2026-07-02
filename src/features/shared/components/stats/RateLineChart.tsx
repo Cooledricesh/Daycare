@@ -26,6 +26,7 @@ interface RateLineChartProps {
   color: string;
   thresholds: { GOOD: number; WARNING: number };
   filterWeekends?: boolean;
+  filterClosures?: boolean;
   yDomain?: [number, number];
   renderTooltipContent: (data: any) => React.ReactNode;
 }
@@ -38,6 +39,7 @@ export function RateLineChart({
   color,
   thresholds,
   filterWeekends = false,
+  filterClosures = false,
   yDomain = [0, 100],
   renderTooltipContent,
 }: RateLineChartProps) {
@@ -45,6 +47,7 @@ export function RateLineChart({
     const rates = dailyStats.map((s) => {
       if (s.is_holiday) return null;
       if (filterWeekends && s.is_weekend) return null;
+      if (filterClosures && s.is_clinic_closure) return null;
       return s[dataKey] as number | null;
     });
     const movingAvg = calculateMovingAverage(rates, 7);
@@ -59,6 +62,7 @@ export function RateLineChart({
       consultation: stat.consultation_count,
       isHoliday: stat.is_holiday,
       isWeekend: stat.is_weekend,
+      isClinicClosure: stat.is_clinic_closure,
       holidayReason: stat.holiday_reason,
     }));
 
@@ -66,7 +70,7 @@ export function RateLineChart({
       chartData: data,
       holidayDates: data.filter((d) => d.isHoliday),
     };
-  }, [dailyStats, dataKey, filterWeekends]);
+  }, [dailyStats, dataKey, filterWeekends, filterClosures]);
 
   return (
     <Card>

@@ -4,7 +4,7 @@ import { ko } from 'date-fns/locale';
 import { getAppConfig } from '@/server/config';
 import { createServiceClient } from '@/server/supabase/client';
 import { getTodayString, getNowKST } from '@/lib/date';
-import { isWeekend, getHolidayDatesMap } from '@/lib/business-days';
+import { isWeekend, getHolidayDatesMap, getClinicClosureDatesSet } from '@/lib/business-days';
 import { getAttendanceBoard } from '@/features/attendance-board/backend/service';
 import { postSlackMessage } from '@/server/integrations/slack/client';
 import { SLACK_CHANNELS } from '@/constants/slack-channels';
@@ -75,11 +75,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // 휴진일 여부 (스킵하지 않고 진찰 요약만 생략)
+  const closureSet = await getClinicClosureDatesSet(supabase, todayStr, todayStr);
+  const isClinicClosed = closureSet.has(todayStr);
+
   // 출석 보드 조회
   const board = await getAttendanceBoard(supabase, { date: todayStr });
 
   const dateLabel = formatKstDateLabel(nowKst);
-  const messageText = composeNoonReportMessage(board, dateLabel);
+  const messageText = composeNoonReportMessage(board, dateLabel, { clinicClosed: isClinicClosed });
 
   // 슬랙 전송
   const result = await postSlackMessage(botToken, SLACK_CHANNELS.CONSULTATION, messageText);
@@ -96,6 +100,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     {
       status: 'sent',
       date: todayStr,
+      clinic_closed: isClinicClosed,
       total_attended: board.total_attended,
       total_scheduled: board.total_scheduled,
       total_consulted: board.total_consulted,

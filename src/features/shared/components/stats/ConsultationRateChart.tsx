@@ -18,16 +18,20 @@ export function ConsultationRateChart({ dailyStats }: ConsultationRateChartProps
       color={CHART_COLORS.CONSULTATION}
       thresholds={CONSULTATION_RATE_THRESHOLDS}
       filterWeekends
+      filterClosures
       renderTooltipContent={(data) => (
         <div className="bg-white border rounded-lg shadow-lg p-3">
           <p className="font-medium mb-2">
             {data.fullDate}
             {data.isHoliday && <span className="text-gray-400 ml-1">({data.holidayReason || '공휴일'})</span>}
             {data.isWeekend && !data.isHoliday && <span className="text-gray-400 ml-1">(주말)</span>}
+            {data.isClinicClosure && !data.isHoliday && !data.isWeekend && <span className="text-gray-400 ml-1">(휴진일)</span>}
           </p>
           <div className="space-y-1 text-sm">
             {data.isHoliday ? (
               <p className="text-gray-400">공휴일 - 통계 제외</p>
+            ) : data.isClinicClosure ? (
+              <p className="text-gray-400">휴진일 - 진찰 통계 제외</p>
             ) : data.isWeekend ? (
               <p className="text-gray-400">주말 - 진찰 미운영</p>
             ) : (

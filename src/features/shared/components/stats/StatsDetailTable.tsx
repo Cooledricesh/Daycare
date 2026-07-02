@@ -102,14 +102,16 @@ export function StatsDetailTable({ dailyStats }: StatsDetailTableProps) {
                             ? `${stat.attendance_rate.toFixed(1)}%`
                             : '-'}
                       </TableCell>
-                      <TableCell className={`text-right ${stat.is_holiday || stat.is_weekend ? '' : getRateCellClass(stat.consultation_rate_vs_attendance, CONSULTATION_RATE_THRESHOLDS)}`}>
+                      <TableCell className={`text-right ${stat.is_holiday || stat.is_weekend || stat.is_clinic_closure ? '' : getRateCellClass(stat.consultation_rate_vs_attendance, CONSULTATION_RATE_THRESHOLDS)}`}>
                         {stat.is_holiday
                           ? '제외'
-                          : stat.is_weekend
-                            ? '-'
-                            : stat.consultation_rate_vs_attendance != null
-                              ? `${stat.consultation_rate_vs_attendance.toFixed(1)}%`
-                              : '-'}
+                          : stat.is_clinic_closure
+                            ? '휴진'
+                            : stat.is_weekend
+                              ? '-'
+                              : stat.consultation_rate_vs_attendance != null
+                                ? `${stat.consultation_rate_vs_attendance.toFixed(1)}%`
+                                : '-'}
                       </TableCell>
                     </TableRow>
                   );

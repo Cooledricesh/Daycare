@@ -23,7 +23,9 @@ function formatPatientLabel(patient: BoardPatient): string {
 export function composeNoonReportMessage(
   board: AttendanceBoardResponse,
   dateLabel: string,
+  options?: { clinicClosed?: boolean },
 ): string {
+  const clinicClosed = options?.clinicClosed ?? false;
   const allPatients = board.rooms.flatMap((room) => room.patients);
 
   const absentPatients = allPatients.filter((p) => p.status === ABSENT_STATUS);
@@ -36,13 +38,17 @@ export function composeNoonReportMessage(
   const consultedCount = board.total_consulted;
 
   const headerLine = `\u{1F3E5} 낮병원 정오 현황 — ${dateLabel}`;
-  const summaryLine = `출석 ${attendedCount}/${scheduledCount} · 진찰 ${consultedCount}/${attendedCount}`;
+  // 휴진일에는 진찰 요약을 생략한다 (진찰 지표 제외).
+  const summaryLine = clinicClosed
+    ? `출석 ${attendedCount}/${scheduledCount} · 휴진일(진찰 없음)`
+    : `출석 ${attendedCount}/${scheduledCount} · 진찰 ${consultedCount}/${attendedCount}`;
 
   const lines: string[] = [headerLine, summaryLine];
 
-  if (absentPatients.length === 0 && attendedNotConsultedPatients.length === 0) {
+  // 미진찰 명단은 휴진일에는 표시하지 않는다. 미출석 명단은 항상 표시.
+  if (absentPatients.length === 0 && (clinicClosed || attendedNotConsultedPatients.length === 0)) {
     lines.push('');
-    lines.push('\u{1F389} 전원 출석·진찰 완료');
+    lines.push(clinicClosed ? '\u{1F389} 전원 출석' : '\u{1F389} 전원 출석·진찰 완료');
     return lines.join('\n');
   }
 
@@ -52,7 +58,7 @@ export function composeNoonReportMessage(
     lines.push(absentPatients.map(formatPatientLabel).join(', '));
   }
 
-  if (attendedNotConsultedPatients.length > 0) {
+  if (!clinicClosed && attendedNotConsultedPatients.length > 0) {
     lines.push('');
     lines.push(`\u{1FA7A} 출석 후 미진찰 (${attendedNotConsultedPatients.length}명)`);
     lines.push(attendedNotConsultedPatients.map(formatPatientLabel).join(', '));

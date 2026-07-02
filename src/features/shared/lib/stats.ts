@@ -23,20 +23,26 @@ export function calculateDayOfWeekStats(dailyStats: DailyStatsItem[]): DayOfWeek
     if (!items || items.length === 0) continue;
 
     const count = items.length;
+    // 진찰 평균은 휴진일 제외 부분집합·별도 분모로 계산 (출석 평균은 전체 유지)
+    const consultItems = items.filter((i) => !i.is_clinic_closure);
+    const consultCount = consultItems.length;
+
     const avgScheduled = items.reduce((s, i) => s + i.scheduled_count, 0) / count;
     const avgAttendance = items.reduce((s, i) => s + i.attendance_count, 0) / count;
-    const avgConsultation = items.reduce((s, i) => s + i.consultation_count, 0) / count;
+    const avgConsultation = consultCount > 0
+      ? consultItems.reduce((s, i) => s + i.consultation_count, 0) / consultCount
+      : 0;
     const avgAttendanceRate = items.reduce(
       (s, i) => s + Math.min(i.attendance_rate || 0, 100), 0,
     ) / count;
 
     const isWeekendDay = dow === 0 || dow === 6;
-    const avgConsultationRateVsAttendance = isWeekendDay
+    const avgConsultationRateVsAttendance = isWeekendDay || consultCount === 0
       ? null
       : Math.round(
-          (items.reduce(
+          (consultItems.reduce(
             (s, i) => s + Math.min(i.consultation_rate_vs_attendance || 0, 100), 0,
-          ) / count) * 10,
+          ) / consultCount) * 10,
         ) / 10;
 
     result.push({

@@ -115,4 +115,30 @@ describe('composeNoonReportMessage', () => {
     expect(message).toContain('홍길동');
     expect(message).not.toMatch(/홍길동\(/);
   });
+
+  it('휴진일: 미진찰 섹션·진찰 요약을 생략하고 휴진 표기를 노출한다', () => {
+    const patients: BoardPatient[] = [
+      makePatient({ id: 'p-1', name: '강동원', room_number: '3011', status: 'attended', is_attended: true, is_consulted: false }),
+      makePatient({ id: 'p-2', name: '원빈', room_number: '3012', status: 'attended', is_attended: true, is_consulted: false }),
+    ];
+    const board = makeBoard(patients);
+    const message = composeNoonReportMessage(board, '7월 6일 (월)', { clinicClosed: true });
+
+    expect(message).toContain('휴진일');
+    expect(message).not.toContain('미진찰');
+    expect(message).not.toMatch(/진찰 \d+\/\d+/);
+  });
+
+  it('휴진일이어도 미출석 명단은 그대로 발송한다', () => {
+    const patients: BoardPatient[] = [
+      makePatient({ id: 'p-1', name: '김결석', room_number: '3011', status: 'absent', is_attended: false, is_scheduled: true, is_consulted: false }),
+      makePatient({ id: 'p-2', name: '원빈', room_number: '3012', status: 'attended', is_attended: true, is_consulted: false }),
+    ];
+    const board = makeBoard(patients);
+    const message = composeNoonReportMessage(board, '7월 6일 (월)', { clinicClosed: true });
+
+    expect(message).toContain('미출석');
+    expect(message).toContain('김결석');
+    expect(message).not.toContain('미진찰');
+  });
 });
