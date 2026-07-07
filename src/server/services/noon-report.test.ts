@@ -56,8 +56,8 @@ function makeBoard(
 }
 
 describe('composeNoonReportMessage', () => {
-  it('정상 케이스: 미출석/미진찰 환자가 있을 때 전체 메시지를 조립한다', () => {
-    // absent 환자는 is_attended=false, is_scheduled=true (예약됐으나 미출석)
+  it('정상 케이스: 미내원/미진찰 환자가 있을 때 전체 메시지를 조립한다', () => {
+    // absent 환자는 is_attended=false, is_scheduled=true (예약됐으나 미내원)
     const patients: BoardPatient[] = [
       makePatient({ id: 'p-1', name: '김철수', room_number: '3012', status: 'absent', is_attended: false, is_scheduled: true, is_consulted: false }),
       makePatient({ id: 'p-2', name: '이영희', room_number: '3013', status: 'absent', is_attended: false, is_scheduled: true, is_consulted: false }),
@@ -67,10 +67,10 @@ describe('composeNoonReportMessage', () => {
     const board = makeBoard(patients);
     const message = composeNoonReportMessage(board, '6월 10일 (수)');
 
-    expect(message).toContain('낮병원 정오 현황 — 6월 10일 (수)');
+    expect(message).toContain('낮병원 오후 진찰 현황 — 6월 10일 (수)');
     // attended=2, scheduled=4, consulted=1
     expect(message).toContain('출석 2/4 · 진찰 1/2');
-    expect(message).toContain('미출석 (2명)');
+    expect(message).toContain('미내원 (2명)');
     expect(message).toContain('김철수(3012)');
     expect(message).toContain('이영희(3013)');
     expect(message).toContain('출석 후 미진찰 (1명)');
@@ -78,7 +78,7 @@ describe('composeNoonReportMessage', () => {
     expect(message).not.toContain('전원 출석·진찰 완료');
   });
 
-  it('미출석 0명: 미출석 섹션이 생략되고 미진찰 섹션만 출력된다', () => {
+  it('미내원 0명: 미내원 섹션이 생략되고 미진찰 섹션만 출력된다', () => {
     const patients: BoardPatient[] = [
       makePatient({ id: 'p-1', name: '강동원', room_number: '3011', status: 'attended', is_attended: true, is_consulted: false }),
       makePatient({ id: 'p-2', name: '손예진', room_number: '3012', status: 'attended_consulted', is_attended: true, is_consulted: true }),
@@ -86,12 +86,12 @@ describe('composeNoonReportMessage', () => {
     const board = makeBoard(patients);
     const message = composeNoonReportMessage(board, '6월 10일 (수)');
 
-    expect(message).not.toContain('미출석');
+    expect(message).not.toContain('미내원');
     expect(message).toContain('출석 후 미진찰 (1명)');
     expect(message).toContain('강동원(3011)');
   });
 
-  it('전원 완료: 미출석/미진찰 모두 0명이면 "전원 출석·진찰 완료" 한 줄만 출력된다', () => {
+  it('전원 완료: 미내원/미진찰 모두 0명이면 "전원 출석·진찰 완료" 한 줄만 출력된다', () => {
     const patients: BoardPatient[] = [
       makePatient({ id: 'p-1', name: '유재석', room_number: '3001', status: 'attended_consulted', is_attended: true, is_consulted: true }),
       makePatient({ id: 'p-2', name: '강호동', room_number: '3002', status: 'attended_consulted', is_attended: true, is_consulted: true }),
@@ -100,7 +100,7 @@ describe('composeNoonReportMessage', () => {
     const message = composeNoonReportMessage(board, '6월 10일 (수)');
 
     expect(message).toContain('전원 출석·진찰 완료');
-    expect(message).not.toContain('미출석');
+    expect(message).not.toContain('미내원');
     expect(message).not.toContain('미진찰');
   });
 
@@ -129,7 +129,7 @@ describe('composeNoonReportMessage', () => {
     expect(message).not.toMatch(/진찰 \d+\/\d+/);
   });
 
-  it('휴진일이어도 미출석 명단은 그대로 발송한다', () => {
+  it('휴진일이어도 미내원 명단은 그대로 발송한다', () => {
     const patients: BoardPatient[] = [
       makePatient({ id: 'p-1', name: '김결석', room_number: '3011', status: 'absent', is_attended: false, is_scheduled: true, is_consulted: false }),
       makePatient({ id: 'p-2', name: '원빈', room_number: '3012', status: 'attended', is_attended: true, is_consulted: false }),
@@ -137,7 +137,7 @@ describe('composeNoonReportMessage', () => {
     const board = makeBoard(patients);
     const message = composeNoonReportMessage(board, '7월 6일 (월)', { clinicClosed: true });
 
-    expect(message).toContain('미출석');
+    expect(message).toContain('미내원');
     expect(message).toContain('김결석');
     expect(message).not.toContain('미진찰');
   });

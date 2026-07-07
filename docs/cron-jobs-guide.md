@@ -141,7 +141,7 @@ SELECT cron.schedule(
 );
 ```
 
-- **cron 표현식은 UTC**다. KST에서 9시간을 빼라. (KST 08:30 → UTC 23:30 → `30 23 * * *`, KST 평일 12:05 → UTC 03:05 → `5 3 * * 1-5`)
+- **cron 표현식은 UTC**다. KST에서 9시간을 빼라. (KST 08:30 → UTC 23:30 → `30 23 * * *`, KST 평일 16:00 → UTC 07:00 → `0 7 * * 1-5`)
 - `CRON_SECRET` 실제값은 `.env.local`에 있다 (2026-06-11 rotate된 값). Vercel 환경변수·pg_cron 잡 command 두 곳이 같은 값이어야 한다.
 
 ## 3. 배포 순서 (반드시 지킬 것)
@@ -186,7 +186,7 @@ SELECT cron.unschedule('weekly-absence-report');
 
 | jobname | 스케줄(UTC) | KST | 라우트 | 채널 |
 |---|---|---|---|---|
-| `noon-attendance-report` | `5 3 * * 1-5` | 평일 12:05 | noon-attendance-report | `#마루-진찰` (`C0B9LCED676`) |
+| `noon-attendance-report` | `0 7 * * 1-5` | 평일 16:00 | noon-attendance-report | `#마루-진찰` (`C0B9LCED676`) |
 | `birthday-report` | `30 23 * * *` | 매일 08:30 | birthday-report | `#마루` |
 
 월간 리포트(`monthly-report-generate`)·공휴일 동기화(`holidays-sync`)는 **Vercel 크론**(vercel.json)으로 따로 돈다. 월간 리포트는 생성 후 `#마루-진찰`(`C0B9LCED676`)로 요약을 슬랙 통보한다.

@@ -14,7 +14,7 @@ function formatPatientLabel(patient: BoardPatient): string {
 }
 
 /**
- * AttendanceBoardResponse를 받아 슬랙 정오 현황 메시지 텍스트를 조립합니다.
+ * AttendanceBoardResponse를 받아 슬랙 오후 진찰 현황 메시지 텍스트를 조립합니다.
  * 순수 함수 — 사이드이펙트 없음.
  *
  * @param board - 출석 보드 응답 데이터
@@ -37,7 +37,7 @@ export function composeNoonReportMessage(
   const scheduledCount = board.total_scheduled;
   const consultedCount = board.total_consulted;
 
-  const headerLine = `\u{1F3E5} 낮병원 정오 현황 — ${dateLabel}`;
+  const headerLine = `\u{1F3E5} 낮병원 오후 진찰 현황 — ${dateLabel}`;
   // 휴진일에는 진찰 요약을 생략한다 (진찰 지표 제외).
   const summaryLine = clinicClosed
     ? `출석 ${attendedCount}/${scheduledCount} · 휴진일(진찰 없음)`
@@ -54,7 +54,7 @@ export function composeNoonReportMessage(
 
   if (absentPatients.length > 0) {
     lines.push('');
-    lines.push(`❌ 미출석 (${absentPatients.length}명)`);
+    lines.push(`❌ 미내원 (${absentPatients.length}명)`);
     lines.push(absentPatients.map(formatPatientLabel).join(', '));
   }
 
