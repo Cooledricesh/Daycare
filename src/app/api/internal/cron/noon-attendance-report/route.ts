@@ -20,6 +20,8 @@ function formatKstDateLabel(kstDate: Date): string {
   return format(kstDate, 'M월 d일 (E)', { locale: ko });
 }
 
+const REPORT_START_HOUR_KST = 16;
+
 function getKstDaySlackRange(date: string): { oldest: string; latest: string } {
   const start = new Date(`${date}T00:00:00+09:00`).getTime() / 1000;
   const now = Date.now() / 1000;
@@ -29,6 +31,10 @@ function getKstDaySlackRange(date: string): { oldest: string; latest: string } {
     oldest: String(start),
     latest: String(Math.min(now, endOfDay)),
   };
+}
+
+function isBeforeReportWindow(kstDate: Date): boolean {
+  return kstDate.getHours() < REPORT_START_HOUR_KST;
 }
 
 /**
@@ -64,6 +70,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const todayStr = getTodayString();
   const nowKst = getNowKST();
+
+  if (isBeforeReportWindow(nowKst)) {
+    return NextResponse.json(
+      {
+        status: 'skipped',
+        reason: 'before_report_window',
+        report_start_hour_kst: REPORT_START_HOUR_KST,
+      },
+      { status: 200 },
+    );
+  }
 
   // 주말 스킵
   if (isWeekend(todayStr)) {
