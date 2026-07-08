@@ -62,7 +62,6 @@ export interface SlackConsultationIngestResult {
 }
 
 const PATIENT_ENTRY_RE = /^\s*(?:[-•]\s*)?([가-힣]{2,4}[A-Z]?)\s*[:：]\s*(.*)$/;
-const SLACK_SOURCE_PREFIX = '[Slack 진찰 기록]';
 const PARK_SEUNGHYUN_DIRECT_APP_RECORD_WEEKDAYS = new Set([1, 2, 3]);
 
 const DOCTOR_ALIAS: Record<string, string> = {
@@ -232,18 +231,8 @@ function resolvePatient(
   return { patient: null, ambiguous: true };
 }
 
-function buildSlackNote(entry: ParsedSlackConsultationEntry, date: string): string {
-  const sourceBits = [
-    SLACK_SOURCE_PREFIX,
-    date,
-    entry.sourceTitle ? `제목=${entry.sourceTitle}` : null,
-    entry.doctorName ? `의사=${entry.doctorName}` : null,
-    `ts=${entry.messageTs}`,
-    entry.threadTs ? `thread=${entry.threadTs}` : null,
-    entry.sourceUser ? `작성자=${entry.sourceUser}` : null,
-  ].filter(Boolean);
-
-  return `${sourceBits.join(' · ')}\n${entry.note.trim()}`;
+function buildSlackNote(entry: ParsedSlackConsultationEntry): string {
+  return entry.note.trim();
 }
 
 function appendNote(existingNote: string | null, addition: string): string {
@@ -328,7 +317,7 @@ export async function ingestSlackConsultations(
       entry,
       patient: resolved.patient,
       doctorId: parsedDoctorId,
-      note: buildSlackNote(entry, params.date),
+      note: buildSlackNote(entry),
     });
   }
 
@@ -406,7 +395,7 @@ export async function ingestSlackConsultations(
   for (const item of groupedMatched) {
     const existing = existingConsultationByPatient.get(item.patient.id);
     const unsyncedNotes = item.notes.filter(
-      ({ entry }) => !(existing?.note || '').includes(`ts=${entry.messageTs}`),
+      ({ note }) => !(existing?.note || '').includes(note.trim()),
     );
 
     if (unsyncedNotes.length === 0) {
