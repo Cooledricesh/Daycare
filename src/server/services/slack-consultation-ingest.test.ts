@@ -44,6 +44,51 @@ describe('parseSlackConsultationMessages', () => {
 
     expect(entries).toHaveLength(0);
   });
+
+  it('월화수 박승현 진찰 기록은 앱 직접 기록 중복 방지를 위해 무시한다', () => {
+    const entries = parseSlackConsultationMessages(
+      [
+        {
+          ts: '444.555',
+          text: `7/7(화) 박승현 부원장님 진찰 약 변경\n김무애: 손이 많이 떨린다. 인데놀 추가 희망.`,
+        },
+      ],
+      doctors,
+      { date: '2026-07-07' },
+    );
+
+    expect(entries).toHaveLength(0);
+  });
+
+  it('목금 박승현 진찰 기록은 기존처럼 파싱한다', () => {
+    const entries = parseSlackConsultationMessages(
+      [
+        {
+          ts: '555.666',
+          text: `7/9(목) 박승현 부원장님 진찰 약 변경\n김무애: 목요일 진찰 기록`,
+        },
+      ],
+      doctors,
+      { date: '2026-07-09' },
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ patientName: '김무애', doctorName: '박승현' });
+  });
+
+  it('환자 note 전체를 감싼 따옴표는 제거한다', () => {
+    const entries = parseSlackConsultationMessages([
+      {
+        ts: '666.777',
+        text: `7/7(화) 박명현 부원장님 진찰 약 변경\n김무애: '최근 계속 약 변경하였으나 깊게 못 잔다.\n-> (자기전) 큐로켈 25 -> 트라조돈 50MG 변경, 조스 2->3MG 증량됨. (7/10~)'`,
+      },
+    ], doctors);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].note).toBe(
+      '최근 계속 약 변경하였으나 깊게 못 잔다.\n-> (자기전) 큐로켈 25 -> 트라조돈 50MG 변경, 조스 2->3MG 증량됨. (7/10~)',
+    );
+  });
 });
 
 describe('inferDoctorName', () => {

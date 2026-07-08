@@ -43,6 +43,10 @@ export interface ParsedSlackConsultationEntry {
   sourceTitle: string | null;
 }
 
+interface SlackConsultationParseOptions {
+  date?: string;
+}
+
 export interface SlackConsultationIngestResult {
   parsedEntries: number;
   matchedEntries: number;
@@ -59,6 +63,7 @@ export interface SlackConsultationIngestResult {
 
 const PATIENT_ENTRY_RE = /^\s*(?:[-•]\s*)?([가-힣]{2,4}[A-Z]?)\s*[:：]\s*(.*)$/;
 const SLACK_SOURCE_PREFIX = '[Slack 진찰 기록]';
+const PARK_SEUNGHYUN_DIRECT_APP_RECORD_WEEKDAYS = new Set([1, 2, 3]);
 
 const DOCTOR_ALIAS: Record<string, string> = {
   원장님: '박상운',
@@ -85,6 +90,39 @@ function normalizeSlackText(text: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&amp;/g, '&')
     .replace(/\r\n/g, '\n');
+}
+
+function getCalendarWeekday(date: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).getUTCDay();
+}
+
+function shouldSkipSlackDoctorRecord(doctorName: string | null, date?: string): boolean {
+  if (doctorName !== '박승현' || !date) return false;
+
+  const weekday = getCalendarWeekday(date);
+  if (weekday === null) return false;
+
+  return PARK_SEUNGHYUN_DIRECT_APP_RECORD_WEEKDAYS.has(weekday);
+}
+
+function stripWrappingQuote(value: string): string {
+  const trimmed = value.trim();
+  const quotePairs: Array<[string, string]> = [
+    ["'", "'"],
+    ['"', '"'],
+    ['“', '”'],
+    ['‘', '’'],
+  ];
+
+  const pair = quotePairs.find(([open, close]) => trimmed.startsWith(open) && trimmed.endsWith(close));
+  if (!pair || trimmed.length < 2) return trimmed;
+
+  const [open, close] = pair;
+  return trimmed.slice(open.length, trimmed.length - close.length).trim();
 }
 
 function titleFromMessage(text: string): string | null {
@@ -114,6 +152,7 @@ export function inferDoctorName(text: string, doctorNames: string[]): string | n
 export function parseSlackConsultationMessages(
   messages: SlackConsultationMessage[],
   doctorNames: string[],
+  options: SlackConsultationParseOptions = {},
 ): ParsedSlackConsultationEntry[] {
   const entries: ParsedSlackConsultationEntry[] = [];
 
@@ -122,13 +161,15 @@ export function parseSlackConsultationMessages(
     if (!text.includes('진찰')) continue;
 
     const doctorName = inferDoctorName(text, doctorNames);
+    if (shouldSkipSlackDoctorRecord(doctorName, options.date)) continue;
+
     const sourceTitle = titleFromMessage(text);
     const lines = text.split('\n');
     let current: ParsedSlackConsultationEntry | null = null;
 
     const flush = () => {
       if (!current) return;
-      const note = current.note.trim();
+      const note = stripWrappingQuote(current.note);
       if (note.length === 0) return;
       entries.push({ ...current, note });
     };
@@ -245,7 +286,7 @@ export async function ingestSlackConsultations(
   const doctorRows = (doctors || []) as DoctorRow[];
   const doctorNames = doctorRows.map((doctor) => doctor.name);
   const doctorIdByName = new Map(doctorRows.map((doctor) => [doctor.name, doctor.id]));
-  const entries = parseSlackConsultationMessages(params.messages, doctorNames);
+  const entries = parseSlackConsultationMessages(params.messages, doctorNames, { date: params.date });
   const result = makeEmptyResult(entries.length);
 
   if (entries.length === 0) return result;
