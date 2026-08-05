@@ -27,9 +27,18 @@ apiClient.interceptors.response.use(
       !isRedirectingToLogin
     ) {
       isRedirectingToLogin = true;
-      void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
-        window.location.assign("/login");
-      });
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 2_000);
+
+      void fetch("/api/auth/logout", {
+        method: "POST",
+        signal: controller.signal,
+      })
+        .catch(() => undefined)
+        .finally(() => {
+          window.clearTimeout(timeoutId);
+          window.location.assign("/login");
+        });
     }
     return Promise.reject(error);
   },
