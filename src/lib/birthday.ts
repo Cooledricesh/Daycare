@@ -58,6 +58,31 @@ export function isBirthdayToday(
   return false;
 }
 
+export function isBirthdayOnDate(
+  birthDate: string | null,
+  dateString: string,
+): boolean {
+  if (!birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
+
+  const parsed = parseISO(birthDate);
+  if (!isValid(parsed)) return false;
+
+  const year = Number(dateString.slice(0, 4));
+  const month = Number(dateString.slice(5, 7));
+  const day = Number(dateString.slice(8, 10));
+  const birthMonth = parsed.getMonth() + 1;
+  const birthDay = parsed.getDate();
+
+  if (birthMonth === month && birthDay === day) return true;
+
+  if (birthMonth === 2 && birthDay === 29) {
+    const isLeap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    if (!isLeap && month === 2 && day === 28) return true;
+  }
+
+  return false;
+}
+
 export function daysUntilNextBirthday(
   birthDate: string | null,
   today: Date = new Date(),

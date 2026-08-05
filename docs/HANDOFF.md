@@ -2,7 +2,7 @@
 
 > **목적**: 시간이 지난 뒤 새 세션에서 작업을 시작할 때, 이 문서 하나로 레포 전체 맥락을 복원한다.
 > **유지 규칙**: 구조 변경·큰 기능 추가·운영 절차 변경이 있는 작업을 끝낼 때마다 이 문서를 갱신한다.
-> 최종 갱신: 2026-07-02
+> 최종 갱신: 2026-08-05
 
 ## 1. 이 프로젝트가 뭔가
 
@@ -47,7 +47,7 @@ src/features/[feature]/hooks/      → React Query 훅 + query-keys.ts
 src/features/shared/               → 직역 공통 (스트릭, 캘린더, StreakBadge 등)
 ```
 
-- 인증: 커스텀 JWT (Supabase Auth 아님). `/api/shared/*`는 4개 직역 모두 접근 가능
+- 인증: 커스텀 JWT (Supabase Auth 아님). `/api/shared/*`는 4개 직역 모두 접근 가능. 세션은 24시간이며, 만료 6시간 이내의 정상 API 활동 시 현재 `staff.is_active`와 역할을 재검증한 뒤 연장한다. 최초 로그인 후 절대 7일에는 다시 로그인해야 한다. 만료된 API 요청은 공통 401 처리로 쿠키를 지우고 로그인 화면으로 이동한다.
 - 프론트는 전부 Client Component + React Query. 서버 상태는 React Query로만
 
 ## 4. 성능 관련 불변식 (2026-06-10 리팩토링 결과 — 깨뜨리지 말 것)
@@ -62,6 +62,7 @@ src/features/shared/               → 직역 공통 (스트릭, 캘린더, Stre
 6. **API 소요시간은 `[timing]` 로그로 측정** (`src/server/middleware/timing.ts`, 1초↑ warn) — Vercel 함수 로그에서 확인. 성능 의심 시 추측 말고 이 로그부터
 7. 환자 목록 행은 memo된 행 컴포넌트 — 행에 내려주는 props는 원시값/안정 참조 유지 (인라인 객체/함수 넘기면 memo 무력화)
 8. `daily_stats.registered_count`는 배치 재계산 시 기존 값 보존 (스냅샷 패턴)
+9. **"오늘" 판정은 항상 KST 기준** — 서버 런타임의 로컬 시간대에 의존하지 않는다. 오늘 하이라이트는 KST 날짜를 query key에 포함하고 KST 자정 및 창 포커스 복귀 시 재검증한다.
 
 ## 5. 작업 워크플로우 컨벤션
 

@@ -4,6 +4,10 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@/lib/supabase/server";
 import { comparePassword, signJWT } from "@/lib/auth";
 import type { StaffRow } from "@/lib/supabase/helpers";
+import {
+    ACCESS_TOKEN_COOKIE_NAME,
+    AUTH_SESSION_DURATION_SECONDS,
+} from "@/constants/auth-session";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -61,15 +65,16 @@ export async function login(prevState: any, formData: FormData) {
             sub: user.id,
             role: user.role,
             name: user.name,
+            sessionStartedAt: Math.floor(Date.now() / 1000),
         });
 
         // Set Cookie
         const cookieStore = await cookies();
-        cookieStore.set("accessToken", token, {
+        cookieStore.set(ACCESS_TOKEN_COOKIE_NAME, token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
-            maxAge: 60 * 60 * 24, // 1 day
+            maxAge: AUTH_SESSION_DURATION_SECONDS,
             path: "/",
         });
 

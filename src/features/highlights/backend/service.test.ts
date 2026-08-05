@@ -33,6 +33,25 @@ function mockSupabase(tables: Record<string, unknown[]>) {
 describe('computeTodayHighlights', () => {
   const today = new Date('2026-04-11');
 
+  it('KST 오전 9시 전에도 한국 날짜 기준 생일과 응답 날짜를 사용한다', async () => {
+    const kstMorning = new Date('2026-08-04T23:30:00Z'); // KST 8/5 08:30
+    const supabase = mockSupabase({
+      patients: [
+        { id: 'today', name: '오늘생일', birth_date: '1974-08-05', display_name: null, avatar_url: null, room_number: '3101', status: 'active', created_at: '2025-01-01T00:00:00Z' },
+        { id: 'yesterday', name: '어제생일', birth_date: '1974-08-04', display_name: null, avatar_url: null, room_number: '3102', status: 'active', created_at: '2025-01-01T00:00:00Z' },
+      ],
+      attendances: [],
+      scheduled_attendances: [],
+      consultations: [],
+      clinic_closures: [],
+    });
+
+    const result = await computeTodayHighlights(supabase as any, kstMorning);
+
+    expect(result.date).toBe('2026-08-05');
+    expect(result.events.birthdays.map((patient) => patient.id)).toEqual(['today']);
+  });
+
   it('오늘 생일인 환자를 birthdays에 포함', async () => {
     const supabase = mockSupabase({
       patients: [

@@ -7,6 +7,8 @@ const apiClient = axios.create({
   },
 });
 
+let isRedirectingToLogin = false;
+
 // FormData 전송 시 Content-Type 헤더 자동 제거 (axios가 boundary 포함하여 설정)
 apiClient.interceptors.request.use((config) => {
   if (config.data instanceof FormData) {
@@ -14,6 +16,24 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      typeof window !== "undefined" &&
+      error?.response?.status === 401 &&
+      window.location.pathname !== "/login" &&
+      !isRedirectingToLogin
+    ) {
+      isRedirectingToLogin = true;
+      void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+        window.location.assign("/login");
+      });
+    }
+    return Promise.reject(error);
+  },
+);
 
 type ErrorPayload = {
   error?: {

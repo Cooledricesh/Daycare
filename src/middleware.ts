@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyJWT } from "@/lib/token";
+import { ACCESS_TOKEN_COOKIE_NAME } from "@/constants/auth-session";
 
 const PROTECTED_PATHS = ["/dashboard", "/shared"];
 
@@ -14,7 +15,7 @@ const LEGACY_REDIRECTS: Array<{ from: RegExp; to: (match: RegExpExecArray) => st
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
-    const accessToken = request.cookies.get("accessToken")?.value;
+    const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value;
 
     // 1. 레거시 URL을 새 URL로 리다이렉트
     for (const { from, to } of LEGACY_REDIRECTS) {
@@ -39,6 +40,7 @@ export async function middleware(request: NextRequest) {
         if (!payload) {
             return redirectToLogin(request);
         }
+
 
         // Role-based access control (admin can access all pages)
         const role = payload.role as string;

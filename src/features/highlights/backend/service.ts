@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { format, subDays } from 'date-fns';
-import { isBirthdayToday } from '@/lib/birthday';
+import { isBirthdayOnDate } from '@/lib/birthday';
+import { getTodayString, shiftDateString } from '@/lib/date';
 import type { Database } from '@/lib/supabase/types';
 import { fetchAllPaginated } from '@/lib/supabase-pagination';
 import type { HighlightPatient, TodayHighlightsResponse } from './schema';
@@ -34,8 +34,8 @@ export async function computeTodayHighlights(
   supabase: DB,
   now: Date = new Date(),
 ): Promise<TodayHighlightsResponse> {
-  const todayStr = format(now, 'yyyy-MM-dd');
-  const fourteenDaysAgo = format(subDays(now, 14), 'yyyy-MM-dd');
+  const todayStr = getTodayString(now);
+  const fourteenDaysAgo = shiftDateString(todayStr, -14);
 
   const { data: patients, error: patientsError } = await supabase
     .from('patients')
@@ -111,7 +111,7 @@ export async function computeTodayHighlights(
   const birthdays: HighlightPatient[] = [];
   const newlyRegistered: HighlightPatient[] = [];
 
-  const recent3Days = [0, 1, 2].map((offset) => format(subDays(now, offset), 'yyyy-MM-dd'));
+  const recent3Days = [0, 1, 2].map((offset) => shiftDateString(todayStr, -offset));
 
   // 진찰이 KST 12시에 끝나므로 그 이전에는 결석/진찰누락을 단정할 수 없다.
   // 정오 이전엔 해당 카드들을 비워서 false positive를 차단하고, 정오 이후에만 판정한다.
@@ -146,11 +146,11 @@ export async function computeTodayHighlights(
       }
     }
 
-    if (isBirthdayToday(p.birth_date, now)) {
+    if (isBirthdayOnDate(p.birth_date, todayStr)) {
       birthdays.push(toHighlightPatient(p, '생일'));
     }
 
-    if (p.created_at && p.created_at.slice(0, 10) === todayStr) {
+    if (p.created_at && getTodayString(new Date(p.created_at)) === todayStr) {
       newlyRegistered.push(toHighlightPatient(p, '신규 등록'));
     }
   }

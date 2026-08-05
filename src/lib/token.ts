@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { AUTH_SESSION_DURATION_SECONDS } from '@/constants/auth-session';
 
 const alg = 'HS256';
 
@@ -10,11 +11,14 @@ function getSecret(): Uint8Array {
   return new TextEncoder().encode(jwtSecret);
 }
 
-export async function signJWT(payload: any) {
+export async function signJWT(
+    payload: Record<string, unknown>,
+    expiresInSeconds = AUTH_SESSION_DURATION_SECONDS,
+) {
     return new SignJWT(payload)
         .setProtectedHeader({ alg })
         .setIssuedAt()
-        .setExpirationTime('24h')
+        .setExpirationTime(`${expiresInSeconds}s`)
         .sign(getSecret());
 }
 

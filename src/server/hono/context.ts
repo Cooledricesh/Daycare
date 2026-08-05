@@ -18,6 +18,7 @@ export type JWTPayload = {
   sub: string; // user.id
   role: string;
   name: string;
+  sessionStartedAt?: number;
   iat?: number;
   exp?: number;
 };

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   formatBirthDateShort,
   calculateKoreanAge,
+  isBirthdayOnDate,
   isBirthdayToday,
   daysUntilNextBirthday,
 } from './birthday';
@@ -58,6 +59,17 @@ describe('isBirthdayToday', () => {
 
   it('null이면 false', () => {
     expect(isBirthdayToday(null)).toBe(false);
+  });
+});
+
+describe('isBirthdayOnDate', () => {
+  it('실행 환경 시간대와 무관한 날짜 문자열로 생일을 비교한다', () => {
+    expect(isBirthdayOnDate('1974-08-05', '2026-08-05')).toBe(true);
+    expect(isBirthdayOnDate('1974-08-04', '2026-08-05')).toBe(false);
+  });
+
+  it('윤년 2/29 생일은 평년 2/28에 포함한다', () => {
+    expect(isBirthdayOnDate('2000-02-29', '2025-02-28')).toBe(true);
   });
 });
 

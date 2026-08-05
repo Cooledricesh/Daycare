@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll } from 'vitest';
 import { signJWT, verifyJWT, hashPassword, comparePassword } from './auth';
+import {
+  AUTH_SESSION_ABSOLUTE_DURATION_SECONDS,
+  AUTH_SESSION_DURATION_SECONDS,
+  AUTH_SESSION_REFRESH_THRESHOLD_SECONDS,
+  getAuthSessionRefreshDurationSeconds,
+  shouldRefreshAuthSession,
+} from '@/constants/auth-session';
 
 describe('auth', () => {
   describe('signJWT', () => {
@@ -85,6 +92,53 @@ describe('auth', () => {
       // iat, exp 필드가 존재하는지 확인
       expect(verified?.iat).toBeDefined();
       expect(verified?.exp).toBeDefined();
+      expect((verified?.exp ?? 0) - (verified?.iat ?? 0)).toBe(
+        AUTH_SESSION_DURATION_SECONDS,
+      );
+    });
+  });
+
+  describe('shouldRefreshAuthSession', () => {
+    const now = 1_000_000;
+
+    it('만료까지 임계값보다 많이 남으면 갱신하지 않는다', () => {
+      expect(
+        shouldRefreshAuthSession(
+          now + AUTH_SESSION_REFRESH_THRESHOLD_SECONDS + 1,
+          now,
+        ),
+      ).toBe(false);
+    });
+
+    it('유효한 세션이 갱신 임계값 안에 들어오면 갱신한다', () => {
+      expect(
+        shouldRefreshAuthSession(
+          now + AUTH_SESSION_REFRESH_THRESHOLD_SECONDS,
+          now,
+        ),
+      ).toBe(true);
+    });
+
+    it('이미 만료됐거나 만료 정보가 없으면 갱신하지 않는다', () => {
+      expect(shouldRefreshAuthSession(now, now)).toBe(false);
+      expect(shouldRefreshAuthSession(undefined, now)).toBe(false);
+    });
+
+    it('최초 로그인 후 절대 7일이 지나면 갱신하지 않는다', () => {
+      const sessionStartedAt = now - AUTH_SESSION_ABSOLUTE_DURATION_SECONDS;
+      expect(
+        shouldRefreshAuthSession(
+          now + AUTH_SESSION_REFRESH_THRESHOLD_SECONDS,
+          now,
+          sessionStartedAt,
+        ),
+      ).toBe(false);
+    });
+
+    it('마지막 갱신 토큰은 절대 7일 경계를 넘지 않는다', () => {
+      const sixHours = 6 * 60 * 60;
+      const sessionStartedAt = now - AUTH_SESSION_ABSOLUTE_DURATION_SECONDS + sixHours;
+      expect(getAuthSessionRefreshDurationSeconds(sessionStartedAt, now)).toBe(sixHours);
     });
   });
 
