@@ -18,6 +18,7 @@ import { ConsultationHistory } from '@/features/doctor/components/ConsultationHi
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
 import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { PatientInjectionsCard } from '@/features/injections/components/PatientInjectionsCard';
+import { PatientInjectionHistoryCard } from '@/features/injections/components/PatientInjectionHistoryCard';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayString } from '@/lib/date';
 
@@ -195,6 +196,7 @@ export default function NursePatientDetailPage({ params }: PageProps) {
       </Card>
 
       <PatientInjectionsCard patientId={patientId} className="mb-4" />
+      <PatientInjectionHistoryCard patientId={patientId} className="mb-4" />
 
       <AttendanceHeatmap patientId={patientId} className="mb-4" />
       <PatientTimelineStrip patientId={patientId} className="mb-4" />
