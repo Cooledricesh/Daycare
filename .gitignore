@@ -71,6 +71,10 @@ next-env.d.ts
 /.claude/settings.local.json
 /.claude/debug-status/
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Playwright
 playwright-report/
 test-results/
