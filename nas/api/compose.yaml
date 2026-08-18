@@ -1,0 +1,75 @@
+services:
+  postgrest:
+    image: postgrest/postgrest:v14.17@sha256:c9dc201e555f5d8e37e7f39cdd4df0229774996e213bfd7de8d10ac609030f2c
+    container_name: daycare-postgrest
+    network_mode: host
+    env_file:
+      - /volume1/docker/daycare-api/postgrest.env
+    environment:
+      PGRST_SERVER_HOST: 127.0.0.1
+      PGRST_SERVER_PORT: 19288
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: daycare_app
+      PGRST_DB_MAX_ROWS: 1000
+    restart: unless-stopped
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    image: nginx:1.27.5-alpine
+    container_name: daycare-api
+    network_mode: host
+    depends_on:
+      - postgrest
+    volumes:
+      - /volume1/docker/daycare-api/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /volume1/docker/daycare-api/storage:/srv/daycare-storage
+    restart: unless-stopped
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=16m,mode=0755
+      - /var/run:size=1m,mode=0755
+      - /tmp:size=8m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:19287/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  scheduler:
+    image: alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+    container_name: daycare-scheduler
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - scheduler.env
+    volumes:
+      - ./scheduler.crontab:/etc/crontabs/root:ro
+      - ./run-job.sh:/opt/daycare/run-job.sh:ro
+    command: ["crond", "-f", "-l", "5"]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep crond >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

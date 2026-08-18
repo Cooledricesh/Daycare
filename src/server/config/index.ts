@@ -2,8 +2,10 @@ import { z } from 'zod';
 import type { AppConfig } from '@/server/hono/context';
 
 const envSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  DAYCARE_DATA_API_URL: z.string().url(),
+  DAYCARE_DATA_API_KEY: z.string().min(1),
+  DAYCARE_AVATAR_API_URL: z.string().url(),
+  DAYCARE_AVATAR_API_KEY: z.string().min(1),
   CARESCHEDULER_API_URL: z.string().url(),
   CARESCHEDULER_API_KEY: z.string().min(1),
 });
@@ -15,9 +17,16 @@ export const getAppConfig = (): AppConfig => {
     return cachedConfig;
   }
 
+  const dataApiUrl = process.env.DAYCARE_DATA_API_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const dataApiKey = process.env.DAYCARE_DATA_API_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const avatarApiUrl = process.env.DAYCARE_AVATAR_API_URL ?? dataApiUrl;
+  const avatarApiKey = process.env.DAYCARE_AVATAR_API_KEY ?? dataApiKey;
+
   const parsed = envSchema.safeParse({
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    DAYCARE_DATA_API_URL: dataApiUrl,
+    DAYCARE_DATA_API_KEY: dataApiKey,
+    DAYCARE_AVATAR_API_URL: avatarApiUrl,
+    DAYCARE_AVATAR_API_KEY: avatarApiKey,
     CARESCHEDULER_API_URL: process.env.CARESCHEDULER_API_URL,
     CARESCHEDULER_API_KEY: process.env.CARESCHEDULER_API_KEY,
   });
@@ -31,8 +40,12 @@ export const getAppConfig = (): AppConfig => {
 
   cachedConfig = {
     supabase: {
-      url: parsed.data.NEXT_PUBLIC_SUPABASE_URL,
-      serviceRoleKey: parsed.data.SUPABASE_SERVICE_ROLE_KEY,
+      url: parsed.data.DAYCARE_DATA_API_URL,
+      serviceRoleKey: parsed.data.DAYCARE_DATA_API_KEY,
+    },
+    avatarStorage: {
+      url: parsed.data.DAYCARE_AVATAR_API_URL,
+      apiKey: parsed.data.DAYCARE_AVATAR_API_KEY,
     },
     carescheduler: {
       apiUrl: parsed.data.CARESCHEDULER_API_URL,

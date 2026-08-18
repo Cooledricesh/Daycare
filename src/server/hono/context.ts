@@ -8,6 +8,10 @@ export type AppConfig = {
     url: string;
     serviceRoleKey: string;
   };
+  avatarStorage: {
+    url: string;
+    apiKey: string;
+  };
   carescheduler: {
     apiUrl: string;
     apiKey: string;

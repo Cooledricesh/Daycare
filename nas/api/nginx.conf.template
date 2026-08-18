@@ -1,0 +1,67 @@
+worker_processes 1;
+events { worker_connections 512; }
+http {
+  map_hash_bucket_size 128;
+  access_log /dev/stdout;
+  error_log /dev/stderr warn;
+  client_max_body_size 3m;
+
+  map $http_apikey $daycare_api_ok {
+    default 0;
+    "__DAYCARE_API_KEY__" 1;
+  }
+
+  map $http_origin $server_origin_ok {
+    "" 1;
+    default 0;
+  }
+
+  map "$request_method:$http_apikey" $avatar_write_ok {
+    default 0;
+    "PUT:__DAYCARE_API_KEY__" 1;
+    "DELETE:__DAYCARE_API_KEY__" 1;
+  }
+
+  server {
+    listen 127.0.0.1:19287;
+
+    location = /_db_health {
+      internal;
+      proxy_set_header Authorization "";
+      proxy_set_header apikey "";
+      proxy_pass http://127.0.0.1:19288/patients?select=id&limit=0;
+    }
+
+    location = /health {
+      auth_request /_db_health;
+      default_type application/json;
+      return 200 '{"ok":true}';
+    }
+
+    location /rest/v1/ {
+      if ($server_origin_ok = 0) { return 403; }
+      if ($daycare_api_ok = 0) { return 401; }
+      proxy_set_header Authorization "";
+      proxy_set_header apikey "";
+      proxy_set_header Host $host;
+      proxy_pass http://127.0.0.1:19288/;
+      proxy_read_timeout 120s;
+    }
+
+    location /storage/v1/object/public/patient-avatars/ {
+      alias /srv/daycare-storage/patient-avatars/;
+      limit_except GET { deny all; }
+      add_header Cache-Control "public, max-age=300" always;
+      try_files $uri =404;
+    }
+
+    location /storage/v1/object/patient-avatars/ {
+      if ($server_origin_ok = 0) { return 403; }
+      if ($avatar_write_ok = 0) { return 401; }
+      alias /srv/daycare-storage/patient-avatars/;
+      dav_methods PUT DELETE;
+      create_full_put_path on;
+      dav_access user:rw group:rw all:r;
+    }
+  }
+}

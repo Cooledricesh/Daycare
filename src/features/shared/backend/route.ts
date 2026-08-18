@@ -135,6 +135,7 @@ sharedRoutes.patch('/patients/:id/birth-date', async (c) => {
  */
 sharedRoutes.post('/patients/:id/avatar', async (c) => {
   const supabase = c.get('supabase');
+  const { avatarStorage } = c.get('config');
   const patientId = c.req.param('id');
 
   const formData = await c.req.formData();
@@ -145,7 +146,7 @@ sharedRoutes.post('/patients/:id/avatar', async (c) => {
   }
 
   try {
-    const result = await uploadPatientAvatar(supabase, patientId, file);
+    const result = await uploadPatientAvatar(supabase, avatarStorage, patientId, file);
     const cacheBustUrl = `${result.avatarUrl}?t=${Date.now()}`;
     return respond(c, success({ avatar_url: cacheBustUrl }, 200));
   } catch (err) {
@@ -163,10 +164,11 @@ sharedRoutes.post('/patients/:id/avatar', async (c) => {
  */
 sharedRoutes.delete('/patients/:id/avatar', async (c) => {
   const supabase = c.get('supabase');
+  const { avatarStorage } = c.get('config');
   const patientId = c.req.param('id');
 
   try {
-    await deletePatientAvatar(supabase, patientId);
+    await deletePatientAvatar(supabase, avatarStorage, patientId);
     return respond(c, success(null, 200));
   } catch (err) {
     if (err instanceof AvatarError) {

@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AvatarError, AVATAR_ERROR_CODES } from './error';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
+import type { AvatarStorageConfig } from './service';
 
 vi.mock('sharp', () => ({
   default: vi.fn(() => ({
@@ -13,10 +14,14 @@ vi.mock('sharp', () => ({
 
 const { uploadPatientAvatar, deletePatientAvatar } = await import('./service');
 
+const storage: AvatarStorageConfig = {
+  url: 'https://daycare-api.example.com',
+  apiKey: 'test-api-key',
+};
+
 function createMockFile(options: { type?: string; size?: number } = {}): File {
   const { type = 'image/jpeg', size = 1024 } = options;
   const buffer = Buffer.alloc(size);
-  // Node.js 테스트 환경에서 File.arrayBuffer()가 동작하지 않으므로 수동으로 주입
   const file = new File([buffer], 'test.jpg', { type });
   Object.defineProperty(file, 'arrayBuffer', {
     value: vi.fn().mockResolvedValue(buffer.buffer),
@@ -24,111 +29,95 @@ function createMockFile(options: { type?: string; size?: number } = {}): File {
   return file;
 }
 
-interface StorageMock {
-  upload: ReturnType<typeof vi.fn>;
-  getPublicUrl: ReturnType<typeof vi.fn>;
-  remove: ReturnType<typeof vi.fn>;
-}
-
 interface SupabaseMock {
   supabase: SupabaseClient<Database>;
-  storageMock: StorageMock;
   mockEq: ReturnType<typeof vi.fn>;
   mockUpdate: ReturnType<typeof vi.fn>;
 }
 
-function createMockSupabaseWithStorage(): SupabaseMock {
-  const mockEq = vi.fn();
-  const mockUpdate = vi.fn();
-
-  const storageMock: StorageMock = {
-    upload: vi.fn().mockResolvedValue({ error: null }),
-    getPublicUrl: vi.fn().mockReturnValue({
-      data: { publicUrl: 'https://example.com/patient-avatars/test-id.webp' },
-    }),
-    remove: vi.fn().mockResolvedValue({ error: null }),
-  };
-
-  const storageFromMock = vi.fn(() => storageMock);
-
-  // DB 체인: .from().update().eq() → { error }
-  mockEq.mockResolvedValue({ error: null });
-  mockUpdate.mockReturnValue({ eq: mockEq });
-
-  const fromMock = vi.fn(() => ({ update: mockUpdate }));
-
+function createMockSupabase(): SupabaseMock {
+  const mockEq = vi.fn().mockResolvedValue({ error: null });
+  const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq });
   const supabase = {
-    from: fromMock,
-    storage: { from: storageFromMock },
+    from: vi.fn(() => ({ update: mockUpdate })),
   } as unknown as SupabaseClient<Database>;
+  return { supabase, mockEq, mockUpdate };
+}
 
-  return { supabase, storageMock, mockEq, mockUpdate };
+function mockFetch(status = 201): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: status >= 200 && status < 300, status });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 describe('shared/uploadPatientAvatar', () => {
   let mock: SupabaseMock;
 
   beforeEach(() => {
-    mock = createMockSupabaseWithStorage();
+    mock = createMockSupabase();
+    mockFetch();
   });
 
-  it('유효한 파일이면 리사이즈 후 업로드하고 avatarUrl을 반환한다', async () => {
-    const file = createMockFile({ type: 'image/jpeg', size: 1024 });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
-    const result = await uploadPatientAvatar(mock.supabase, 'test-id', file);
+  it('유효한 파일이면 NAS gateway에 리사이즈 결과를 업로드하고 공개 URL을 저장한다', async () => {
+    const result = await uploadPatientAvatar(mock.supabase, storage, 'test-id', createMockFile());
 
     expect(result.avatarUrl).toBe(
-      'https://example.com/patient-avatars/test-id.webp',
+      'https://daycare-api.example.com/storage/v1/object/public/patient-avatars/test-id.webp',
     );
-    expect(mock.storageMock.upload).toHaveBeenCalledWith(
-      'test-id.webp',
-      expect.any(Buffer),
-      { contentType: 'image/webp', upsert: true },
+    expect(fetch).toHaveBeenCalledWith(
+      'https://daycare-api.example.com/storage/v1/object/patient-avatars/test-id.webp',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ apikey: 'test-api-key', 'Content-Type': 'image/webp' }),
+      }),
     );
     expect(mock.mockUpdate).toHaveBeenCalledWith({ avatar_url: result.avatarUrl });
   });
 
   it('허용되지 않는 파일 형식이면 INVALID_FILE_TYPE 에러', async () => {
-    const file = createMockFile({ type: 'image/gif' });
-
-    await expect(uploadPatientAvatar(mock.supabase, 'test-id', file)).rejects.toSatisfy(
-      (err: unknown) =>
-        err instanceof AvatarError &&
-        err.code === AVATAR_ERROR_CODES.INVALID_FILE_TYPE,
+    await expect(
+      uploadPatientAvatar(mock.supabase, storage, 'test-id', createMockFile({ type: 'image/gif' })),
+    ).rejects.toSatisfy(
+      (err: unknown) => err instanceof AvatarError && err.code === AVATAR_ERROR_CODES.INVALID_FILE_TYPE,
     );
   });
 
   it('파일 크기가 2MB를 초과하면 FILE_TOO_LARGE 에러', async () => {
-    const file = createMockFile({ type: 'image/jpeg', size: 3 * 1024 * 1024 });
-
-    await expect(uploadPatientAvatar(mock.supabase, 'test-id', file)).rejects.toSatisfy(
-      (err: unknown) =>
-        err instanceof AvatarError &&
-        err.code === AVATAR_ERROR_CODES.FILE_TOO_LARGE,
+    await expect(
+      uploadPatientAvatar(
+        mock.supabase,
+        storage,
+        'test-id',
+        createMockFile({ type: 'image/jpeg', size: 3 * 1024 * 1024 }),
+      ),
+    ).rejects.toSatisfy(
+      (err: unknown) => err instanceof AvatarError && err.code === AVATAR_ERROR_CODES.FILE_TOO_LARGE,
     );
   });
 
   it('Storage 업로드 실패 시 UPLOAD_FAILED 에러', async () => {
-    mock.storageMock.upload.mockResolvedValueOnce({
-      error: { message: 'bucket not found' },
-    });
-    const file = createMockFile();
-
-    await expect(uploadPatientAvatar(mock.supabase, 'test-id', file)).rejects.toSatisfy(
-      (err: unknown) =>
-        err instanceof AvatarError &&
-        err.code === AVATAR_ERROR_CODES.UPLOAD_FAILED,
+    mockFetch(500);
+    await expect(
+      uploadPatientAvatar(mock.supabase, storage, 'test-id', createMockFile()),
+    ).rejects.toSatisfy(
+      (err: unknown) => err instanceof AvatarError && err.code === AVATAR_ERROR_CODES.UPLOAD_FAILED,
     );
   });
 
-  it('DB 업데이트 실패 시 DB_UPDATE_FAILED 에러', async () => {
+  it('DB 업데이트 실패 시 업로드 파일을 정리하고 DB_UPDATE_FAILED 에러', async () => {
     mock.mockEq.mockResolvedValueOnce({ error: { message: 'db error' } });
-    const file = createMockFile();
-
-    await expect(uploadPatientAvatar(mock.supabase, 'test-id', file)).rejects.toSatisfy(
-      (err: unknown) =>
-        err instanceof AvatarError &&
-        err.code === AVATAR_ERROR_CODES.DB_UPDATE_FAILED,
+    await expect(
+      uploadPatientAvatar(mock.supabase, storage, 'test-id', createMockFile()),
+    ).rejects.toSatisfy(
+      (err: unknown) => err instanceof AvatarError && err.code === AVATAR_ERROR_CODES.DB_UPDATE_FAILED,
+    );
+    expect(fetch).toHaveBeenLastCalledWith(
+      'https://daycare-api.example.com/storage/v1/object/patient-avatars/test-id.webp',
+      expect.objectContaining({ method: 'DELETE' }),
     );
   });
 });
@@ -137,32 +126,33 @@ describe('shared/deletePatientAvatar', () => {
   let mock: SupabaseMock;
 
   beforeEach(() => {
-    mock = createMockSupabaseWithStorage();
+    mock = createMockSupabase();
+    mockFetch(204);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('Storage 삭제 후 DB avatar_url을 null로 업데이트한다', async () => {
-    await deletePatientAvatar(mock.supabase, 'test-id');
-
-    expect(mock.storageMock.remove).toHaveBeenCalledWith(['test-id.webp']);
+    await deletePatientAvatar(mock.supabase, storage, 'test-id');
+    expect(fetch).toHaveBeenCalledWith(
+      'https://daycare-api.example.com/storage/v1/object/patient-avatars/test-id.webp',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
     expect(mock.mockUpdate).toHaveBeenCalledWith({ avatar_url: null });
   });
 
-  it('Storage 파일이 없어도 에러 없이 DB를 null로 업데이트한다', async () => {
-    mock.storageMock.remove.mockResolvedValueOnce({
-      error: { message: 'Object not found' },
-    });
-
-    await expect(deletePatientAvatar(mock.supabase, 'test-id')).resolves.toBeUndefined();
+  it('Storage 파일이 없어도 DB를 null로 업데이트한다', async () => {
+    mockFetch(404);
+    await expect(deletePatientAvatar(mock.supabase, storage, 'test-id')).resolves.toBeUndefined();
     expect(mock.mockUpdate).toHaveBeenCalledWith({ avatar_url: null });
   });
 
   it('DB 업데이트 실패 시 DB_UPDATE_FAILED 에러', async () => {
     mock.mockEq.mockResolvedValueOnce({ error: { message: 'db error' } });
-
-    await expect(deletePatientAvatar(mock.supabase, 'test-id')).rejects.toSatisfy(
-      (err: unknown) =>
-        err instanceof AvatarError &&
-        err.code === AVATAR_ERROR_CODES.DB_UPDATE_FAILED,
+    await expect(deletePatientAvatar(mock.supabase, storage, 'test-id')).rejects.toSatisfy(
+      (err: unknown) => err instanceof AvatarError && err.code === AVATAR_ERROR_CODES.DB_UPDATE_FAILED,
     );
   });
 });

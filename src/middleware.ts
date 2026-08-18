@@ -3,6 +3,7 @@ import { verifyJWT } from "@/lib/token";
 import { ACCESS_TOKEN_COOKIE_NAME } from "@/constants/auth-session";
 
 const PROTECTED_PATHS = ["/dashboard", "/shared"];
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 // 구 URL → 신 URL 레거시 리다이렉트 (북마크 보호용)
 const LEGACY_REDIRECTS: Array<{ from: RegExp; to: (match: RegExpExecArray) => string }> = [
@@ -16,6 +17,17 @@ const LEGACY_REDIRECTS: Array<{ from: RegExp; to: (match: RegExpExecArray) => st
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value;
+
+    if (
+        process.env.DAYCARE_WRITE_PAUSED === "true" &&
+        pathname.startsWith("/api/") &&
+        WRITE_METHODS.has(request.method)
+    ) {
+        return NextResponse.json(
+            { error: "데이터 이전 작업 중입니다. 잠시 후 다시 시도해주세요." },
+            { status: 503, headers: { "Retry-After": "300" } }
+        );
+    }
 
     // 1. 레거시 URL을 새 URL로 리다이렉트
     for (const { from, to } of LEGACY_REDIRECTS) {

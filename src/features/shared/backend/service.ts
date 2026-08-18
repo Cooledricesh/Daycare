@@ -11,12 +11,62 @@ import {
 } from '../constants/avatar';
 import { AvatarError } from './error';
 
+export type AvatarStorageConfig = {
+  url: string;
+  apiKey: string;
+};
+
 function isAllowedMimeType(type: string): type is AvatarAllowedMimeType {
   return (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(type);
 }
 
+function avatarObjectPath(patientId: string): string {
+  return `${encodeURIComponent(patientId)}.webp`;
+}
+
+function avatarWriteUrl(storage: AvatarStorageConfig, patientId: string): string {
+  return `${storage.url.replace(/\/$/u, '')}/storage/v1/object/${AVATAR_BUCKET}/${avatarObjectPath(patientId)}`;
+}
+
+function avatarPublicUrl(storage: AvatarStorageConfig, patientId: string): string {
+  return `${storage.url.replace(/\/$/u, '')}/storage/v1/object/public/${AVATAR_BUCKET}/${avatarObjectPath(patientId)}`;
+}
+
+async function putAvatar(
+  storage: AvatarStorageConfig,
+  patientId: string,
+  body: Buffer,
+): Promise<void> {
+  const response = await fetch(avatarWriteUrl(storage, patientId), {
+    method: 'PUT',
+    headers: {
+      apikey: storage.apiKey,
+      'Content-Type': 'image/webp',
+      'User-Agent': 'daycare-vercel/1.0',
+    },
+    body: new Uint8Array(body),
+  });
+  if (!response.ok) {
+    throw new AvatarError('UPLOAD_FAILED', `Storage 업로드 실패: HTTP ${response.status}`);
+  }
+}
+
+async function removeAvatar(storage: AvatarStorageConfig, patientId: string): Promise<void> {
+  const response = await fetch(avatarWriteUrl(storage, patientId), {
+    method: 'DELETE',
+    headers: {
+      apikey: storage.apiKey,
+      'User-Agent': 'daycare-vercel/1.0',
+    },
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new AvatarError('UPLOAD_FAILED', `Storage 삭제 실패: HTTP ${response.status}`);
+  }
+}
+
 export async function uploadPatientAvatar(
   supabase: SupabaseClient<Database>,
+  storage: AvatarStorageConfig,
   patientId: string,
   file: File,
 ): Promise<{ avatarUrl: string }> {
@@ -34,24 +84,8 @@ export async function uploadPatientAvatar(
     .webp({ quality: AVATAR_QUALITY })
     .toBuffer();
 
-  const filePath = `${patientId}.webp`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(AVATAR_BUCKET)
-    .upload(filePath, resizedBuffer, {
-      contentType: 'image/webp',
-      upsert: true,
-    });
-
-  if (uploadError) {
-    throw new AvatarError('UPLOAD_FAILED', `Storage 업로드 실패: ${uploadError.message}`);
-  }
-
-  const { data: urlData } = supabase.storage
-    .from(AVATAR_BUCKET)
-    .getPublicUrl(filePath);
-
-  const avatarUrl = urlData.publicUrl;
+  await putAvatar(storage, patientId, resizedBuffer);
+  const avatarUrl = avatarPublicUrl(storage, patientId);
 
   const { error: dbError } = await supabase
     .from('patients')
@@ -59,6 +93,7 @@ export async function uploadPatientAvatar(
     .eq('id', patientId);
 
   if (dbError) {
+    await removeAvatar(storage, patientId).catch(() => undefined);
     throw new AvatarError('DB_UPDATE_FAILED', `DB 업데이트 실패: ${dbError.message}`);
   }
 
@@ -67,12 +102,10 @@ export async function uploadPatientAvatar(
 
 export async function deletePatientAvatar(
   supabase: SupabaseClient<Database>,
+  storage: AvatarStorageConfig,
   patientId: string,
 ): Promise<void> {
-  const filePath = `${patientId}.webp`;
-
-  // Storage 삭제 시도 — 파일이 없어도 에러 무시
-  await supabase.storage.from(AVATAR_BUCKET).remove([filePath]);
+  await removeAvatar(storage, patientId);
 
   const { error: dbError } = await supabase
     .from('patients')
@@ -83,4 +116,3 @@ export async function deletePatientAvatar(
     throw new AvatarError('DB_UPDATE_FAILED', `DB 업데이트 실패: ${dbError.message}`);
   }
 }
-

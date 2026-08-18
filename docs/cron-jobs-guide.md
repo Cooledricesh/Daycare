@@ -2,24 +2,24 @@
 
 > **목적**: 새로운 정기 슬랙 알림(또는 배치 작업)을 추가하는 표준 절차.
 > 새 알림을 만들 때 이 문서의 레시피를 그대로 따르면 환경변수를 건드릴 필요가 없다.
-> 최종 갱신: 2026-06-19
+> 최종 갱신: 2026-08-18
 
 ## 0. 전체 그림 (현재 구조)
 
 ```
-Supabase pg_cron (스케줄러)
-  └─ pg_net.http_post ──Bearer CRON_SECRET──▶ Vercel 앱
-                                               /api/internal/cron/<이름>
-                                                 ├─ CRON_SECRET 인증
-                                                 ├─ Supabase에서 데이터 조회
-                                                 ├─ compose 순수함수로 메시지 조립
-                                                 └─ postSlackMessage(botToken, 채널, text)
-                                                      └─▶ Slack (@alimi 봇) → 채널
+NAS daycare-scheduler (crond, UTC)
+  └─ HTTPS POST ──Bearer CRON_SECRET──▶ Vercel 앱
+                                      /api/internal/cron/<이름>
+                                        ├─ CRON_SECRET 인증
+                                        ├─ NAS Daycare API에서 데이터 조회
+                                        ├─ compose 순수함수로 메시지 조립
+                                        └─ postSlackMessage(...) → Slack
 ```
 
-- **스케줄링은 Supabase pg_cron**이 담당한다 (Vercel Hobby 플랜은 크론 2개 제한이라 vercel.json은 월간리포트·공휴일동기화로 이미 꽉 참).
-- **실제 데이터 가공·전송은 Vercel 앱**이 한다. pg_cron은 그냥 HTTP로 엔드포인트를 때릴 뿐.
-- **슬랙 전송은 봇 토큰 1개**(`SLACK_BOT_TOKEN`, 봇 이름 `@alimi`)로 모든 채널에 보낸다. 채널은 코드 상수로 관리.
+- 평일 정오 리포트·생일 리포트 스케줄은 NAS `/volume1/docker/daycare-api/scheduler.crontab`이 담당한다.
+- 월간 리포트·공휴일 동기화 2개는 `vercel.json`의 Vercel Cron을 유지한다.
+- 실제 데이터 가공·전송은 Vercel 앱이 하며 NAS scheduler는 인증된 HTTP POST만 수행한다.
+- 기존 Supabase pg_cron은 이전 `CRON_SECRET`을 보유하므로 401로 차단된다.
 
 ## 1. 이미 존재하는 재사용 부품 (새로 만들지 말 것)
 
@@ -29,7 +29,7 @@ Supabase pg_cron (스케줄러)
 | `SLACK_CHANNELS` | `src/constants/slack-channels.ts` | 채널 상수 (`마루-진찰`은 채널 ID `C0B9LCED676`, `#마루` …) |
 | `getTodayString()` / `getNowKST()` | `src/lib/date.ts` | KST 기준 오늘 날짜 / 현재 시각 Date |
 | `getHolidayDatesMap()`, `isWeekend()` | `src/lib/business-days.ts` | 공휴일/주말 판정 |
-| `createServiceClient()` + `getAppConfig()` | `src/server/supabase/client.ts`, `src/server/config` | service-role Supabase 클라이언트 |
+| `createServiceClient()` + `getAppConfig()` | `src/server/supabase/client.ts`, `src/server/config` | NAS Daycare PostgREST 클라이언트(과거 이름 유지) |
 
 기존 라우트 2개가 복사용 템플릿이다:
 - `src/app/api/internal/cron/noon-attendance-report/route.ts` — 주말/공휴일 스킵 + 출석 데이터 사용
@@ -119,30 +119,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   2. `src/constants/slack-channels.ts`에 상수 한 줄 추가
   3. **환경변수는 건드리지 않는다** — 봇 토큰 하나가 모든 채널 공용
 
-### Step 4. pg_cron 잡 등록
+### Step 4. NAS scheduler 등록
 
-코드를 **푸시·배포한 뒤** Supabase에 잡을 등록한다 (Claude가 Supabase MCP `execute_sql`로 실행. 직접 SQL Editor에 붙여도 됨). project: `hgkhcbdixubimbraigen`.
+코드를 배포한 뒤 `nas/api/scheduler.crontab`에 UTC cron 표현식과 라우트 이름을 추가한다.
 
-```sql
-SELECT cron.schedule(
-  'weekly-absence-report',              -- jobname (동일 이름이면 갱신됨)
-  '0 0 * * 1',                          -- UTC 기준. 예: KST 월요일 09:00
-  $$
-  SELECT net.http_post(
-    url := 'https://dddaycare.vercel.app/api/internal/cron/weekly-absence-report',
-    body := '{}'::jsonb,
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer <CRON_SECRET 실제값>',
-      'Content-Type', 'application/json'
-    ),
-    timeout_milliseconds := 15000
-  )
-  $$
-);
+```cron
+# KST 월요일 09:00 = UTC 월요일 00:00
+0 0 * * 1 /opt/daycare/run-job.sh weekly-absence-report
 ```
 
-- **cron 표현식은 UTC**다. KST에서 9시간을 빼라. (KST 08:30 → UTC 23:30 → `30 23 * * *`, KST 평일 16:00 → UTC 07:00 → `0 7 * * 1-5`)
-- `CRON_SECRET` 실제값은 `.env.local`에 있다 (2026-06-11 rotate된 값). Vercel 환경변수·pg_cron 잡 command 두 곳이 같은 값이어야 한다.
+변경한 `scheduler.crontab`과 `run-job.sh`를 `/volume1/docker/daycare-api/`에 배포한 뒤 `daycare-scheduler` 컨테이너만 재생성한다. `scheduler.env`의 `CRON_SECRET` 값은 Vercel Production과 같아야 하며 Git에 저장하지 않는다.
+
+- cron 표현식은 UTC다. KST에서 9시간을 뺀다.
+- 실제 알림을 보내지 않는 연결 점검은 `run-job.sh health`를 사용한다.
 
 ## 3. 배포 순서 (반드시 지킬 것)
 
@@ -155,32 +144,25 @@ SELECT cron.schedule(
    curl -s -o /dev/null -w "%{http_code}" -X POST https://dddaycare.vercel.app/api/internal/cron/<이름>
    # 404 = 아직 배포 안 됨, 401 = 배포됨(인증 차단 정상)
    ```
-4. **그 다음에** pg_cron 잡 등록 (Step 4)
-5. 수동 1회 발사로 실전 검증:
-   ```bash
-   curl -s -X POST https://dddaycare.vercel.app/api/internal/cron/<이름> \
-     -H "Authorization: Bearer <CRON_SECRET>"
-   # {"status":"sent",...} 확인 + 슬랙 채널에 실제 메시지 도착 확인
-   ```
+4. NAS scheduler 파일을 배포하고 `daycare-scheduler`만 재생성
+5. 무부작용 검증: 컨테이너에서 `/opt/daycare/run-job.sh health` 실행 → `database:reachable` 확인
+6. 실제 알림 라우트의 수동 발사는 사용자가 요청했거나 테스트 채널이 준비된 경우에만 수행
 
-> ⚠️ pg_cron 잡은 코드가 배포된 **뒤에** 등록하거나, 적어도 첫 발사 시각 전까지 배포가 끝나 있어야 한다. 라우트가 없으면 pg_cron은 404를 때리고 조용히 실패한다.
+> ⚠️ 스케줄러는 코드가 배포된 뒤 활성화한다. 라우트가 없거나 `CRON_SECRET`이 다르면 404/401로 실패한다.
 
 ## 4. 운영·점검
 
-```sql
--- 등록된 잡 목록
-SELECT jobid, jobname, schedule, active FROM cron.job ORDER BY jobid;
+```bash
+# 컨테이너와 health
+sudo docker ps --filter name=daycare-scheduler
+sudo docker exec daycare-scheduler /opt/daycare/run-job.sh health
 
--- 최근 실행 이력 (성공/실패, KST 시각)
-SELECT jobid, status, return_message, start_time AT TIME ZONE 'Asia/Seoul' AS start_kst
-FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
-
--- 잡 중지/삭제
-SELECT cron.unschedule('weekly-absence-report');
+# 최근 실행 로그
+sudo docker logs --tail 100 daycare-scheduler
 ```
 
-- `job_run_details.status = 'succeeded'`는 **HTTP 요청을 보냈다**는 뜻이지 슬랙 전송 성공이 아니다. 실제 전송 결과는 Vercel 함수 로그(`[timing]` 등) 또는 슬랙 채널로 확인.
-- 알림이 안 왔을 때 점검 순서: ① `cron.job_run_details`에 실행 기록 있나 → ② 엔드포인트가 404인가(미배포) → ③ 수동 발사 응답 코드(401 인증, 503 토큰없음, 502 슬랙실패, 200 정상) → ④ 봇이 채널에 초대됐나.
+- `health`가 200이면 scheduler → Vercel 인증 → NAS DB 조회까지 정상이다.
+- 알림이 안 왔을 때 점검 순서: ① scheduler 컨테이너 healthy ② cron 표현식과 UTC 시간 ③ `run-job.sh health` ④ Vercel 함수 로그 ⑤ 봇 채널 초대·Slack 응답.
 
 ## 5. 현재 등록된 크론잡
 
@@ -189,7 +171,7 @@ SELECT cron.unschedule('weekly-absence-report');
 | `noon-attendance-report` | `0 7 * * 1-5` | 평일 16:00 | noon-attendance-report | `#마루-진찰` (`C0B9LCED676`) |
 | `birthday-report` | `30 23 * * *` | 매일 08:30 | birthday-report | `#마루` |
 
-월간 리포트(`monthly-report-generate`)·공휴일 동기화(`holidays-sync`)는 **Vercel 크론**(vercel.json)으로 따로 돈다. 월간 리포트는 생성 후 `#마루-진찰`(`C0B9LCED676`)로 요약을 슬랙 통보한다.
+위 두 잡은 NAS `daycare-scheduler`에서 실행한다. 월간 리포트(`monthly-report-generate`)·공휴일 동기화(`holidays-sync`)는 `vercel.json`의 Vercel Cron으로 실행한다.
 
 ## 6. 관련 문서
 
