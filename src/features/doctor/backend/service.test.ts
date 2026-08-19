@@ -11,7 +11,49 @@ vi.mock('@/lib/date', () => ({
   getMonthsAgoString: (m: number) => '2026-03-04',
 }));
 
-const { createConsultation, markMessageRead, getPatientMessages } = await import('./service');
+const { createConsultation, markMessageRead, getPatientMessages, getWaitingPatients } = await import('./service');
+
+describe('doctor/getWaitingPatients', () => {
+  it('당일 상태 조회 URL에 전체 환자 ID 목록을 넣지 않는다', async () => {
+    const rowsByTable: Record<string, unknown[]> = {
+      patients: [{
+        id: 'p-1',
+        name: '테스트 환자',
+        display_name: null,
+        avatar_url: null,
+        gender: 'M',
+        birth_date: null,
+        room_number: '3101',
+        coordinator: null,
+      }],
+      attendances: [{ patient_id: 'p-1', checked_at: '2026-04-04T09:00:00Z' }],
+      consultations: [{ id: 'c-1', patient_id: 'p-1', has_task: false, task_completions: [] }],
+      messages: [],
+      vitals: [],
+      scheduled_attendances: [{ patient_id: 'p-1' }],
+    };
+
+    const from = vi.fn((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        returns: vi.fn(() => chain),
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          Promise.resolve(resolve({ data: rowsByTable[table] ?? [], error: null })),
+      };
+      return chain;
+    });
+
+    const result = await getWaitingPatients(
+      { from } as unknown as Parameters<typeof getWaitingPatients>[0],
+      { date: '2026-04-04' },
+    );
+
+    expect(result[0]?.has_consultation).toBe(true);
+    expect(result[0]?.is_scheduled).toBe(true);
+  });
+});
 
 describe('doctor/createConsultation', () => {
   let mock: MockSupabaseChain;

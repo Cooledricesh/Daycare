@@ -525,39 +525,42 @@ export async function getWaitingPatients(
     return [];
   }
 
-  // 환자 ID 목록
-  const patientIds = patientList.map((p) => p.patient_id);
-
-  // 단계 2: 독립적인 5개 쿼리 병렬 실행 (ensureScheduleGenerated 포함)
+  // 단계 2: 당일 데이터만 조회한다. 전체 환자 UUID를 URL의 in 필터로 보내면
+  // 활성 환자 수가 많을 때 NAS nginx의 요청줄 한도를 넘어 414가 발생한다.
   const [
-    { data: attendances },
-    { data: consultations },
-    { data: unreadMessages },
-    { data: vitals },
+    { data: attendances, error: attendancesError },
+    { data: consultations, error: consultationsError },
+    { data: unreadMessages, error: unreadMessagesError },
+    { data: vitals, error: vitalsError },
   ] = await Promise.all([
     supabase.from('attendances')
       .select('patient_id, checked_at')
       .eq('date', date)
-      .in('patient_id', patientIds)
       .returns<AttendanceResult[]>(),
     supabase.from('consultations')
       .select('id, patient_id, has_task, task_completions(is_completed)')
       .eq('date', date)
-      .in('patient_id', patientIds)
       .returns<ConsultationWithTaskCompletions[]>(),
     supabase.from('messages')
       .select('patient_id')
       .eq('date', date)
       .eq('is_read', false)
-      .in('patient_id', patientIds)
       .returns<MessagePatientId[]>(),
     supabase.from('vitals')
       .select('patient_id, systolic, diastolic, blood_sugar')
       .eq('date', date)
-      .in('patient_id', patientIds)
       .returns<VitalsForPatient[]>(),
     ensureScheduleGenerated(supabase, date),
   ]);
+
+  const statusQueryError =
+    attendancesError ?? consultationsError ?? unreadMessagesError ?? vitalsError;
+  if (statusQueryError) {
+    throw new DoctorError(
+      DoctorErrorCode.INVALID_REQUEST,
+      `대기 환자 상태 조회에 실패했습니다: ${statusQueryError.message}`,
+    );
+  }
 
   // 출석 Map 생성
   const attendanceMap = new Map<string, string>();
@@ -587,13 +590,19 @@ export async function getWaitingPatients(
 
   // 단계 3: ensureScheduleGenerated 완료 후 scheduled_attendances 조회
   // (ensureScheduleGenerated 이후 실행되어야 하므로 별도 단계 유지)
-  const { data: scheduledAttendances } = await supabase
+  const { data: scheduledAttendances, error: scheduledAttendancesError } = await supabase
     .from('scheduled_attendances')
     .select('patient_id')
     .eq('date', date)
     .eq('is_cancelled', false)
-    .in('patient_id', patientIds)
     .returns<ScheduledAttendanceResult[]>();
+
+  if (scheduledAttendancesError) {
+    throw new DoctorError(
+      DoctorErrorCode.INVALID_REQUEST,
+      `예정 출석 조회에 실패했습니다: ${scheduledAttendancesError.message}`,
+    );
+  }
 
   const scheduledSet = new Set<string>(
     (scheduledAttendances || []).map((s) => s.patient_id),
