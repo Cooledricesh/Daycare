@@ -452,10 +452,10 @@ export class PatientSyncService {
         dischargeIds.push(patient.id);
       }
 
-      // 배치 UPDATE: 긴 URL을 피하도록 100명 단위로 처리
+      // 배치 UPDATE: 운영 NAS에서 검증된 안전 범위인 50명 단위로 처리
       if (!options.dryRun && dischargeIds.length > 0) {
-        for (let index = 0; index < dischargeIds.length; index += 100) {
-          const idChunk = dischargeIds.slice(index, index + 100);
+        for (let index = 0; index < dischargeIds.length; index += 50) {
+          const idChunk = dischargeIds.slice(index, index + 50);
           const { error: dischargeError } = await this.supabase
             .from('patients')
             .update({

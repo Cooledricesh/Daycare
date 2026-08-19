@@ -226,10 +226,10 @@ export async function getTasks(
   // 진찰 ID 목록
   const consultationIds = consultations.map((c) => c.id);
 
-  // task_completions 조회 — 긴 consultation_id 필터를 피하도록 100개씩 나눈다.
+  // task_completions 조회 — 운영 NAS에서 검증된 안전 범위인 50개씩 나눈다.
   const completions: TaskCompletionResult[] = [];
-  for (let index = 0; index < consultationIds.length; index += 100) {
-    const idChunk = consultationIds.slice(index, index + 100);
+  for (let index = 0; index < consultationIds.length; index += 50) {
+    const idChunk = consultationIds.slice(index, index + 50);
     const { data: completionChunk, error: completionsError } = await supabase
       .from('task_completions')
       .select('consultation_id, role, is_completed, completed_at')

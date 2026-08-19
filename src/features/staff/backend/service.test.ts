@@ -35,7 +35,7 @@ function makeBatchSupabase(mode: BatchMode, patientIds: string[]) {
       eq: vi.fn(() => chain),
       in: vi.fn((_column: string, ids: string[]) => {
         inSizes.push(ids.length);
-        if (ids.length > 100) throw new Error(`oversized in filter: ${ids.length}`);
+        if (ids.length > 50) throw new Error(`oversized in filter: ${ids.length}`);
         filteredIds = ids;
         return chain;
       }),
@@ -143,7 +143,7 @@ describe('staff 대량 일괄 처리', () => {
     expect(mock.insertedSizes).toContain(283);
   });
 
-  it('전체 선택 출석 취소의 삭제 필터를 100명 이하로 나눈다', async () => {
+  it('전체 선택 출석 취소의 삭제 필터를 50명 이하로 나눈다', async () => {
     const mock = makeBatchSupabase('cancel-attendance', patientIds);
     const result = await batchCancelAttendance(
       mock.supabase as unknown as Parameters<typeof batchCancelAttendance>[0],
@@ -151,7 +151,7 @@ describe('staff 대량 일괄 처리', () => {
     );
 
     expect(result.cancelled).toBe(283);
-    expect(mock.inSizes).toEqual([100, 100, 83]);
+    expect(mock.inSizes).toEqual([50, 50, 50, 50, 50, 33]);
   });
 
   it('전체 선택 진찰 생성에서 긴 in(...) URL을 만들지 않는다', async () => {
@@ -166,7 +166,7 @@ describe('staff 대량 일괄 처리', () => {
     expect(mock.insertedSizes).toContain(283);
   });
 
-  it('전체 선택 진찰 취소의 삭제 필터를 100명 이하로 나눈다', async () => {
+  it('전체 선택 진찰 취소의 삭제 필터를 50명 이하로 나눈다', async () => {
     const mock = makeBatchSupabase('cancel-consultation', patientIds);
     const result = await batchCancelConsultation(
       mock.supabase as unknown as Parameters<typeof batchCancelConsultation>[0],
@@ -174,6 +174,6 @@ describe('staff 대량 일괄 처리', () => {
     );
 
     expect(result.cancelled).toBe(283);
-    expect(mock.inSizes).toEqual([100, 100, 83]);
+    expect(mock.inSizes).toEqual([50, 50, 50, 50, 50, 33]);
   });
 });

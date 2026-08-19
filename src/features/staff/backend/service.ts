@@ -79,7 +79,7 @@ interface MessageWithPatient {
   patients: { name: string };
 }
 
-const MAX_PATIENT_IDS_PER_QUERY = 100;
+const MAX_PATIENT_IDS_PER_QUERY = 50;
 
 function chunkPatientIds(patientIds: string[]): string[][] {
   const chunks: string[][] = [];
@@ -732,7 +732,7 @@ export async function batchCancelAttendance(
     return { cancelled: 0, skippedConsulted, clearedCoordinatorConsultations: 0 };
   }
 
-  // 삭제 요청의 URL도 100개 단위로 제한한다.
+  // 삭제 요청의 URL도 운영 NAS에서 검증된 50개 단위로 제한한다.
   const coordToDelete = coordinatorCheckedIds.filter((id) => !doctorConsultedSet.has(id));
   let clearedCoordinatorConsultations = 0;
 

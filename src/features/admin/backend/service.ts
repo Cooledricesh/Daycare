@@ -649,12 +649,22 @@ export async function getSchedulePatterns(
   }
 
   const patientRows = (data ?? []) as PatientWithCoordinatorJoin[];
-  const patientIds = patientRows.map((p) => p.id);
-  const { data: patterns } = await supabase
+  const patientIdSet = new Set(patientRows.map((patient) => patient.id));
+  const { data: allPatterns, error: patternsError } = await supabase
     .from('scheduled_patterns')
     .select('patient_id, day_of_week')
-    .in('patient_id', patientIds)
     .eq('is_active', true);
+
+  if (patternsError) {
+    throw new AdminError(
+      AdminErrorCode.SCHEDULE_PATTERN_UPDATE_FAILED,
+      `스케줄 패턴 상세 조회 실패: ${patternsError.message}`,
+    );
+  }
+
+  const patterns = (allPatterns ?? []).filter((pattern) =>
+    patientIdSet.has(pattern.patient_id),
+  );
 
   const patternMap = new Map<string, number[]>();
   (patterns ?? []).forEach((p) => {
