@@ -452,15 +452,21 @@ export class PatientSyncService {
         dischargeIds.push(patient.id);
       }
 
-      // 배치 UPDATE: 퇴원 대상 전체를 한 번에 처리
+      // 배치 UPDATE: 긴 URL을 피하도록 100명 단위로 처리
       if (!options.dryRun && dischargeIds.length > 0) {
-        await this.supabase
-          .from('patients')
-          .update({
-            status: 'discharged',
-            updated_at: new Date().toISOString(),
-          })
-          .in('id', dischargeIds);
+        for (let index = 0; index < dischargeIds.length; index += 100) {
+          const idChunk = dischargeIds.slice(index, index + 100);
+          const { error: dischargeError } = await this.supabase
+            .from('patients')
+            .update({
+              status: 'discharged',
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', idChunk);
+          if (dischargeError) {
+            throw new Error(`퇴원 처리 실패: ${dischargeError.message}`);
+          }
+        }
       }
 
       // 동기화 로그 업데이트

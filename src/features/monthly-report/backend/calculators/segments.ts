@@ -266,19 +266,22 @@ export async function getNewPatients(
 
   if (newPatients.length === 0) return [];
 
-  const patientIds = newPatients.map((p) => p.id);
+  const patientIdSet = new Set(newPatients.map((p) => p.id));
 
-  const attendances = await fetchAllWithPagination(async (from, to) => {
+  // 신규 환자 수에 비례하는 긴 in(...) URL을 피하고 월 범위 출석을 조회한 뒤 교차한다.
+  const monthAttendances = await fetchAllWithPagination(async (from, to) => {
     const { data, error } = await supabase
       .from('attendances')
       .select('patient_id, date')
-      .in('patient_id', patientIds)
       .gte('date', monthStartStr)
       .lte('date', formatDate(monthEnd))
       .range(from, to);
     if (error) throw new Error(`출석 조회 실패: ${error.message}`);
     return data ?? [];
   });
+  const attendances = monthAttendances.filter((attendance) =>
+    patientIdSet.has(attendance.patient_id),
+  );
 
   const attendedByPatient = new Map<string, number>();
   for (const att of attendances) {

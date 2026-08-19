@@ -350,25 +350,30 @@ export async function ingestSlackConsultations(
   const groupedMatched = [...groupedByPatient.values()];
   const patientIds = groupedMatched.map((item) => item.patient.id);
 
+  const selectedIdSet = new Set(patientIds);
   const [attendanceQuery, consultationQuery] = await Promise.all([
     supabase
       .from('attendances')
       .select('patient_id')
-      .in('patient_id', patientIds)
       .eq('date', params.date),
     supabase
       .from('consultations')
       .select('id, patient_id, doctor_id, note, has_task, task_content, task_target, checked_by_coordinator')
-      .in('patient_id', patientIds)
       .eq('date', params.date),
   ]);
 
   if (attendanceQuery.error) throw attendanceQuery.error;
   if (consultationQuery.error) throw consultationQuery.error;
 
-  const attendedSet = new Set((attendanceQuery.data || []).map((row) => row.patient_id));
+  const attendedSet = new Set(
+    (attendanceQuery.data || [])
+      .filter((row) => selectedIdSet.has(row.patient_id))
+      .map((row) => row.patient_id),
+  );
   const existingConsultationByPatient = new Map(
-    ((consultationQuery.data || []) as ExistingConsultationRow[]).map((row) => [row.patient_id, row]),
+    ((consultationQuery.data || []) as ExistingConsultationRow[])
+      .filter((row) => selectedIdSet.has(row.patient_id))
+      .map((row) => [row.patient_id, row]),
   );
 
   const attendancesToCreate = patientIds

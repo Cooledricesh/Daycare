@@ -78,15 +78,16 @@ export async function getDischargesFromSyncLogs(
   const patientIdMap = new Map<string, string>();
 
   if (patientIdNos.length > 0) {
-    const { data: patients, error: patientError } = await supabase
+    const patientIdNoSet = new Set(patientIdNos);
+    // 퇴원자 수에 비례하는 긴 in(...) URL을 피하고 환자 매핑을 메모리에서 교차한다.
+    const { data: allPatients, error: patientError } = await supabase
       .from('patients')
-      .select('id, patient_id_no')
-      .in('patient_id_no', patientIdNos);
+      .select('id, patient_id_no');
 
     if (patientError) throw new Error(`환자 조회 실패: ${patientError.message}`);
 
-    for (const patient of patients ?? []) {
-      if (patient.patient_id_no) {
+    for (const patient of allPatients ?? []) {
+      if (patient.patient_id_no && patientIdNoSet.has(patient.patient_id_no)) {
         patientIdMap.set(patient.patient_id_no, patient.id);
       }
     }

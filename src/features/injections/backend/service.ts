@@ -167,10 +167,11 @@ export async function getUpcomingInjections(
     new Set(upstream.items.map((item) => item.patient_number)),
   );
 
-  const { data: patientRows, error: patientsError } = await supabase
+  const patientNumberSet = new Set(patientNumbers);
+  // 주사 예정 환자 수에 비례하는 긴 in(...) URL을 피하고 환자 매핑을 메모리에서 교차한다.
+  const { data: allPatientRows, error: patientsError } = await supabase
     .from('patients')
-    .select('id, patient_id_no')
-    .in('patient_id_no', patientNumbers);
+    .select('id, patient_id_no');
 
   if (patientsError) {
     throw new InjectionsError(
@@ -178,6 +179,10 @@ export async function getUpcomingInjections(
       `Daycare 환자 매핑 조회 실패: ${patientsError.message}`,
     );
   }
+
+  const patientRows = (allPatientRows ?? []).filter(
+    (row) => row.patient_id_no && patientNumberSet.has(row.patient_id_no),
+  );
 
   const idByPatientNumber = new Map<string, string>();
   for (const row of (patientRows ?? []) as Array<{

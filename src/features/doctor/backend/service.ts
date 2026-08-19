@@ -226,12 +226,23 @@ export async function getTasks(
   // 진찰 ID 목록
   const consultationIds = consultations.map((c) => c.id);
 
-  // task_completions 조회
-  const { data: completions } = await supabase
-    .from('task_completions')
-    .select('consultation_id, role, is_completed, completed_at')
-    .in('consultation_id', consultationIds)
-    .returns<TaskCompletionResult[]>();
+  // task_completions 조회 — 긴 consultation_id 필터를 피하도록 100개씩 나눈다.
+  const completions: TaskCompletionResult[] = [];
+  for (let index = 0; index < consultationIds.length; index += 100) {
+    const idChunk = consultationIds.slice(index, index + 100);
+    const { data: completionChunk, error: completionsError } = await supabase
+      .from('task_completions')
+      .select('consultation_id, role, is_completed, completed_at')
+      .in('consultation_id', idChunk)
+      .returns<TaskCompletionResult[]>();
+    if (completionsError) {
+      throw new DoctorError(
+        DoctorErrorCode.INVALID_REQUEST,
+        `지시사항 완료 상태 조회에 실패했습니다: ${completionsError.message}`,
+      );
+    }
+    completions.push(...(completionChunk || []));
+  }
 
   // completion Map 생성
   const completionMap = new Map<string, TaskCompletionResult[]>();

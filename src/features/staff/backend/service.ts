@@ -79,6 +79,16 @@ interface MessageWithPatient {
   patients: { name: string };
 }
 
+const MAX_PATIENT_IDS_PER_QUERY = 100;
+
+function chunkPatientIds(patientIds: string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < patientIds.length; index += MAX_PATIENT_IDS_PER_QUERY) {
+    chunks.push(patientIds.slice(index, index + MAX_PATIENT_IDS_PER_QUERY));
+  }
+  return chunks;
+}
+
 /**
  * 코디네이터가 접근 가능한 모든 호실 prefix 조회.
  * room_coordinator_assignments 의 active row 기준 — primary/backup/co 모두 포함.
@@ -175,21 +185,19 @@ export async function getMyPatients(
   await ensureScheduleGenerated(supabase, date);
 
   {
-    // 환자 목록 조회: show_all 이면 전체, 아니면 담당(N:N) 합집합
-    let patientsQuery = supabase
+    // 환자 목록 조회: URL 크기가 환자 수에 비례하지 않도록 활성 환자를 조회한 뒤
+    // 담당 환자 집합과 메모리에서 교차한다.
+    const accessibleIdSet = showAll
+      ? null
+      : new Set(await getAccessiblePatientIds(supabase, coordinatorId));
+    if (accessibleIdSet && accessibleIdSet.size === 0) {
+      return [];
+    }
+
+    const { data: activePatients, error: patientsError } = await supabase
       .from('patients')
       .select('id, name, display_name, avatar_url, gender, birth_date')
       .eq('status', 'active');
-
-    if (!showAll) {
-      const accessibleIds = await getAccessiblePatientIds(supabase, coordinatorId);
-      if (accessibleIds.length === 0) {
-        return [];
-      }
-      patientsQuery = patientsQuery.in('id', accessibleIds);
-    }
-
-    const { data: patients, error: patientsError } = await patientsQuery;
 
     if (patientsError) {
       throw new StaffError(
@@ -197,6 +205,10 @@ export async function getMyPatients(
         `환자 목록 조회에 실패했습니다: ${patientsError.message}`,
       );
     }
+
+    const patients = accessibleIdSet
+      ? (activePatients || []).filter((patient) => accessibleIdSet.has(patient.id))
+      : (activePatients || []);
 
     const patientIdSet = new Set((patients || []).map((p) => p.id));
 
@@ -458,12 +470,24 @@ export async function getMyPatientsSchedulePatterns(
     return [];
   }
 
-  const { data: patients, error: patientsError } = await supabase
-    .from('patients')
-    .select('id, name')
-    .in('id', accessibleIds)
-    .eq('status', 'active')
-    .order('name');
+  const accessibleIdSet = new Set(accessibleIds);
+
+  // URL 크기가 담당 환자 수에 비례하지 않도록 활성 환자와 활성 패턴을
+  // 각각 조회한 뒤 담당 환자 집합과 메모리에서 교차한다.
+  const [
+    { data: activePatients, error: patientsError },
+    { data: activePatterns, error: patternsError },
+  ] = await Promise.all([
+    supabase
+      .from('patients')
+      .select('id, name')
+      .eq('status', 'active')
+      .order('name'),
+    supabase
+      .from('scheduled_patterns')
+      .select('patient_id, day_of_week')
+      .eq('is_active', true),
+  ]);
 
   if (patientsError) {
     throw new StaffError(
@@ -471,19 +495,16 @@ export async function getMyPatientsSchedulePatterns(
       `환자 목록 조회에 실패했습니다: ${patientsError.message}`,
     );
   }
-
-  const patientIds = (patients || []).map((p) => p.id);
-
-  if (patientIds.length === 0) {
-    return [];
+  if (patternsError) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `스케줄 패턴 조회에 실패했습니다: ${patternsError.message}`,
+    );
   }
 
-  // 스케줄 패턴 조회
-  const { data: patterns } = await supabase
-    .from('scheduled_patterns')
-    .select('patient_id, day_of_week')
-    .in('patient_id', patientIds)
-    .eq('is_active', true);
+  const patients = (activePatients || []).filter((patient) => accessibleIdSet.has(patient.id));
+  const patientIdSet = new Set(patients.map((patient) => patient.id));
+  const patterns = (activePatterns || []).filter((pattern) => patientIdSet.has(pattern.patient_id));
 
   const patternMap = new Map<string, number[]>();
   (patterns || []).forEach((p) => {
@@ -615,12 +636,21 @@ export async function batchCreateAttendance(
   const date = params.date || getTodayString();
   const patientIds = params.patient_ids;
 
-  // 이미 출석한 환자 조회
-  const { data: existing } = await supabase
+  // URL 크기가 선택 환자 수에 비례하지 않도록 해당 날짜 출석만 조회한다.
+  const { data: allExisting, error: existingError } = await supabase
     .from('attendances')
     .select('patient_id')
-    .in('patient_id', patientIds)
     .eq('date', date);
+
+  if (existingError) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `기존 출석 조회에 실패했습니다: ${existingError.message}`,
+    );
+  }
+
+  const selectedIdSet = new Set(patientIds);
+  const existing = (allExisting || []).filter((attendance) => selectedIdSet.has(attendance.patient_id));
 
   const existingSet = new Set<string>(
     (existing || []).map((a) => a.patient_id),
@@ -665,18 +695,29 @@ export async function batchCancelAttendance(
   const date = params.date || getTodayString();
   const patientIds = params.patient_ids;
 
-  // 해당 날짜에 진찰 기록이 있는 환자 조회 (코디 체크 여부 포함)
-  const { data: consulted } = await supabase
+  // URL 크기가 선택 환자 수에 비례하지 않도록 해당 날짜 진찰만 조회한다.
+  const { data: allConsulted, error: consultedError } = await supabase
     .from('consultations')
     .select('patient_id, checked_by_coordinator')
-    .in('patient_id', patientIds)
     .eq('date', date);
+
+  if (consultedError) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `진찰 기록 조회에 실패했습니다: ${consultedError.message}`,
+    );
+  }
+
+  const selectedIdSet = new Set(patientIds);
+  const consulted = (allConsulted || []).filter((consultation) =>
+    selectedIdSet.has(consultation.patient_id),
+  );
 
   // 의사 진찰은 출석 취소 불가, 코디 체크 진찰은 함께 삭제
   const doctorConsultedSet = new Set<string>();
   const coordinatorCheckedIds: string[] = [];
 
-  (consulted || []).forEach((c) => {
+  consulted.forEach((c) => {
     if (c.checked_by_coordinator) {
       coordinatorCheckedIds.push(c.patient_id);
     } else {
@@ -691,36 +732,46 @@ export async function batchCancelAttendance(
     return { cancelled: 0, skippedConsulted, clearedCoordinatorConsultations: 0 };
   }
 
-  // 코디 체크 진찰 중 출석 취소 대상에 포함된 것들 삭제
-  const coordToDelete = coordinatorCheckedIds.filter((id) => cancellableIds.includes(id));
+  // 삭제 요청의 URL도 100개 단위로 제한한다.
+  const coordToDelete = coordinatorCheckedIds.filter((id) => !doctorConsultedSet.has(id));
   let clearedCoordinatorConsultations = 0;
 
-  if (coordToDelete.length > 0) {
-    const { data: deletedConsultations } = await supabase
+  for (const idChunk of chunkPatientIds(coordToDelete)) {
+    const { data: deletedConsultations, error: deleteConsultationsError } = await supabase
       .from('consultations')
       .delete()
-      .in('patient_id', coordToDelete)
+      .in('patient_id', idChunk)
       .eq('date', date)
       .eq('checked_by_coordinator', true)
       .select('patient_id');
-    clearedCoordinatorConsultations = (deletedConsultations || []).length;
+    if (deleteConsultationsError) {
+      throw new StaffError(
+        StaffErrorCode.INVALID_REQUEST,
+        `코디 진찰 기록 삭제에 실패했습니다: ${deleteConsultationsError.message}`,
+      );
+    }
+    clearedCoordinatorConsultations += (deletedConsultations || []).length;
   }
 
-  const { data: deleted, error } = await supabase
-    .from('attendances')
-    .delete()
-    .in('patient_id', cancellableIds)
-    .eq('date', date)
-    .select('patient_id');
+  let cancelled = 0;
+  for (const idChunk of chunkPatientIds(cancellableIds)) {
+    const { data: deleted, error } = await supabase
+      .from('attendances')
+      .delete()
+      .in('patient_id', idChunk)
+      .eq('date', date)
+      .select('patient_id');
 
-  if (error) {
-    throw new StaffError(
-      StaffErrorCode.INVALID_REQUEST,
-      `출석 취소에 실패했습니다: ${error.message}`,
-    );
+    if (error) {
+      throw new StaffError(
+        StaffErrorCode.INVALID_REQUEST,
+        `출석 취소에 실패했습니다: ${error.message}`,
+      );
+    }
+    cancelled += (deleted || []).length;
   }
 
-  return { cancelled: (deleted || []).length, skippedConsulted, clearedCoordinatorConsultations };
+  return { cancelled, skippedConsulted, clearedCoordinatorConsultations };
 }
 
 /**
@@ -734,24 +785,40 @@ export async function batchCreateConsultation(
   const date = params.date || getTodayString();
   const patientIds = params.patient_ids;
 
-  // 환자 정보 조회 (doctor_id 포함)
+  // URL 크기가 선택 환자 수에 비례하지 않도록 기준 집합을 조회한 뒤
+  // 선택 환자 집합과 메모리에서 교차한다.
   const [
-    { data: patients },
-    { data: existingConsultations },
-    { data: attendances },
+    { data: allPatients, error: patientsError },
+    { data: allExistingConsultations, error: consultationsError },
+    { data: allAttendances, error: attendancesError },
   ] = await Promise.all([
     supabase.from('patients')
       .select('id, doctor_id')
-      .in('id', patientIds),
+      .eq('status', 'active'),
     supabase.from('consultations')
       .select('patient_id')
-      .in('patient_id', patientIds)
       .eq('date', date),
     supabase.from('attendances')
       .select('patient_id')
-      .in('patient_id', patientIds)
       .eq('date', date),
   ]);
+
+  const queryError = patientsError || consultationsError || attendancesError;
+  if (queryError) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `일괄 진찰 대상 조회에 실패했습니다: ${queryError.message}`,
+    );
+  }
+
+  const selectedIdSet = new Set(patientIds);
+  const patients = (allPatients || []).filter((patient) => selectedIdSet.has(patient.id));
+  const existingConsultations = (allExistingConsultations || []).filter((consultation) =>
+    selectedIdSet.has(consultation.patient_id),
+  );
+  const attendances = (allAttendances || []).filter((attendance) =>
+    selectedIdSet.has(attendance.patient_id),
+  );
 
   const consultedSet = new Set<string>(
     (existingConsultations || []).map((c) => c.patient_id),
@@ -824,12 +891,23 @@ export async function batchCancelConsultation(
   const date = params.date || getTodayString();
   const patientIds = params.patient_ids;
 
-  // checked_by_coordinator 상태 조회
-  const { data: consultations } = await supabase
+  // URL 크기가 선택 환자 수에 비례하지 않도록 해당 날짜 진찰을 조회한 뒤 교차한다.
+  const { data: allConsultations, error: consultationsError } = await supabase
     .from('consultations')
     .select('patient_id, checked_by_coordinator')
-    .in('patient_id', patientIds)
     .eq('date', date);
+
+  if (consultationsError) {
+    throw new StaffError(
+      StaffErrorCode.INVALID_REQUEST,
+      `진찰 기록 조회에 실패했습니다: ${consultationsError.message}`,
+    );
+  }
+
+  const selectedIdSet = new Set(patientIds);
+  const consultations = (allConsultations || []).filter((consultation) =>
+    selectedIdSet.has(consultation.patient_id),
+  );
 
   const coordinatorCheckedIds: string[] = [];
   let skippedDoctorConsulted = 0;
@@ -846,20 +924,24 @@ export async function batchCancelConsultation(
     return { cancelled: 0, skippedDoctorConsulted };
   }
 
-  const { data: deleted, error } = await supabase
-    .from('consultations')
-    .delete()
-    .in('patient_id', coordinatorCheckedIds)
-    .eq('date', date)
-    .eq('checked_by_coordinator', true)
-    .select('patient_id');
+  let cancelled = 0;
+  for (const idChunk of chunkPatientIds(coordinatorCheckedIds)) {
+    const { data: deleted, error } = await supabase
+      .from('consultations')
+      .delete()
+      .in('patient_id', idChunk)
+      .eq('date', date)
+      .eq('checked_by_coordinator', true)
+      .select('patient_id');
 
-  if (error) {
-    throw new StaffError(
-      StaffErrorCode.INVALID_REQUEST,
-      `진찰 취소에 실패했습니다: ${error.message}`,
-    );
+    if (error) {
+      throw new StaffError(
+        StaffErrorCode.INVALID_REQUEST,
+        `진찰 취소에 실패했습니다: ${error.message}`,
+      );
+    }
+    cancelled += (deleted || []).length;
   }
 
-  return { cancelled: (deleted || []).length, skippedDoctorConsulted };
+  return { cancelled, skippedDoctorConsulted };
 }

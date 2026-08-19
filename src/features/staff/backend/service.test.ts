@@ -9,7 +9,69 @@ vi.mock('@/lib/date', () => ({
   getMonthsAgoString: () => '2026-03-04',
 }));
 
-const { getMyPatients } = await import('./service');
+const {
+  getMyPatients,
+  batchCreateAttendance,
+  batchCancelAttendance,
+  batchCreateConsultation,
+  batchCancelConsultation,
+} = await import('./service');
+
+type BatchMode = 'create-attendance' | 'cancel-attendance' | 'create-consultation' | 'cancel-consultation';
+
+function makePatientIds(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `patient-${String(index).padStart(3, '0')}`);
+}
+
+function makeBatchSupabase(mode: BatchMode, patientIds: string[]) {
+  const inSizes: number[] = [];
+  const insertedSizes: number[] = [];
+
+  const from = vi.fn((table: string) => {
+    let action: 'read' | 'insert' | 'delete' = 'read';
+    let filteredIds: string[] = [];
+    const chain = {
+      select: vi.fn(() => chain),
+      eq: vi.fn(() => chain),
+      in: vi.fn((_column: string, ids: string[]) => {
+        inSizes.push(ids.length);
+        if (ids.length > 100) throw new Error(`oversized in filter: ${ids.length}`);
+        filteredIds = ids;
+        return chain;
+      }),
+      insert: vi.fn((rows: unknown[]) => {
+        action = 'insert';
+        insertedSizes.push(rows.length);
+        return chain;
+      }),
+      delete: vi.fn(() => {
+        action = 'delete';
+        return chain;
+      }),
+      then: (resolve: (value: { data: unknown[]; error: null }) => unknown) => {
+        let data: unknown[] = [];
+        if (action === 'delete') {
+          data = filteredIds.map((patient_id) => ({ patient_id }));
+        } else if (action === 'read') {
+          if (table === 'patients' && mode === 'create-consultation') {
+            data = patientIds.map((id) => ({ id, doctor_id: 'doctor-1' }));
+          } else if (table === 'attendances' && mode === 'create-consultation') {
+            data = patientIds.map((patient_id) => ({ patient_id }));
+          } else if (table === 'consultations' && mode === 'cancel-consultation') {
+            data = patientIds.map((patient_id) => ({
+              patient_id,
+              checked_by_coordinator: true,
+            }));
+          }
+        }
+        return Promise.resolve(resolve({ data, error: null }));
+      },
+    };
+    return chain;
+  });
+
+  return { supabase: { from }, inSizes, insertedSizes };
+}
 
 describe('staff/getMyPatients', () => {
   it('전체 보기에서도 당일 상태 조회 URL에 전체 환자 ID 목록을 넣지 않는다', async () => {
@@ -62,5 +124,56 @@ describe('staff/getMyPatients', () => {
     expect(result[0]?.is_consulted).toBe(true);
     expect(result[0]?.is_scheduled).toBe(true);
     expect(result[0]?.unread_message_count).toBe(1);
+  });
+});
+
+describe('staff 대량 일괄 처리', () => {
+  const patientIds = makePatientIds(283);
+  const request = { date: '2026-04-04', patient_ids: patientIds };
+
+  it('전체 선택 출석 생성에서 긴 in(...) URL을 만들지 않는다', async () => {
+    const mock = makeBatchSupabase('create-attendance', patientIds);
+    const result = await batchCreateAttendance(
+      mock.supabase as unknown as Parameters<typeof batchCreateAttendance>[0],
+      request,
+    );
+
+    expect(result).toEqual({ created: 283, skipped: 0 });
+    expect(mock.inSizes).toEqual([]);
+    expect(mock.insertedSizes).toContain(283);
+  });
+
+  it('전체 선택 출석 취소의 삭제 필터를 100명 이하로 나눈다', async () => {
+    const mock = makeBatchSupabase('cancel-attendance', patientIds);
+    const result = await batchCancelAttendance(
+      mock.supabase as unknown as Parameters<typeof batchCancelAttendance>[0],
+      request,
+    );
+
+    expect(result.cancelled).toBe(283);
+    expect(mock.inSizes).toEqual([100, 100, 83]);
+  });
+
+  it('전체 선택 진찰 생성에서 긴 in(...) URL을 만들지 않는다', async () => {
+    const mock = makeBatchSupabase('create-consultation', patientIds);
+    const result = await batchCreateConsultation(
+      mock.supabase as unknown as Parameters<typeof batchCreateConsultation>[0],
+      request,
+    );
+
+    expect(result.created).toBe(283);
+    expect(mock.inSizes).toEqual([]);
+    expect(mock.insertedSizes).toContain(283);
+  });
+
+  it('전체 선택 진찰 취소의 삭제 필터를 100명 이하로 나눈다', async () => {
+    const mock = makeBatchSupabase('cancel-consultation', patientIds);
+    const result = await batchCancelConsultation(
+      mock.supabase as unknown as Parameters<typeof batchCancelConsultation>[0],
+      request,
+    );
+
+    expect(result.cancelled).toBe(283);
+    expect(mock.inSizes).toEqual([100, 100, 83]);
   });
 });
