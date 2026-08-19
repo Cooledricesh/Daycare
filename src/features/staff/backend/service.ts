@@ -198,56 +198,70 @@ export async function getMyPatients(
       );
     }
 
-    // 각 환자에 대해 출석, 진찰, 메시지 정보 조회
-    const patientIds = (patients || []).map((p) => p.id);
+    const patientIdSet = new Set((patients || []).map((p) => p.id));
 
-    if (patientIds.length === 0) {
+    if (patientIdSet.size === 0) {
       return [];
     }
 
-    // 출석, 진찰, 메시지, 출석예정을 병렬로 조회
+    // 환자 수에 비례하는 긴 in(...) URL을 피하고 당일 데이터만 조회한다.
     const [
-      { data: attendances },
-      { data: consultations },
-      { data: messages },
-      { data: scheduledAttendances },
+      { data: attendances, error: attendancesError },
+      { data: consultations, error: consultationsError },
+      { data: messages, error: messagesError },
+      { data: scheduledAttendances, error: scheduledAttendancesError },
     ] = await Promise.all([
       supabase.from('attendances')
         .select('patient_id, checked_at')
-        .in('patient_id', patientIds)
         .eq('date', date),
       supabase.from('consultations')
         .select('patient_id, id, has_task, task_content, task_target, checked_by_coordinator, task_completions(is_completed)')
-        .in('patient_id', patientIds)
         .eq('date', date)
         .returns<ConsultationWithTasks[]>(),
       supabase.from('messages')
         .select('patient_id, id, is_read')
-        .in('patient_id', patientIds)
         .eq('date', date),
       supabase.from('scheduled_attendances')
         .select('patient_id')
         .eq('date', date)
-        .eq('is_cancelled', false)
-        .in('patient_id', patientIds),
+        .eq('is_cancelled', false),
     ]);
 
-    // 데이터를 Map으로 변환
+    const statusQueryError = attendancesError
+      || consultationsError
+      || messagesError
+      || scheduledAttendancesError;
+    if (statusQueryError) {
+      throw new StaffError(
+        StaffErrorCode.INVALID_REQUEST,
+        `환자 상태 조회에 실패했습니다: ${statusQueryError.message}`,
+      );
+    }
+
+    // 현재 화면의 환자 집합과 메모리에서 교차해 기존 권한/결과 의미를 유지한다.
     const attendanceMap = new Map(
-      (attendances || []).map((a) => [a.patient_id, a]),
+      (attendances || [])
+        .filter((a) => patientIdSet.has(a.patient_id))
+        .map((a) => [a.patient_id, a]),
     );
     const consultationMap = new Map(
-      (consultations || []).map((c) => [c.patient_id, c]),
+      (consultations || [])
+        .filter((c) => patientIdSet.has(c.patient_id))
+        .map((c) => [c.patient_id, c]),
     );
     const messageMap = new Map<string, Pick<MessageRow, 'patient_id' | 'id' | 'is_read'>[]>();
-    (messages || []).forEach((m) => {
-      if (!messageMap.has(m.patient_id)) {
-        messageMap.set(m.patient_id, []);
-      }
-      messageMap.get(m.patient_id)!.push(m);
-    });
+    (messages || [])
+      .filter((m) => patientIdSet.has(m.patient_id))
+      .forEach((m) => {
+        if (!messageMap.has(m.patient_id)) {
+          messageMap.set(m.patient_id, []);
+        }
+        messageMap.get(m.patient_id)!.push(m);
+      });
     const scheduledSet = new Set<string>(
-      (scheduledAttendances || []).map((s) => s.patient_id),
+      (scheduledAttendances || [])
+        .filter((s) => patientIdSet.has(s.patient_id))
+        .map((s) => s.patient_id),
     );
 
     // 데이터 변환 (Map에서 조회)

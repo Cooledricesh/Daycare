@@ -72,21 +72,20 @@ export async function getNursePatients(
     );
   }
 
-  const patientIds = (patients || []).map((p) => p.id);
-  if (patientIds.length === 0) return [];
+  const patientIdSet = new Set((patients || []).map((p) => p.id));
+  if (patientIdSet.size === 0) return [];
 
   // 오늘 스케줄이 없으면 패턴에서 자동 생성
   await ensureScheduleGenerated(supabase, date);
 
-  // 2+3. 출석 + 진료 기록 + 출석예정을 병렬로 조회
+  // 환자 수에 비례하는 긴 in(...) URL을 피하고 당일 데이터만 조회한다.
   const [
-    { data: attendances },
-    { data: consultations },
-    { data: scheduledAttendances },
+    { data: attendances, error: attendancesError },
+    { data: consultations, error: consultationsError },
+    { data: scheduledAttendances, error: scheduledAttendancesError },
   ] = await Promise.all([
     supabase.from('attendances')
       .select('patient_id, checked_at')
-      .in('patient_id', patientIds)
       .eq('date', date)
       .returns<{ patient_id: string; checked_at: string }[]>(),
     supabase.from('consultations')
@@ -100,26 +99,38 @@ export async function getNursePatients(
         staff!consultations_doctor_id_fkey(name),
         task_completions(id, is_completed, completed_at, role)
       `)
-      .in('patient_id', patientIds)
       .eq('date', date)
       .returns<ConsultationJoinRow[]>(),
     supabase.from('scheduled_attendances')
       .select('patient_id')
       .eq('date', date)
       .eq('is_cancelled', false)
-      .in('patient_id', patientIds)
       .returns<{ patient_id: string }[]>(),
   ]);
 
-  // 4. Map 생성
+  const statusQueryError = attendancesError || consultationsError || scheduledAttendancesError;
+  if (statusQueryError) {
+    throw new NurseError(
+      NurseErrorCode.INVALID_REQUEST,
+      `환자 상태 조회에 실패했습니다: ${statusQueryError.message}`,
+    );
+  }
+
+  // 활성 환자 여부는 메모리에서 교차해 기존 결과 의미를 유지한다.
   const attendanceMap = new Map(
-    (attendances || []).map((a) => [a.patient_id, a] as const),
+    (attendances || [])
+      .filter((a) => patientIdSet.has(a.patient_id))
+      .map((a) => [a.patient_id, a] as const),
   );
   const consultationMap = new Map(
-    (consultations || []).map((c) => [c.patient_id, c] as const),
+    (consultations || [])
+      .filter((c) => patientIdSet.has(c.patient_id))
+      .map((c) => [c.patient_id, c] as const),
   );
   const scheduledSet = new Set(
-    (scheduledAttendances || []).map((s) => s.patient_id),
+    (scheduledAttendances || [])
+      .filter((s) => patientIdSet.has(s.patient_id))
+      .map((s) => s.patient_id),
   );
 
   // 5. 데이터 변환

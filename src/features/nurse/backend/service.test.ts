@@ -14,7 +14,66 @@ vi.mock('@/lib/date', () => ({
 }));
 
 // 동적 import로 mock 이후에 로드
-const { completeTask, createMessage, deleteMessage, updateMessage } = await import('./service');
+const {
+  completeTask,
+  createMessage,
+  deleteMessage,
+  updateMessage,
+  getNursePatients,
+} = await import('./service');
+
+describe('nurse/getNursePatients', () => {
+  it('당일 상태 조회 URL에 전체 환자 ID 목록을 넣지 않는다', async () => {
+    const rowsByTable: Record<string, unknown[]> = {
+      patients: [{
+        id: 'p-1',
+        name: '테스트 환자',
+        display_name: null,
+        avatar_url: null,
+        gender: 'M',
+        birth_date: null,
+        coordinator: null,
+      }],
+      attendances: [
+        { patient_id: 'p-1', checked_at: '2026-04-04T09:00:00Z' },
+        { patient_id: 'inactive-patient', checked_at: '2026-04-04T09:00:00Z' },
+      ],
+      consultations: [{
+        id: 'c-1',
+        patient_id: 'p-1',
+        note: null,
+        has_task: false,
+        task_content: null,
+        task_target: null,
+        staff: null,
+        task_completions: [],
+      }],
+      scheduled_attendances: [{ patient_id: 'p-1' }],
+    };
+
+    const from = vi.fn((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        returns: vi.fn(() => chain),
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          Promise.resolve(resolve({ data: rowsByTable[table] ?? [], error: null })),
+      };
+      return chain;
+    });
+
+    const result = await getNursePatients(
+      { from } as unknown as Parameters<typeof getNursePatients>[0],
+      { date: '2026-04-04', filter: 'all' },
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.is_attended).toBe(true);
+    expect(result[0]?.is_consulted).toBe(true);
+    expect(result[0]?.is_scheduled).toBe(true);
+  });
+});
 
 describe('nurse/completeTask', () => {
   let mock: MockSupabaseChain;
