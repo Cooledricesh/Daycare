@@ -2,7 +2,7 @@
  * Google Apps Script: Wellington 낮병원 환자 동기화
  *
  * 목적: Google Drive의 환자 명단 스프레드시트를 읽어
- *       Supabase REST API로 직접 동기화
+ *       Daycare NAS REST API로 직접 동기화
  *
  * 스케줄: 매일 오전 8:15 KST (Google Apps Script Triggers)
  *
@@ -10,8 +10,8 @@
  * 1. https://script.google.com 에서 새 프로젝트 생성
  * 2. 이 코드 전체를 붙여넣기
  * 3. 프로젝트 설정 > 스크립트 속성에 아래 값 설정:
- *    - SUPABASE_URL: Supabase 프로젝트 URL
- *    - SUPABASE_SERVICE_ROLE_KEY: Service Role Key
+ *    - SUPABASE_URL: Daycare NAS API URL (기존 속성명 유지)
+ *    - SUPABASE_SERVICE_ROLE_KEY: Apps Script 전용 API Key (기존 속성명 유지)
  *    - SPREADSHEET_ID: Google Sheets 파일 ID
  *    - SHEET_NAME: 시트 탭 이름 (기본: Sheet1)
  * 4. testConnection() 실행하여 연결 확인
@@ -257,8 +257,8 @@ function parseGender(genderAge) {
  * @returns {Object} - { room_prefix: coordinator_id }
  */
 function getRoomMappings() {
-  var data = supabaseRequest('room_coordinator_mapping', 'get', {
-    query: 'is_active=eq.true&select=room_prefix,coordinator_id',
+  var data = supabaseRequest('room_coordinator_assignments', 'get', {
+    query: 'role=eq.primary&is_active=eq.true&select=room_prefix,coordinator_id',
   });
 
   var map = {};
@@ -585,9 +585,12 @@ function syncPatientDepartments() {
     // 6c. 재입원 환자 출석 패턴 일괄 삭제
     if (batchReactivatePatientIds.length > 0) {
       Logger.log('재입원 패턴 초기화: ' + batchReactivatePatientIds.length + '명');
-      supabaseRequest('scheduled_patterns', 'delete', {
-        query: 'patient_id=in.(' + batchReactivatePatientIds.join(',') + ')',
-      });
+      for (var rci = 0; rci < batchReactivatePatientIds.length; rci += 50) {
+        var reactivateChunk = batchReactivatePatientIds.slice(rci, rci + 50);
+        supabaseRequest('scheduled_patterns', 'delete', {
+          query: 'patient_id=in.(' + reactivateChunk.join(',') + ')',
+        });
+      }
     }
 
     // 6d. 변경된 환자 개별 PATCH (각각 다른 필드 변경)
@@ -605,14 +608,17 @@ function syncPatientDepartments() {
     // 6e. 퇴원 환자 일괄 PATCH
     if (batchDischargeIds.length > 0) {
       Logger.log('배치 퇴원 처리: ' + batchDischargeIds.length + '명');
-      supabaseRequest('patients', 'patch', {
-        query: 'id=in.(' + batchDischargeIds.join(',') + ')',
-        body: {
-          status: 'discharged',
-          last_synced_at: now,
-          sync_source: 'google_sheets',
-        },
-      });
+      for (var di = 0; di < batchDischargeIds.length; di += 50) {
+        var dischargeChunk = batchDischargeIds.slice(di, di + 50);
+        supabaseRequest('patients', 'patch', {
+          query: 'id=in.(' + dischargeChunk.join(',') + ')',
+          body: {
+            status: 'discharged',
+            last_synced_at: now,
+            sync_source: 'google_sheets',
+          },
+        });
+      }
     }
 
     // 동기화 로그 업데이트

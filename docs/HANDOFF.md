@@ -23,6 +23,7 @@
 | DB/API | NAS PostgreSQL `daycare` + PostgREST/Avatar Gateway. Vercel 주 경로 `https://daycare-api.rebridge.work`; DB 포트는 공개하지 않음. Supabase `hgkhcbdixubimbraigen`은 rollback snapshot으로만 보존 |
 | 연동 | Carescheduler (주사제 시스템, `careschedulerp.vercel.app`, Supabase `xlhtmakvxbdjnpvtzdqh`) — BFF로 주사 이력 조회 |
 | 크론 | Vercel: 월간리포트·공휴일 동기화. NAS `daycare-scheduler`: 평일 16:00 정오 출석 리포트와 매일 08:30 생일 리포트. 스케줄러는 `/api/internal/cron/*`를 새 `CRON_SECRET`으로 호출하며, 기존 Supabase pg_cron은 이전 secret이라 401로 차단됨 |
+| 환자 명단 | Apps Script `DaycareListUpdate`가 Drive의 최신 Excel을 읽어 `https://daycare-api.rebridge.work/rest/v1/*`로 동기화. 기존 속성명 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`은 유지하되 값은 NAS API URL/Apps Script 전용 키로 사용. 매일 오전 트리거 1개만 운영 |
 | 슬랙 알림 | 봇 `@alimi`(`SLACK_BOT_TOKEN`) + 채널 상수 `src/constants/slack-channels.ts`. ① 평일 16:00 당일 기록 반영 후 현황 → `#마루-진찰` ② 매일 08:30 생일 알림 → `#마루`. 진찰 알림은 16:00 KST 전 호출을 `before_report_window`로 skip. NAS scheduler 설정은 `/volume1/docker/daycare-api/{scheduler.crontab,run-job.sh,scheduler.env}`이며 `scheduler.env`는 Git에 저장하지 않음. 인증·DB 연결 무부작용 점검은 `POST /api/internal/cron/health` 사용 |
 
 ### 마이그레이션 적용 방법 (중요)

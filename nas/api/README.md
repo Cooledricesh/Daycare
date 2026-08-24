@@ -12,9 +12,9 @@ Supabase-compatible database and patient-avatar gateway for the Daycare applicat
 
 Contracts:
 
-- `/rest/v1/*`: server-only Supabase/PostgREST compatibility endpoint; requires the Daycare `apikey` and rejects browser-Origin requests.
+- `/rest/v1/*`: server-only Supabase/PostgREST compatibility endpoint; requires either the primary Daycare `apikey` or the dedicated Apps Script key and rejects browser-Origin requests.
 - `/storage/v1/object/patient-avatars/*`: authenticated `PUT`/`DELETE` for Vercel server-side avatar operations.
 - `/storage/v1/object/public/patient-avatars/*`: public `GET` for the avatar URLs stored in `patients.avatar_url`.
 - `/health`: performs a live PostgREST/database subrequest and returns only `{"ok":true}`.
 
-Rendered `nginx.conf`, `postgrest.env`, `service.env`, and `scheduler.env` are NAS-local protected files and must not be committed. The scheduler calls `https://dddaycare.vercel.app/api/internal/cron/*`; run `docker exec daycare-scheduler /opt/daycare/run-job.sh health` for a no-notification connectivity and database check.
+Rendered `nginx.conf`, `postgrest.env`, `service.env`, and `scheduler.env` are NAS-local protected files and must not be committed. `service.env` keeps `DAYCARE_APPS_SCRIPT_KEY` beside the primary API key; `render.py` writes both accepted keys into the protected nginx config. The scheduler calls `https://dddaycare.vercel.app/api/internal/cron/*`; run `docker exec daycare-scheduler /opt/daycare/run-job.sh health` for a no-notification connectivity and database check.

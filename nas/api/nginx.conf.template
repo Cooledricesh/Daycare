@@ -1,7 +1,7 @@
 worker_processes 1;
 events { worker_connections 512; }
 http {
-  map_hash_bucket_size 128;
+  map_hash_bucket_size 512;
   access_log /dev/stdout;
   error_log /dev/stderr warn;
   client_max_body_size 3m;
@@ -9,6 +9,7 @@ http {
   map $http_apikey $daycare_api_ok {
     default 0;
     "__DAYCARE_API_KEY__" 1;
+    "__DAYCARE_APPS_SCRIPT_KEY__" 1;
   }
 
   map $http_origin $server_origin_ok {
