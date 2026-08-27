@@ -7,6 +7,7 @@ import { LogOut, User } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 import { useAuth } from '@/hooks/useAuth';
 import { SyncNotificationBanner } from '@/features/notification/components/SyncNotificationBanner';
+import { trackStaffNavClicked } from '@/lib/posthog';
 
 import { type NavItem } from '@/constants/navigation';
 export type { NavItem };
@@ -96,7 +97,12 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
             }
 
             return (
-              <Link key={item.href} href={item.href} className={className}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={className}
+                onClick={() => trackStaffNavClicked(item.label)}
+              >
                 <Icon className="h-5 w-5" />
                 {item.label}
               </Link>
@@ -182,7 +188,12 @@ export function AppLayout({ children, navItems, title = '낮병원' }: AppLayout
             }
 
             return (
-              <Link key={item.href} href={item.href} className={className}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={className}
+                onClick={() => trackStaffNavClicked(item.label)}
+              >
                 <Icon className={cn('h-5 w-5', isActive && colors.activeText)} />
                 <span className="truncate max-w-[72px]">{item.label}</span>
               </Link>
