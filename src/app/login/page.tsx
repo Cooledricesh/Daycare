@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { login } from "./actions";
+import { trackLoginPageViewed } from "@/lib/posthog";
 
 const initialState = {
   error: "",
@@ -33,6 +34,10 @@ export default function LoginPage() {
   const [state, formAction] = useActionState(login, initialState);
   const [loginId, setLoginId] = useState("");
   const passwordRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    trackLoginPageViewed();
+  }, []);
 
   useEffect(() => {
     if (state?.success && state?.redirectUrl) {
