@@ -23,6 +23,7 @@ import { ConsultationHistory } from '@/features/doctor/components/ConsultationHi
 import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
+import { PatientHistoryButton } from '@/features/shared/components/PatientHistoryButton';
 import { getTodayString } from '@/lib/date';
 import type { NursePatientSummary } from '../backend/schema';
 
@@ -113,7 +114,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
       {/* 환자 정보 헤더 */}
       <div className="flex items-center gap-3 mb-5">
         <PatientAvatar avatarUrl={patient.avatar_url} size="lg" fallbackColorClass="bg-emerald-100" iconColorClass="text-emerald-600" />
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>
             <DisplayNameEditButton
@@ -144,6 +145,7 @@ export function NurseDetailPanel({ patient }: NurseDetailPanelProps) {
             {patient.doctor_name && ` · 담당의: ${patient.doctor_name}`}
           </p>
         </div>
+        <PatientHistoryButton role="nurse" patientId={patient.id} />
       </div>
 
       {/* 2컬럼 레이아웃: 좌(작업) / 우(캘린더+히스토리) */}

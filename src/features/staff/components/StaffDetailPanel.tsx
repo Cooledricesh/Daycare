@@ -20,6 +20,7 @@ import { ConsultationHistory } from '@/features/doctor/components/ConsultationHi
 import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
 import { AttendanceHeatmap } from '@/features/shared/components/AttendanceHeatmap';
+import { PatientHistoryButton } from '@/features/shared/components/PatientHistoryButton';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { calculateKoreanAge } from '@/lib/birthday';
 import { getTodayString } from '@/lib/date';
@@ -109,7 +110,7 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
       {/* 환자 정보 헤더 */}
       <div className="flex items-center gap-3 mb-5">
         <PatientAvatar avatarUrl={patient.avatar_url} size="lg" fallbackColorClass="bg-emerald-100" iconColorClass="text-emerald-600" />
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>
             <DisplayNameEditButton
@@ -139,6 +140,7 @@ export function StaffDetailPanel({ patient }: StaffDetailPanelProps) {
             {patient.unread_message_count > 0 && ` · 미확인 전달사항 ${patient.unread_message_count}건`}
           </p>
         </div>
+        <PatientHistoryButton role="coordinator" patientId={patient.id} />
       </div>
 
       {/* 2컬럼 레이아웃: 좌(작업) / 우(캘린더+히스토리) */}

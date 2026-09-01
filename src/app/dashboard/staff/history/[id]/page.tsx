@@ -7,7 +7,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default function DoctorHistoryPage({ params }: PageProps) {
+export default function StaffHistoryPage({ params }: PageProps) {
   const { id } = use(params);
   return <PatientFullHistoryPage patientId={id} />;
 }

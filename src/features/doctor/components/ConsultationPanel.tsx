@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import {
   Stethoscope,
   MessageSquare,
-  History,
+
   CheckCircle2,
   Check,
   Pencil,
@@ -27,6 +27,7 @@ import { PatientInjectionHistoryCard } from '@/features/injections/components/Pa
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getTodayString } from '@/lib/date';
 import { getPatientDisplayName } from '@/lib/patient';
+import { PatientHistoryButton } from '@/features/shared/components/PatientHistoryButton';
 import type { WaitingPatient } from '../backend/schema';
 
 interface ConsultationPanelProps {
@@ -198,12 +199,7 @@ export function ConsultationPanel({ patient, searchInputRef, saveRef }: Consulta
             </p>
           </div>
         </div>
-        <Link href={`/dashboard/doctor/history/${patient.id}`}>
-          <Button variant="outline" size="sm">
-            <History className="w-4 h-4 mr-1" />
-            전체 히스토리
-          </Button>
-        </Link>
+        <PatientHistoryButton role="doctor" patientId={patient.id} />
       </div>
 
       {/* 2컬럼 레이아웃: 좌(입력) / 우(히스토리) */}

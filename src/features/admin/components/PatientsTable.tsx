@@ -14,6 +14,7 @@ import { Edit } from 'lucide-react';
 import type { PatientWithCoordinator } from '../backend/schema';
 import { DisplayNameEditButton } from '@/features/shared/components/DisplayNameEditButton';
 import { getPatientDisplayName } from '@/lib/patient';
+import { PatientHistoryButton } from '@/features/shared/components/PatientHistoryButton';
 
 interface PatientsTableProps {
   patients: PatientWithCoordinator[];
@@ -43,7 +44,7 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
             <TableHead>주치의</TableHead>
             <TableHead>출석 패턴</TableHead>
             <TableHead>상태</TableHead>
-            <TableHead className="w-[100px]">관리</TableHead>
+            <TableHead className="w-[240px]">관리</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -96,13 +97,17 @@ export function PatientsTable({ patients, onEdit }: PatientsTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell>
+                  <div className="flex items-center gap-2">
+                    <PatientHistoryButton role="admin" patientId={patient.id} />
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => onEdit(patient)}
+                    aria-label="환자 정보 수정"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))

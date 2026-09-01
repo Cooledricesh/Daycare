@@ -17,11 +17,13 @@ import {
   GetTasksParamsSchema,
   GetMessagesParamsSchema,
   MarkMessageReadRequestSchema,
+  GetPatientHistoryParamsSchema,
 } from '@/features/doctor/backend/schema';
 import {
   getTasks,
   getMessages,
   markMessageRead,
+  getPatientHistory,
 } from '@/features/doctor/backend/service';
 import { DoctorError, DoctorErrorCode } from '@/features/doctor/backend/error';
 import { comparePassword, hashPassword } from '@/lib/auth';
@@ -417,6 +419,40 @@ sharedRoutes.post('/change-password', async (c) => {
     return respond(c, success({ message: '비밀번호가 변경되었습니다' }, 200));
   } catch (err) {
     return respond(c, failure(500, 'INTERNAL_ERROR', '비밀번호 변경 중 오류가 발생했습니다'));
+  }
+});
+
+/**
+ * GET /api/shared/patient/:id/history
+ * 환자 전체 히스토리 조회 (의사/간호사/코디/관리자 공용)
+ */
+sharedRoutes.get('/patient/:id/history', async (c) => {
+  const supabase = c.get('supabase');
+  const config = c.get('config');
+  const patientId = c.req.param('id');
+  const query = c.req.query();
+  const parseResult = GetPatientHistoryParamsSchema.safeParse({
+    patient_id: patientId,
+    months: query.months ? parseInt(query.months, 10) : undefined,
+  });
+
+  if (!parseResult.success) {
+    return respond(c, failure(400, DoctorErrorCode.INVALID_REQUEST, parseResult.error.message));
+  }
+
+  try {
+    const history = await getPatientHistory(
+      supabase,
+      parseResult.data,
+      config.clinicalHistory,
+    );
+    return respond(c, success(history, 200));
+  } catch (error) {
+    if (error instanceof DoctorError) {
+      const status = error.code === DoctorErrorCode.PATIENT_NOT_FOUND ? 404 : 400;
+      return respond(c, failure(status, error.code, error.message));
+    }
+    throw error;
   }
 });
 

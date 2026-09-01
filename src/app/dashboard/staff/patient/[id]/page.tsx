@@ -19,6 +19,7 @@ import { PatientTimelineStrip } from '@/features/patient-timeline/components/Pat
 import { PatientInjectionsCard } from '@/features/injections/components/PatientInjectionsCard';
 import { PatientInjectionHistoryCard } from '@/features/injections/components/PatientInjectionHistoryCard';
 import { getTodayString } from '@/lib/date';
+import { PatientHistoryButton } from '@/features/shared/components/PatientHistoryButton';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -73,12 +74,17 @@ export default function StaffPatientDetailPage({ params }: PageProps) {
             뒤로
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">{patient.name}</h1>
-        {patient.gender && (
-          <p className="text-gray-600">
-            ({patient.gender === 'M' ? '남' : '여'})
-          </p>
-        )}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{patient.name}</h1>
+            {patient.gender && (
+              <p className="text-gray-600">
+                ({patient.gender === 'M' ? '남' : '여'})
+              </p>
+            )}
+          </div>
+          <PatientHistoryButton role="coordinator" patientId={patientId} />
+        </div>
       </div>
 
       <Card className="mb-6">

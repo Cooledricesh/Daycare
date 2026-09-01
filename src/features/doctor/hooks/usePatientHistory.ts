@@ -14,7 +14,7 @@ export function usePatientHistory({ patientId, months = 1 }: UsePatientHistoryPa
   return useQuery({
     queryKey: doctorKeys.patientHistory.detail(patientId, months),
     queryFn: async () => {
-      const url = `/api/doctor/history/${patientId}?months=${months}`;
+      const url = `/api/shared/patient/${patientId}/history?months=${months}`;
       const response = await apiClient.get<PatientHistory>(url);
       return response.data;
     },
