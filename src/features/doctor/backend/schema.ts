@@ -85,12 +85,30 @@ export interface VitalsRecord {
   blood_sugar: number | null;
 }
 
+export type ClinicalHistoryStatus = 'available' | 'not_found' | 'unavailable';
+
+export interface PersonalHistory {
+  summary_text: string;
+  onset_text: string;
+  course_text: string;
+  current_text: string;
+  full_markdown: string;
+  updated_at: string | null;
+}
+
+export interface ClinicalHistoryLookup {
+  status: ClinicalHistoryStatus;
+  history: PersonalHistory | null;
+}
+
 // 환자 히스토리 응답
 export interface PatientHistory {
   patient: PatientBasicInfo;
   consultations: ConsultationRecord[];
   messages: MessageRecord[];
   vitals: VitalsRecord[];
+  clinical_history_status: ClinicalHistoryStatus;
+  clinical_history: PersonalHistory | null;
 }
 
 // 전달사항 조회 파라미터

@@ -18,6 +18,10 @@ import type {
 import { DoctorError, DoctorErrorCode } from './error';
 import { getTodayString, getMonthsAgoString } from '@/lib/date';
 import { ensureScheduleGenerated } from '@/server/services/schedule';
+import {
+  getClinicalHistoryByPatientIdNo,
+  type ClinicalHistoryConfig,
+} from '@/server/services/clinical-history';
 
 type ConsultationsRow = Database['public']['Tables']['consultations']['Row'];
 type TaskCompletionsRow = Database['public']['Tables']['task_completions']['Row'];
@@ -55,6 +59,7 @@ interface TaskCompletionResult {
 interface PatientWithJoins {
   id: string;
   name: string;
+  patient_id_no: string | null;
   gender: Gender | null;
   birth_date: string | null;
   room_number: string | null;
@@ -292,6 +297,7 @@ export async function getTasks(
 export async function getPatientHistory(
   supabase: SupabaseClient<Database>,
   params: GetPatientHistoryParams,
+  clinicalHistoryConfig?: ClinicalHistoryConfig,
 ): Promise<PatientHistory> {
   const { patient_id, months } = params;
   // months=0이면 전체 기간 조회
@@ -308,6 +314,7 @@ export async function getPatientHistory(
       .select(`
         id,
         name,
+        patient_id_no,
         gender,
         birth_date,
         room_number,
@@ -362,6 +369,11 @@ export async function getPatientHistory(
     );
   }
 
+  const clinicalHistory = await getClinicalHistoryByPatientIdNo(
+    clinicalHistoryConfig,
+    patient.patient_id_no,
+  );
+
   return {
     patient: {
       id: patient.id,
@@ -398,6 +410,8 @@ export async function getPatientHistory(
       diastolic: v.diastolic,
       blood_sugar: v.blood_sugar,
     })),
+    clinical_history_status: clinicalHistory.status,
+    clinical_history: clinicalHistory.history,
   };
 }
 

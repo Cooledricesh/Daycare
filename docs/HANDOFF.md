@@ -32,6 +32,7 @@
 - 운영 적용은 NAS `/volume1/docker/postgres-platform/migrations/daycare/`에 전송한 뒤 `./dbctl migrate daycare <file>`과 `./dbctl check daycare`로 검증한다.
 - 데이터·사진 이전/검증 도구는 `nas/scripts/`; API·스케줄러 배포 정의는 `nas/api/`에 있다.
 - 운영 Vercel 데이터 변수는 `DAYCARE_DATA_API_URL`, `DAYCARE_DATA_API_KEY`, `DAYCARE_AVATAR_API_URL`, `DAYCARE_AVATAR_API_KEY`. 과거 Supabase 변수명은 rollback 호환 fallback으로만 남는다.
+- 환자 개인력은 별도 임상 DB의 `patient_clinical_history_versions` 현재 버전을 병록번호로 조회한다. Vercel 서버 환경변수 `CLINICAL_HISTORY_API_URL`, `CLINICAL_HISTORY_API_KEY`가 필요하며, Daycare DB에는 개인력 본문을 복제하지 않는다.
 
 ## 3. 실제 코드 구조 (CLAUDE.md와 다른 부분 주의)
 

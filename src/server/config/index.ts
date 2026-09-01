@@ -8,6 +8,8 @@ const envSchema = z.object({
   DAYCARE_AVATAR_API_KEY: z.string().min(1),
   CARESCHEDULER_API_URL: z.string().url(),
   CARESCHEDULER_API_KEY: z.string().min(1),
+  CLINICAL_HISTORY_API_URL: z.string().url().optional(),
+  CLINICAL_HISTORY_API_KEY: z.string().min(1).optional(),
 });
 
 let cachedConfig: AppConfig | null = null;
@@ -29,6 +31,8 @@ export const getAppConfig = (): AppConfig => {
     DAYCARE_AVATAR_API_KEY: avatarApiKey,
     CARESCHEDULER_API_URL: process.env.CARESCHEDULER_API_URL,
     CARESCHEDULER_API_KEY: process.env.CARESCHEDULER_API_KEY,
+    CLINICAL_HISTORY_API_URL: process.env.CLINICAL_HISTORY_API_URL,
+    CLINICAL_HISTORY_API_KEY: process.env.CLINICAL_HISTORY_API_KEY,
   });
 
   if (!parsed.success) {
@@ -51,6 +55,12 @@ export const getAppConfig = (): AppConfig => {
       apiUrl: parsed.data.CARESCHEDULER_API_URL,
       apiKey: parsed.data.CARESCHEDULER_API_KEY,
     },
+    clinicalHistory: parsed.data.CLINICAL_HISTORY_API_URL && parsed.data.CLINICAL_HISTORY_API_KEY
+      ? {
+          apiUrl: parsed.data.CLINICAL_HISTORY_API_URL,
+          apiKey: parsed.data.CLINICAL_HISTORY_API_KEY,
+        }
+      : undefined,
   } satisfies AppConfig;
 
   return cachedConfig;

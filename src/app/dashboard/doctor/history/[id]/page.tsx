@@ -9,6 +9,7 @@ import { PatientHistoryCard } from '@/features/doctor/components/PatientHistoryC
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { PatientTimelineStrip } from '@/features/patient-timeline/components/PatientTimelineStrip';
 import { MessageHistory } from '@/features/doctor/components/MessageHistory';
+import { PersonalHistoryCard } from '@/features/doctor/components/PersonalHistoryCard';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -58,6 +59,11 @@ export default function DoctorHistoryPage({ params }: PageProps) {
 
       <div className="space-y-6">
         <PatientHistoryCard patient={history.patient} />
+
+        <PersonalHistoryCard
+          status={history.clinical_history_status}
+          history={history.clinical_history}
+        />
 
         <PatientTimelineStrip patientId={history.patient.id} />
 

@@ -16,6 +16,10 @@ export type AppConfig = {
     apiUrl: string;
     apiKey: string;
   };
+  clinicalHistory?: {
+    apiUrl: string;
+    apiKey: string;
+  };
 };
 
 export type JWTPayload = {

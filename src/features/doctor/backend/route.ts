@@ -67,6 +67,7 @@ doctorRoutes.get('/tasks', async (c) => {
  */
 doctorRoutes.get('/history/:patientId', async (c) => {
   const supabase = c.get('supabase');
+  const config = c.get('config');
   const user = c.get('user');
 
   if (!user) {
@@ -89,7 +90,11 @@ doctorRoutes.get('/history/:patientId', async (c) => {
   }
 
   try {
-    const history = await getPatientHistory(supabase, parseResult.data);
+    const history = await getPatientHistory(
+      supabase,
+      parseResult.data,
+      config.clinicalHistory,
+    );
     return respond(c, success(history, 200));
   } catch (error) {
     if (error instanceof DoctorError) {
