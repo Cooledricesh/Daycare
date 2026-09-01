@@ -19,6 +19,7 @@ describe('전체 역할 환자 히스토리 접근 계약', () => {
   it.each([
     'src/features/doctor/components/ConsultationPanel.tsx',
     'src/features/admin/components/PatientsTable.tsx',
+    'src/features/admin/components/AdminDetailPanel.tsx',
     'src/features/nurse/components/NurseDetailPanel.tsx',
     'src/features/staff/components/StaffDetailPanel.tsx',
   ])('%s에 전체 히스토리 버튼이 있다', (sourcePath) => {

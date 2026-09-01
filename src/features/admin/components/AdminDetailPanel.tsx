@@ -18,6 +18,7 @@ import { extractApiErrorMessage } from '@/lib/remote/api-client';
 import { AdminMessageForm } from './AdminMessageForm';
 import { ConsultationHistory } from '@/features/doctor/components/ConsultationHistory';
 import { AttendanceCalendar } from '@/features/shared/components/AttendanceCalendar';
+import { PatientHistoryButton } from '@/features/shared/components/PatientHistoryButton';
 import type { NursePatientSummary } from '@/features/nurse/backend/schema';
 
 interface AdminDetailPanelProps {
@@ -117,7 +118,7 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
       {/* 환자 정보 헤더 */}
       <div className="flex items-center gap-3 mb-5">
         <PatientAvatar avatarUrl={patient.avatar_url} size="lg" fallbackColorClass="bg-indigo-100" iconColorClass="text-indigo-600" />
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{getPatientDisplayName(patient)}</h2>
             <DisplayNameEditButton
@@ -148,6 +149,7 @@ export function AdminDetailPanel({ patient }: AdminDetailPanelProps) {
             {patient.doctor_name && ` · 담당의: ${patient.doctor_name}`}
           </p>
         </div>
+        <PatientHistoryButton role="admin" patientId={patient.id} />
       </div>
 
       {/* 2컬럼 레이아웃: 좌(작업) / 우(캘린더+히스토리) */}
