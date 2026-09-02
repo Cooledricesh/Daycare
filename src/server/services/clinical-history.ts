@@ -81,18 +81,17 @@ export async function getClinicalHistoryByPatientIdNo(
   try {
     const rawId = patientIdNo.trim();
     const normalizedId = normalizedPatientIdNo(rawId);
-    const rawMatch = await fetchCurrentHistory(config, rawId);
-    const row = rawMatch ?? (
-      normalizedId !== rawId
-        ? await fetchCurrentHistory(config, normalizedId)
-        : null
-    );
+    const paddedId = normalizedId.padStart(7, '0');
+    const candidates = [...new Set([rawId, normalizedId, paddedId])];
 
-    if (!row) {
-      return { status: 'not_found', history: null };
+    for (const candidate of candidates) {
+      const row = await fetchCurrentHistory(config, candidate);
+      if (row) {
+        return { status: 'available', history: toPersonalHistory(row) };
+      }
     }
 
-    return { status: 'available', history: toPersonalHistory(row) };
+    return { status: 'not_found', history: null };
   } catch {
     return { status: 'unavailable', history: null };
   }

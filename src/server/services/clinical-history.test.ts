@@ -56,8 +56,31 @@ describe('getClinicalHistoryByPatientIdNo', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('patient_id_no=eq.123');
   });
 
+  it('6자리 병록번호가 없으면 7자리 선행 0 형식으로 한 번 더 조회한다', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        summary_text: '요약',
+        onset_text: '초발',
+        course_text: '경과',
+        current_text: '현재',
+        full_markdown: '전체',
+        source_generated_at: '2026-09-02T01:00:00Z',
+        source_captured_at: '2026-09-02T00:00:00Z',
+      }]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getClinicalHistoryByPatientIdNo(config, '102034');
+
+    expect(result.status).toBe('available');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('patient_id_no=eq.0102034');
+  });
+
   it('등록된 개인력이 없으면 not_found를 반환한다', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200 })));
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(
+      () => Promise.resolve(new Response('[]', { status: 200 })),
+    ));
 
     await expect(getClinicalHistoryByPatientIdNo(config, '123')).resolves.toEqual({
       status: 'not_found',
