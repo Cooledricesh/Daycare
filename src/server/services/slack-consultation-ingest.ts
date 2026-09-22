@@ -61,7 +61,11 @@ export interface SlackConsultationIngestResult {
   skippedDbErrors: number;
 }
 
-const PATIENT_ENTRY_RE = /^\s*(?:[-•]\s*)?([가-힣]{2,4}[A-Z]?)\s*[:：]\s*(.*)$/;
+const PATIENT_ENTRY_RE = /^\s*(?:[-•]\s*)?([가-힣]{2,4}[A-Z]?(?:\s*,\s*[가-힣]{2,4}[A-Z]?)*)\s*[:：]\s*(.*)$/;
+const STANDALONE_CLOSING_RE = /^\s*이상입니다\.?\s*$/;
+// Require a sentence boundary, not just whitespace: "검사 결과 이상입니다." is clinical text.
+const TRAILING_CLOSING_RE = /(^|[.!?]\s+)이상입니다\.?\s*$/;
+const REGISTRATION_ONLY_RE = /^마루\s*등록함\.?$/;
 const PARK_SEUNGHYUN_DIRECT_APP_RECORD_WEEKDAYS = new Set([1, 2, 3]);
 
 const DOCTOR_ALIAS: Record<string, string> = {
@@ -168,17 +172,26 @@ export function parseSlackConsultationMessages(
 
     const flush = () => {
       if (!current) return;
-      const note = stripWrappingQuote(current.note);
-      if (note.length === 0) return;
+      const note = stripWrappingQuote(stripWrappingQuote(current.note).replace(TRAILING_CLOSING_RE, '$1'));
+      if (note.length === 0 || REGISTRATION_ONLY_RE.test(note)) return;
       entries.push({ ...current, note });
     };
 
     for (const rawLine of lines) {
       const line = rawLine.trimEnd();
+      if (STANDALONE_CLOSING_RE.test(line)) {
+        flush();
+        current = null;
+        continue;
+      }
       const match = PATIENT_ENTRY_RE.exec(line);
       if (match) {
         flush();
+        current = null;
         const patientName = match[1].trim();
+        // A multi-patient block is a boundary, never a continuation or an
+        // unambiguous individual consultation. Ignore it until the next entry.
+        if (patientName.includes(',')) continue;
         const body = match[2].trim();
         current = {
           patientName,

@@ -37,6 +37,62 @@ describe('parseSlackConsultationMessages', () => {
     expect(entries[1].note).toBe('진찰 완료');
   });
 
+  // Synthetic patient labels only: these cases must not depend on a live roster.
+  it.each(['- 가상나, 가상다:', '• 가상나A, 가상다B：', '가상나,가상다,가상라:'])(
+    '여러 환자의 등록 행을 이전 환자의 약 변경에 붙이지 않는다 (%s)',
+    (header) => {
+      const note = '약 조절 요청.\n-> (자기전) 브로마제팜 0.5t 추가 (17~)';
+      const entries = parseSlackConsultationMessages([
+        { ts: 'test.1', text: `박명현 진찰\n- 가상가: ${note}\n${header} 마루 등록함.\n등록 안내 완료\n이상입니다.\n- 가상마: 경과 관찰.` },
+      ], doctors);
+
+      expect(entries.map(({ patientName, note }) => ({ patientName, note }))).toEqual([
+        { patientName: '가상가', note },
+        { patientName: '가상마', note: '경과 관찰.' },
+      ]);
+    },
+  );
+
+  it.each(['가상나', '가상나, 가상다'])('등록만 있는 행은 진찰로 만들지 않는다 (%s)', (names) => {
+    expect(parseSlackConsultationMessages([
+      { ts: 'test.2', text: `박명현 진찰\n- ${names}: 마루 등록함.\n이상입니다.` },
+    ], doctors)).toEqual([]);
+  });
+
+  it.each([
+    '경과 관찰.\n이상입니다.',
+    '경과 관찰. 이상입니다.',
+    '경과 관찰.\n이상입니다',
+    "'경과 관찰.'\n이상입니다.",
+    "'경과 관찰. 이상입니다.'",
+  ])('독립된 마무리 인사만 제거한다 (%s)', (body) => {
+    const entries = parseSlackConsultationMessages([
+      { ts: 'test.3', text: `박명현 진찰\n가상가: ${body}` },
+    ], doctors);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].note).toBe('경과 관찰.');
+  });
+
+  it.each([
+    '검사 결과 이상입니다.',
+    '검사 결과 이상입니다.\n추가 검사 예정.',
+    '검사 결과 이상입니다. 이상입니다.',
+  ])('임상 문장의 이상입니다는 보존한다 (%s)', (body) => {
+    const entries = parseSlackConsultationMessages([
+      { ts: 'test.4', text: `박명현 진찰\n가상가: ${body}` },
+    ], doctors);
+    expect(entries[0].note).toBe(body === '검사 결과 이상입니다. 이상입니다.' ? '검사 결과 이상입니다.' : body);
+  });
+
+  it('등록과 임상 내용이 함께 있으면 임상 기록을 버리지 않는다', () => {
+    const note = '마루 등록함.\n약 조절 요청.\n-> (자기전) 브로마제팜 0.5t 추가 (17~)';
+    const entries = parseSlackConsultationMessages([
+      { ts: 'test.5', text: `박명현 진찰\n가상가: ${note}\n이상입니다.` },
+    ], doctors);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].note).toBe(note);
+  });
+
   it('진찰이 없는 메시지는 무시한다', () => {
     const entries = parseSlackConsultationMessages([
       { ts: '333.444', text: '오늘 프로그램 공지\n홍길동: 참석' },
