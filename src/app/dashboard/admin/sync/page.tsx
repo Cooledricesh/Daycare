@@ -22,16 +22,12 @@ import { useSyncStore } from '@/features/admin/stores/useSyncStore';
 import { SyncUploadModal } from '@/features/admin/components/SyncUploadModal';
 import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { resolveSyncProvenance } from '@/features/admin/lib/sync-provenance';
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   running: { label: '진행 중', color: 'bg-yellow-100 text-yellow-700' },
   completed: { label: '완료', color: 'bg-green-100 text-green-700' },
   failed: { label: '실패', color: 'bg-red-100 text-red-700' },
-};
-
-const sourceLabels: Record<string, string> = {
-  google_sheets: 'Google Sheets',
-  excel_upload: 'Excel 업로드',
 };
 
 export default function SyncPage() {
@@ -121,8 +117,10 @@ export default function SyncPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>실행 시간</TableHead>
-                <TableHead>소스</TableHead>
-                <TableHead>실행자</TableHead>
+                <TableHead>입력 자료</TableHead>
+                <TableHead>실행 엔진</TableHead>
+                <TableHead>호출 방식</TableHead>
+                <TableHead>실행 주체</TableHead>
                 <TableHead>상태</TableHead>
                 <TableHead className="text-center">처리</TableHead>
                 <TableHead className="text-center">추가</TableHead>
@@ -135,7 +133,7 @@ export default function SyncPage() {
               {logs.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={11}
                     className="text-center text-gray-500 py-8"
                   >
                     동기화 이력이 없습니다
@@ -155,8 +153,10 @@ export default function SyncPage() {
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>{sourceLabels[log.source] || log.source}</TableCell>
-                    <TableCell>{log.triggered_by}</TableCell>
+                    <TableCell>{resolveSyncProvenance(log).artifact}</TableCell>
+                    <TableCell>{resolveSyncProvenance(log).engine}</TableCell>
+                    <TableCell>{resolveSyncProvenance(log).trigger}</TableCell>
+                    <TableCell>{resolveSyncProvenance(log).actor}</TableCell>
                     <TableCell>
                       <Badge className={statusLabels[log.status]?.color || ''}>
                         {statusLabels[log.status]?.label || log.status}
@@ -241,12 +241,29 @@ export default function SyncPage() {
                     : '-'}
                 </div>
                 <div>
-                  <span className="text-gray-500">소스:</span>{' '}
-                  {sourceLabels[selectedLog.source] || selectedLog.source}
+                  <span className="text-gray-500">입력 자료:</span>{' '}
+                  {resolveSyncProvenance(selectedLog).artifact}
                 </div>
                 <div>
-                  <span className="text-gray-500">실행자:</span>{' '}
-                  {selectedLog.triggered_by}
+                  <span className="text-gray-500">실행 엔진:</span>{' '}
+                  {resolveSyncProvenance(selectedLog).engine}
+                </div>
+                <div>
+                  <span className="text-gray-500">호출 방식:</span>{' '}
+                  {resolveSyncProvenance(selectedLog).trigger}
+                </div>
+                <div>
+                  <span className="text-gray-500">실행 주체:</span>{' '}
+                  {resolveSyncProvenance(selectedLog).actor}
+                </div>
+                {resolveSyncProvenance(selectedLog).operationId && (
+                  <div className="col-span-2 break-all">
+                    <span className="text-gray-500">중앙 작업 ID:</span>{' '}
+                    {resolveSyncProvenance(selectedLog).operationId}
+                  </div>
+                )}
+                <div className="col-span-2 text-xs text-gray-500">
+                  원본 기록: {selectedLog.source} / {selectedLog.triggered_by}
                 </div>
               </div>
 

@@ -431,6 +431,26 @@ export interface CoordinatorWorkloadSummary {
 
 // ========== Sync Types ==========
 
+export interface SyncProvenance {
+  schema: 'daycare.sync-provenance.v1';
+  artifact: 'emr_excel_drive_archive' | 'uploaded_excel' | 'google_sheet' | 'unknown';
+  engine: 'nas_direct' | 'google_apps_script' | 'web_admin' | 'unknown';
+  trigger: 'scheduled_room2' | 'maintenance_manual' | 'user_manual' | 'unknown';
+  actor: 'room2_windows_runner' | 'ara_recovery' | 'staff' | 'unknown';
+  actor_label?: string;
+  operation_id?: string;
+  verified?: boolean;
+}
+
+export interface SyncLogDetails {
+  provenance?: SyncProvenance;
+  changes?: unknown[];
+  skipped_reasons?: unknown[];
+  source_drive_md5?: string | null;
+  source_drive_modified_time?: string | null;
+  source_drive_size?: number | null;
+}
+
 export interface SyncLogItem {
   id: string;
   started_at: string;
@@ -447,4 +467,5 @@ export interface SyncLogItem {
   unchanged: number;
   skipped: number;
   error_message: string | null;
+  details: SyncLogDetails | null;
 }
