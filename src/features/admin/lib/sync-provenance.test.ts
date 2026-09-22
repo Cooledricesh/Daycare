@@ -39,7 +39,7 @@ function provenance(overrides: Partial<SyncProvenance> = {}): SyncProvenance {
 describe('resolveSyncProvenance', () => {
   it('preserves legacy Google history without claiming a scheduler or actor', () => {
     expect(resolveSyncProvenance(log())).toMatchObject({
-      artifact: 'Drive 보관 EMR Excel',
+      artifact: '기존 Google 기록 · 자료형 미확인',
       engine: 'Google Apps Script (기존 기록)',
       trigger: '기존 기록 · 자동/수동 미확인',
       actor: '확인되지 않음',

@@ -68,7 +68,7 @@ export function resolveSyncProvenance(log: SyncLogItem): SyncProvenanceLabels {
 
   if (log.source === 'google_sheets') {
     return {
-      artifact: 'Drive 보관 EMR Excel',
+      artifact: '기존 Google 기록 · 자료형 미확인',
       engine: 'Google Apps Script (기존 기록)',
       trigger: '기존 기록 · 자동/수동 미확인',
       actor: '확인되지 않음',
